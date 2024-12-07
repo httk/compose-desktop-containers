@@ -34,11 +34,16 @@ Hence, you can at any time run `podman system reset` to completely purge your po
 
 ## Quickstart: build the system image
 
-Install prerequistes:
+Clone the repository and initialize submodule dependecies; a suggested location is `~/Containers`:
 ```
-cd setup/host-installers
+git clone --recurse-submodules 'https://github.com/httk/desktop-containers.git' ~/Containers 
+```
+
+Install dependencies (replace `<your host system>` with the name of the OS you are installing the containers on):
+```
+cd dependencies/installers
 ls
-cd <relevant host>
+cd <your host system>
 ./install.sh
 cd ../../..
 ```

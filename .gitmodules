@@ -1,0 +1,6 @@
+[submodule "dependencies/submodules/minimize-to-tray-wrapper"]
+	path = dependencies/submodules/minimize-to-tray-wrapper
+	url = https://github.com/httk/minimize-to-tray-wrapper.git
+[submodule "dependencies/submodules/legacy-screenshare-helper"]
+	path = dependencies/submodules/legacy-screenshare-helper
+	url = https://github.com/httk/legacy-screenshare-helper.git

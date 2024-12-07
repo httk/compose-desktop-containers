@@ -2,6 +2,7 @@
 !/apps
 !/generic
 !/setup
+!/dependencies
 !/README.md
 !/.gitignore
 Containerfile
