@@ -66,3 +66,5 @@ python3-gst-1.0
 python3-xlib
 gstreamer1.0-pipewire
 gir1.2-appindicator3-0.1
+libglu1-mesa
+libqt5opengl5
