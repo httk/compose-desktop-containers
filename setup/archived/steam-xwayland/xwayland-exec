@@ -1,0 +1,39 @@
+#!/bin/bash
+
+cleanup() {
+    # kill all processes whose parent is this process
+    pkill -P $$
+}
+
+for sig in INT QUIT HUP TERM; do
+  trap "
+    cleanup
+    trap - $sig EXIT
+    kill -s $sig "'"$$"' "$sig"
+done
+trap cleanup EXIT
+
+# Ideas from https://bennett.dev/rootful-xwayland/
+
+file=$(mktemp)
+NEW_DISPLAY=:$RANDOM
+
+cat >> $file <<EOF
+<openbox_config>
+	<applications>
+		<application title="*">
+		  <decor>no</decor>
+			<fullscreen>yes</fullscreen>
+			<maximized>yes</maximized>
+		</application>
+	</applications>
+</openbox_config>
+EOF
+
+Xwayland -noreset -decorate "$NEW_DISPLAY" &
+export DISPLAY="$NEW_DISPLAY"
+while ! xdpyinfo >/dev/null 2>&1; do sleep 0.5s; done
+openbox --replace --config-file $file &
+sleep 0.5
+"$@"
+openbox --exit

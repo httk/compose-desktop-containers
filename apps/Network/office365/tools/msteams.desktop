@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=MS Teams (container)
+StartupWMClass=msteams
+Comment=Microsoft Teams
+GenericName=Internet Messenger
+Exec=
+Icon=msteams
+Type=Application
+Categories=Network;InstantMessaging;
+Path=/usr/bin

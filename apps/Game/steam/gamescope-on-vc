@@ -1,0 +1,13 @@
+#!/bin/bash
+
+ARG=""
+while [ -n "$1" -a "$1" != "--" ]; do
+    ARG="$ARG $1"
+    shift 1
+done
+
+mkdir -p "$HOME/.local/state/gamescope-daemon"
+echo "$ARG" > "$HOME/.local/state/gamescope-daemon/args"
+sleep 5
+export DISPLAY=:42
+exec "$@"

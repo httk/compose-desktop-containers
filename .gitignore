@@ -1,0 +1,14 @@
+/*
+!/apps
+!/generic
+!/setup
+!/README.md
+!/.gitignore
+Containerfile
+/**/home/*
+!/**/home/.gitignore
+*~
+OLD
+setup/*/outputs
+archived
+files
