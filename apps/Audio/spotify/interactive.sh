@@ -3,10 +3,10 @@
 set -e
 
 # If the container is already runs, execute inside the running container so it can discover that it already runs
-ID="$(podman ps -q -f "name=flashprint_container_runtime")"
+ID="$(podman ps -q -f "name=spotify_container_runtime")"
 if [ -n "$ID" ]; then
     echo "App already running; exec inside running container"
-    podman exec "$ID" bash -c "LD_LIBRARY_PATH=/home/$USER/flashprint/flashprint/usr/lib exec /home/$USER/flashprint/flashprint/usr/share/FlashPrint5/FlashPrint" "$@"
+    podman exec -it "$ID" bash
     exit 0
 fi
 
@@ -29,12 +29,19 @@ if ! sort -C -V <<< $'1.9.1\n'"$CRUNVER"; then
     echo "Warning: read-only turned off due to old version of crun."
 fi
 
+VIDEO_DEVS=""
+for DEV in /dev/video*; do
+    if [ -c $DEV ]; then
+      VIDEO_DEVS="--device $DEV $VIDEO_DEVS"
+    fi
+done
+
 NAME=${IMAGE_NAME%-img}
 NAME=${NAME#wrap-}
 
-podman run --rm \
+podman run --rm -it \
        -w "/home/$USER" \
-       --name "flashprint_container_runtime" \
+       --name "spotify_container_runtime" \
        --hostname="$NAME" \
        --user="$USER" \
        --shm-size=1G \
@@ -56,29 +63,6 @@ podman run --rm \
        -e XAUTHORITY \
        -v "$IMAGE_DIR/home:/home/$USER:rw" \
        $FIXES \
-       "$IMAGE_NAME" bash -c "LD_LIBRARY_PATH=/home/$USER/flashprint/flashprint/usr/lib exec /home/$USER/flashprint/flashprint/usr/share/FlashPrint5/FlashPrint" "$@"
+       "$IMAGE_NAME"
 
-#      -e QT_QPA_PLATFORM=wayland \
-#       -e QT_WAYLAND_RECONNECT=1 \
-#       -e WAYLAND_DISPLAY \
-
-
-#       --cap-add=CAP_SYS_CHROOT \
-#       --device /dev/snd \
-#       -v /tmp/.X11-unix:/tmp/.X11-unix \
-#       -e DISPLAY \
 #       -v $XAUTHORITY:$XAUTHORITY \
-#       -e XAUTHORITY \
-
-
-#       "$IMAGE_NAME" bash -c "cd flashprint/Flashprint; pipewire-pulse & ./Flashprint --enable-features=UseOzonePlatform,WaylandWindowDecorations --ozone-platform=wayland" "$@"
-
-#       -e TERM=xterm \
-#       -e XTERM_LOCALE=en_US.UTF-8 \
-#       -e XTERM_SHELL=/usr/bin/bash \
-# -v "$XDG_RUNTIME_DIR/bus:/tmp/$USER/run/bus" \
-#  -e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/$USER/run/bus" \
-
-# pipewire-pulse &
-
-# "$IMAGE_NAME" bash -c "cd zoom/zoom; systemctl --user start wireplumber pipewire pipewire-pulse && LD_LIBRARY_PATH=/home/rar/zoom/zoom:/home/rar/zoom/zoom/Qt/lib exec ./zoom" "$@"

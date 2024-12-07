@@ -3,10 +3,10 @@
 set -e
 
 # If the container is already runs, execute inside the running container so it can discover that it already runs
-ID="$(podman ps -q -f "name=flashprint_container_runtime")"
+ID="$(podman ps -q -f "name=spotify_container_runtime")"
 if [ -n "$ID" ]; then
     echo "App already running; exec inside running container"
-    podman exec "$ID" bash -c "LD_LIBRARY_PATH=/home/$USER/flashprint/flashprint/usr/lib exec /home/$USER/flashprint/flashprint/usr/share/FlashPrint5/FlashPrint" "$@"
+    podman exec "$ID" bash -c "LD_LIBRARY_PATH=/home/$USER/spotify/spotify/usr/share/spotify exec /home/$USER/spotify/spotify/usr/share/spotify/spotify" "$@"
     exit 0
 fi
 
@@ -32,13 +32,26 @@ fi
 NAME=${IMAGE_NAME%-img}
 NAME=${NAME#wrap-}
 
+xdg-dbus-proxy unix:path="$XDG_RUNTIME_DIR/bus" "$XDG_RUNTIME_DIR/bus-proxy-spotify" --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher &
+# --call="org.freedesktop.portal.*=*" &
+# --own=org.mpris.MediaPlayer2.spotify --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.gnome.SessionManager
+# --talk=org.kde.StatusNotifierWatcher &
+#--call="org.freedesktop.portal.*=*" --broadcast="org.freedesktop.portal.*=@/org/freedesktop/portal/*" &
+        
+BUS_PROXY_PID=$?
+trap "kill $BUS_PROXY_PID" EXIT
+
+#--filter --own=org.gnome.ghex.* --talk=ca.desrt.dconf
+#       --call=org.freedesktop.portal.*=* --broadcast=org.freedesktop.portal.*=@/org/freedesktop/portal/*
+
 podman run --rm \
        -w "/home/$USER" \
-       --name "flashprint_container_runtime" \
+       --name "spotify_container_runtime" \
        --hostname="$NAME" \
        --user="$USER" \
        --shm-size=1G \
        --cap-drop=ALL \
+       --cap-add=CAP_SYS_CHROOT \
        --read-only \
        --read-only-tmpfs \
        --systemd=false \
@@ -56,7 +69,12 @@ podman run --rm \
        -e XAUTHORITY \
        -v "$IMAGE_DIR/home:/home/$USER:rw" \
        $FIXES \
-       "$IMAGE_NAME" bash -c "LD_LIBRARY_PATH=/home/$USER/flashprint/flashprint/usr/lib exec /home/$USER/flashprint/flashprint/usr/share/FlashPrint5/FlashPrint" "$@"
+       -v "$XDG_RUNTIME_DIR/bus-proxy-spotify:/tmp/$USER/run/bus" \
+       -e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/$USER/run/bus" \
+       "$IMAGE_NAME" bash -c "xdg-settings set default-web-browser org.kde.falkon.desktop; LD_LIBRARY_PATH=/home/$USER/spotify/spotify/usr/share/spotify exec /home/$USER/spotify/spotify/usr/share/spotify/spotify" "$@"
+
+#       -v "$XDG_RUNTIME_DIR/bus:/tmp/$USER/run/bus" \
+#       -e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/$USER/run/bus" \
 
 #      -e QT_QPA_PLATFORM=wayland \
 #       -e QT_WAYLAND_RECONNECT=1 \
@@ -71,14 +89,14 @@ podman run --rm \
 #       -e XAUTHORITY \
 
 
-#       "$IMAGE_NAME" bash -c "cd flashprint/Flashprint; pipewire-pulse & ./Flashprint --enable-features=UseOzonePlatform,WaylandWindowDecorations --ozone-platform=wayland" "$@"
+#       "$IMAGE_NAME" bash -c "cd spotify/Spotify; pipewire-pulse & ./Spotify --enable-features=UseOzonePlatform,WaylandWindowDecorations --ozone-platform=wayland" "$@"
 
 #       -e TERM=xterm \
 #       -e XTERM_LOCALE=en_US.UTF-8 \
 #       -e XTERM_SHELL=/usr/bin/bash \
-# -v "$XDG_RUNTIME_DIR/bus:/tmp/$USER/run/bus" \
-#  -e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/$USER/run/bus" \
 
 # pipewire-pulse &
 
 # "$IMAGE_NAME" bash -c "cd zoom/zoom; systemctl --user start wireplumber pipewire pipewire-pulse && LD_LIBRARY_PATH=/home/rar/zoom/zoom:/home/rar/zoom/zoom/Qt/lib exec ./zoom" "$@"
+
+#kill "$BUS_PROXY_PID"
