@@ -33,6 +33,10 @@ NAME=${NAME#wrap-}
 
 DESKTOP_FILE=$(find "$IMAGE_DIR/home/.local/share/applications/" -name "*.desktop" | xargs grep -l '^Name=Microsoft Teams$')
 EXEC=$(cat "$DESKTOP_FILE" | awk -F 'Exec=' '/^Exec/ {print $2}')
+CHROMIUM_APP_ID="${DESKTOP_FILE%*-Default.desktop}"
+CHROMIUM_APP_ID="${CHROMIUM_APP_ID##*/chrome-}"
+ICON=$(cat "$DESKTOP_FILE" | awk -F 'Icon=' '/^Icon/ {print $2}')
+ICONFILE="${IMAGE_DIR}/home/.local/share/icons/hicolor/256x256/apps/${ICON}.png"
 
 # If the container is already runs, execute inside the running container so it can discover that it already runs
 ID="$(podman ps -q -f "name=office365_container_runtime")"
@@ -42,7 +46,7 @@ if [ -n "$ID" ]; then
     exit 0
 fi
 
-podman run --rm \
+"${IMAGE_DIR}/../../../dependencies/submodules/minimize-to-tray-wrapper/bin/minimize-to-tray-wrapper" --app-name "Teams" --icon "$ICONFILE" --wm-class "crx_$CHROMIUM_APP_ID" -- podman run --rm \
        -w "/home/$USER" \
        --name "office365_container_runtime" \
        --user="$USER" \
@@ -52,6 +56,9 @@ podman run --rm \
        --read-only-tmpfs \
        --systemd=false \
        --cap-drop=ALL \
+       -e XDG_RUNTIME_DIR \
+       -e XDG_DATA_DIRS \
+       -e XDG_CURRENT_DESKTOP=GNOME \
        --cap-add CAP_SYS_CHROOT \
        --security-opt=no-new-privileges \
        -e LANG \
@@ -70,6 +77,14 @@ podman run --rm \
        $VIDEO_DEVS \
        $FIXES \
        "$IMAGE_NAME" $EXEC --disable-gpu-memory-buffer-video-frames "$@"
+
+# /opt/minimize-to-tray-wrapper/bin/minimize-to-tray-wrapper -- xterm
+#-v "${IMAGE_DIR}/../../../dependencies/submodules/minimize-to-tray-wrapper":/opt/minimize-to-tray-wrapper \
+#-e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/$USER/run/bus" \
+#-v "$XDG_RUNTIME_DIR/bus:/tmp/$USER/run/bus" \
+
+
+# 
 
 # "$IMAGE_NAME" $EXEC --ozone-platform=wayland --disable-gpu-memory-buffer-video-frames "$@"
 

@@ -2,10 +2,24 @@
 
 set -e
 
-if [ ! -e ./image.info ]; then
-    echo "You first need to run setup.sh to create an image."
+# If the container is already runs, execute inside the running container so it can discover that it already runs
+ID="$(podman ps -q -f "name=zoom_container_runtime")"
+if [ -n "$ID" ]; then
+    echo "App already running; exec inside running container"
+    podman exec -it "$ID" bash
+    exit 0
+fi
+
+IMAGE_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd -P)
+IMAGE_NAME="$(cat "$IMAGE_DIR/image.info")"
+
+if ! podman image exists "$IMAGE_NAME"; then
+    echo "You first need to create the image: $IMAGE_NAME"
     exit 1
 fi
+
+mkdir -p "$IMAGE_DIR/home"
+cd "$IMAGE_DIR/home"
 
 FIXES=""
 
@@ -22,13 +36,13 @@ for DEV in /dev/video*; do
     fi
 done
 
-IMAGE_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd -P)
-IMAGE_NAME="$(cat image.info)"
 NAME=${IMAGE_NAME%-img}
 NAME=${NAME#wrap-}
 
 podman run --rm -it \
        -w "/home/$USER" \
+       -v "${IMAGE_DIR}/../../../dependencies/submodules/minimize-to-tray-wrapper":/opt/minimize-to-tray-wrapper \
+       --name "zoom_container_runtime" \
        --hostname="$NAME" \
        --user="$USER" \
        --shm-size=512M \
@@ -42,7 +56,6 @@ podman run --rm -it \
        -e XDG_RUNTIME_DIR \
        -e XDG_DATA_DIRS \
        -e XDG_CURRENT_DESKTOP=GNOME \
-       -e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/$USER/run/bus" \
        -e BROSER="falkon" \
        -e TERM=xterm \
        -e XTERM_LOCALE=en_US.UTF-8 \
@@ -51,7 +64,6 @@ podman run --rm -it \
        -e DISPLAY \
        -v $XAUTHORITY:$XAUTHORITY \
        -e XAUTHORITY \
-       -v "$XDG_RUNTIME_DIR/bus:/tmp/$USER/run/bus" \
        -v "$XDG_RUNTIME_DIR/pipewire-0:/tmp/$USER/run/pipewire-0" \
        --device /dev/dri \
        --device /dev/snd \
@@ -59,6 +71,8 @@ podman run --rm -it \
        -v "$IMAGE_DIR/home:/home/$USER:rw" \
        $VIDEO_DEVS \
        $FIXES \
+       -e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/$USER/run/bus" \
+       -v "$XDG_RUNTIME_DIR/bus:/tmp/$USER/run/bus" \
        "$IMAGE_NAME"
 
 #       -v $XAUTHORITY:$XAUTHORITY \

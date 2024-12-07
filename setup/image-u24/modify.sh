@@ -59,6 +59,7 @@ else
        "$IMAGE_NAME" /bin/bash
 fi
   
-podman commit wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=$USER" wrap-u24-img
+podman commit wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=$USER" desktop-container-u24
+podman tag desktop-container-u24 desktop-container-default
 podman rm -fi wrap-upgrade-tmp
 podman image prune -f
