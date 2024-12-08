@@ -3,10 +3,10 @@
 set -e
 
 # If the container is already runs, execute inside the running container so it can discover that it already runs
-ID="$(podman ps -q -f "name=spotify_container_runtime")"
+ID="$(podman ps -q -f "name=obsidian_container_runtime")"
 if [ -n "$ID" ]; then
     echo "App already running; exec inside running container"
-    podman exec "$ID" bash -c "LD_LIBRARY_PATH=/home/$USER/spotify/spotify/usr/share/spotify exec /home/$USER/spotify/spotify/usr/share/spotify/spotify" "$@"
+    podman exec "$ID" bash -c "LD_LIBRARY_PATH=/home/$USER/obsidian/obsidian/opt/Obsidian exec /home/$USER/obsidian/obsidian/opt/Obsidian/obsidian \"\$@\"" bash "$@"
     exit 0
 fi
 
@@ -32,9 +32,9 @@ fi
 NAME=${IMAGE_NAME%-img}
 NAME=${NAME#wrap-}
 
-xdg-dbus-proxy unix:path="$XDG_RUNTIME_DIR/bus" "$XDG_RUNTIME_DIR/bus-proxy-spotify" --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher &
+#xdg-dbus-proxy unix:path="$XDG_RUNTIME_DIR/bus" "$XDG_RUNTIME_DIR/bus-proxy-obsidian" --filter --own=org.mpris.MediaPlayer2.obsidian --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher &
 # --call="org.freedesktop.portal.*=*" &
-# --own=org.mpris.MediaPlayer2.spotify --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.gnome.SessionManager
+# --own=org.mpris.MediaPlayer2.obsidian --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.gnome.SessionManager
 # --talk=org.kde.StatusNotifierWatcher &
 #--call="org.freedesktop.portal.*=*" --broadcast="org.freedesktop.portal.*=@/org/freedesktop/portal/*" &
         
@@ -46,7 +46,7 @@ trap "kill $BUS_PROXY_PID" EXIT
 
 podman run --rm \
        -w "/home/$USER" \
-       --name "spotify_container_runtime" \
+       --name "obsidian_container_runtime" \
        --hostname="$NAME" \
        --user="$USER" \
        --shm-size=1G \
@@ -62,7 +62,6 @@ podman run --rm \
        -e BROSER="falkon" \
        -v "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:/tmp/$USER/run/$WAYLAND_DISPLAY:ro" \
        --device /dev/dri \
-       -v "$XDG_RUNTIME_DIR/pipewire-0:/tmp/$USER/run/pipewire-0" \
        --userns=keep-id \
        -v /tmp/.X11-unix:/tmp/.X11-unix \
        -e DISPLAY \
@@ -70,9 +69,10 @@ podman run --rm \
        -e XAUTHORITY \
        -v "$IMAGE_DIR/home:/home/$USER:rw" \
        $FIXES \
-       -v "$XDG_RUNTIME_DIR/bus-proxy-spotify:/tmp/$USER/run/bus" \
-       -e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/$USER/run/bus" \
-       "$IMAGE_NAME" bash -c "xdg-settings set default-web-browser org.kde.falkon.desktop; pipewire-pulse & LD_LIBRARY_PATH=/home/$USER/spotify/spotify/usr/share/spotify exec /home/$USER/spotify/spotify/usr/share/spotify/spotify" "$@"
+       "$IMAGE_NAME" bash -c "xdg-settings set default-web-browser org.kde.falkon.desktop; LD_LIBRARY_PATH=/home/$USER/obsidian/obsidian/opt/Obsidian exec /home/$USER/obsidian/obsidian/opt/Obsidian/obsidian \"\$@\"" bash "$@"
+
+#       -v "$XDG_RUNTIME_DIR/bus-proxy-obsidian:/tmp/$USER/run/bus" \
+#       -e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/$USER/run/bus" \
 
 #       -v "$XDG_RUNTIME_DIR/bus:/tmp/$USER/run/bus" \
 #       -e DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/$USER/run/bus" \
@@ -90,7 +90,7 @@ podman run --rm \
 #       -e XAUTHORITY \
 
 
-#       "$IMAGE_NAME" bash -c "cd spotify/Spotify; pipewire-pulse & ./Spotify --enable-features=UseOzonePlatform,WaylandWindowDecorations --ozone-platform=wayland" "$@"
+#       "$IMAGE_NAME" bash -c "cd obsidian/Obsidian; pipewire-pulse & ./Obsidian --enable-features=UseOzonePlatform,WaylandWindowDecorations --ozone-platform=wayland" "$@"
 
 #       -e TERM=xterm \
 #       -e XTERM_LOCALE=en_US.UTF-8 \

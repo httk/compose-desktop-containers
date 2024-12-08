@@ -21,7 +21,7 @@ fi
 NAME=${IMAGE_NAME%-img}
 NAME=${NAME#wrap-}
 
-LATESTURL="http://repository.spotify.com/pool/non-free/s/spotify-client/$(curl -L 'http://repository.spotify.com/pool/non-free/s/spotify-client/' | sed -n 's|^.*"\(spotify-client_.\+_amd64\.deb\)".*$|\1|p')"
+LATESTURL="$(curl -L 'https://obsidian.md/download' | sed -n 's|^.*"\(https://.*/obsidian_[0-9.]\+_amd64\.deb\)".*$|\1|p')"
 LATESTFILENAME="${LATESTURL##*/}"
 
 if [ -z "$LATESTFILENAME" ]; then
@@ -29,7 +29,7 @@ if [ -z "$LATESTFILENAME" ]; then
     exit 1
 fi
 
-mkdir -p files
+mkdir -p files home
 if [ ! -e "files/$LATESTFILENAME" ]; then
     curl -L -o "files/$LATESTFILENAME" "$LATESTURL"
 fi
@@ -55,10 +55,10 @@ podman run --rm \
 	--userns=keep-id \
 	-v "$IMAGE_DIR/home:/home/$USER:rw" \
         $FIXES \
-	"$IMAGE_NAME" bash -c "rm -rf ~/spotify && mkdir ~/spotify && cd ~/spotify &&  dpkg-deb -x \"/files/$LATESTFILENAME\" spotify && mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps/ && cp spotify/usr/share/spotify/spotify.desktop ~/.local/share/applications/spotify.desktop && sed -i 's%^Exec=.*%Exec=/home/$USER/spotify/spotify/usr/share/spotify/spotify%' ~/.local/share/applications/spotify.desktop && cp spotify/usr/share/spotify/icons/spotify-linux-256.png ~/.local/share/icons/hicolor/256x256/apps/. && gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor && update-desktop-database ~/.local/share/applications/"
+	"$IMAGE_NAME" bash -c "rm -rf ~/obsidian && mkdir ~/obsidian && cd ~/obsidian &&  dpkg-deb -x \"/files/$LATESTFILENAME\" obsidian && mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps/ && cp obsidian/usr/share/applications/obsidian.desktop ~/.local/share/applications/obsidian.desktop && sed -i 's%^Exec=.*%Exec=/home/$USER/obsidian/obsidian/opt/Obsidian/%' ~/.local/share/applications/obsidian.desktop && cp obsidian/usr/share/icons/hicolor/256x256/apps/obsidian.png ~/.local/share/icons/hicolor/256x256/apps/. && update-desktop-database ~/.local/share/applications/"
 
 mkdir -p ~/.local/share/icons/hicolor/256x256/apps ~/.local/share/applications
-cat "$IMAGE_DIR/tools/spotify.desktop" | sed "s|^Exec=.*\$|Exec=\"${IMAGE_DIR}/exec-spotify.sh\" %U|;" > ~/.local/share/applications/spotify_container.desktop
-cp "$IMAGE_DIR/home/spotify/spotify/usr/share/spotify/icons/spotify-linux-256.png" ~/.local/share/icons/hicolor/256x256/apps/spotify-client.png
+cat "$IMAGE_DIR/tools/obsidian.desktop" | sed "s|^Exec=.*\$|Exec=\"${IMAGE_DIR}/exec-obsidian.sh\" %U|;" > ~/.local/share/applications/obsidian_container.desktop
+cp "$IMAGE_DIR/home/obsidian/obsidian/usr/share/icons/hicolor/256x256/apps/obsidian.png" ~/.local/share/icons/hicolor/256x256/apps/obsidian.png
 update-desktop-database ~/.local/share/applications/
 gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
