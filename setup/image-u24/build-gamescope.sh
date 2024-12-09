@@ -2,6 +2,9 @@
 
 set -e
 
+mkdir -p opt home
+rm -rf opt/gamescope
+
 cat > Containerfile <<EOF
 FROM ubuntu:24.04
 USER root
@@ -50,15 +53,16 @@ podman run --rm \
        --security-opt=no-new-privileges \
        -e LANG \
        --userns=keep-id \
-       -v "$IMAGE_DIR/outputs:/home/$USER:rw" \
+       -v "$IMAGE_DIR/opt:/opt:rw" \
+       -v "$IMAGE_DIR/home:/home/${USER}:rw" \
        $FIXES \
-       build-gamescope bash -c "rm -rf cd ~/build/gamescope && mkdir -p ~/build/gamescope ~/install/gamescope && cd ~/build/gamescope && git clone https://github.com/ValveSoftware/gamescope.git && cd gamescope && git checkout 3.13.16.9 && git submodule update --init && meson build/ && ninja -C build/ && meson install -C build --skip-subprojects --destdir ~/install/gamescope"
+       build-gamescope bash -c "rm -rf cd ~/build/gamescope && mkdir -p ~/build/gamescope ~/install/gamescope && cd ~/build/gamescope && git clone https://github.com/ValveSoftware/gamescope.git && cd gamescope && git checkout 3.13.16.9 && git submodule update --init && meson build/ && ninja -C build/ && meson install -C build --skip-subprojects --destdir /opt/gamescope"
 
 podman rmi build-gamescope
 podman image prune -f
 rm -rf outputs/build
 mkdir -p files
 
-(cd outputs/install/gamescope; tar -zcvf ../../../files/gamescope.tgz .)
+#(cd outputs/install/gamescope; tar -zcvf ../../../files/gamescope.tgz .)
 
-echo "Gamescope built; result available in outputs/install/gamescope"
+echo "Gamescope built; result available in opt"

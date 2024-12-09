@@ -11,5 +11,6 @@ Containerfile
 *~
 OLD
 setup/*/outputs
+setup/*/opt
 archived
 files
