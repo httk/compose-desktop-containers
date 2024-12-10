@@ -43,7 +43,6 @@ xwayland
 openbox
 dbus
 dbus-x11
-bubblewrap
 libsdl2-2.0-0
 libseat1
 libxres1
