@@ -1,6 +1,20 @@
 version: "3.8"
 
 x-desktop-containers:
+  readme: |
+    Zoom: videotelephony software program.
+
+    This container uses the x11 server on your desktop (i.e., likely xwayland if you are
+    running Wayland), which is not great from a security barrier perspective. Zoom has support
+    to run directly under wayland, but in present versions this support seem to cause issues
+    (crashes, incomplete user interface, etc.), which is probably why current versions of Zoom
+    at the time of writing this defaults to x11 even if Wayland is available.
+
+  config-default: |
+    version: "3.8"
+    
+    # This container has no configurable options
+
   dbus: filter
   devices:
     video:
@@ -20,7 +34,9 @@ x-desktop-containers:
         Categories=Network;Application;
         MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;
         X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall
-      icon: files/extract/usr/share/pixmaps/Zoom.png
+      icons:
+        - source: files/extract/usr/share/pixmaps/Zoom.png
+          dest: hicolor/256x256/apps/zoom.png
 
 x-common: &common
 
