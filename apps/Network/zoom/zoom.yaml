@@ -1,6 +1,7 @@
 version: "3.8"
 
 x-desktop-containers:
+
   readme: |
     Zoom: videotelephony software program.
 
@@ -15,28 +16,34 @@ x-desktop-containers:
     
     # This container has no configurable options
 
-  dbus: filter
-  devices:
-    video:
-      - exec
-  desktop:
+  launchers:
+
     zoom:
-      file: |
-        [Desktop Entry]
-        Name=Zoom (container)
-        StartupWMClass=zoom
-        Comment=Zoom Video Conference
-        Exec=ZoomLauncher %U
-        Terminal=false
-        Type=Application
-        Encoding=UTF-8
-        Icon=zoom
-        Categories=Network;Application;
-        MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;
-        X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall
-      icons:
-        - source: files/extract/usr/share/pixmaps/Zoom.png
-          dest: hicolor/256x256/apps/zoom.png
+
+      dbus: filter
+      devices:
+        - video
+
+      desktop:
+
+        file: |
+          [Desktop Entry]
+          Name=Zoom (container)
+          StartupWMClass=zoom
+          Comment=Zoom Video Conference
+          Exec=ZoomLauncher %U
+          Terminal=false
+          Type=Application
+          Encoding=UTF-8
+          Icon=zoom
+          Categories=Network;Application;
+          MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;
+          X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall
+          
+        icons:
+          - source: files/extract/usr/share/pixmaps/Zoom.png
+            size: 256
+            dest: zoom.png
 
 x-common: &common
 
@@ -90,6 +97,27 @@ x-common: &common
 
 services:
 
+  update-check:
+    <<: *common 
+
+    container_name: zoom_container_runtime_update_check
+    image: "desktop-container-default"
+
+    environment:
+      <<: *common-env
+      LAUNCH_COMMAND: echo "UPDATE CHECK"; mkdir -p files; if [ -e files/zoom_x86_64.tar.xz ]; then LASTMOD_LINE="$$(curl -sI -L "https://zoom.us/client/latest/zoom_x86_64.tar.xz" | grep -i '^Last-Modified:' | cut "-d:" -f2- | sed 's/^[ \t]*//')"; if [ -z "$$LASTMOD_LINE" ]; then echo "Could not get last modified date"; exit 0; fi; REMOTE_TS="$$(date -d "$${LASTMOD_STR# }" +%s)"; LOCAL_TS="$$(date -r "files/zoom_x86_64.tar.xz" +%s)"; if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ]; then echo "No new version"; exit 0; fi; fi; echo "File missing, or server-side file newer"; exit 1 
+
+
+  update-prepare:
+    <<: *common 
+
+    container_name: zoom_container_runtime_update_prepare
+    image: "desktop-container-default"
+
+    environment:
+      <<: *common-env
+      LAUNCH_COMMAND: echo "UPDATE PREPARE"; mkdir -p files; EXISTFLAG=""; if [ -e files/zoom_x86_64.tar.xz ]; then EXISTFLAG="-z files/zoom_x86_64.tar.xz"; fi; curl -L -o files/zoom_x86_64.tar.xz $$EXISTFLAG "https://zoom.us/client/latest/zoom_x86_64.tar.xz"
+
   install:
     <<: *common 
 
@@ -98,9 +126,9 @@ services:
 
     environment:
       <<: *common-env
-      LAUNCH_COMMAND: mkdir -p files; EXISTFLAG=""; if [ -e files/zoom_x86_64.tar.xz ]; then EXISTFLAG="-z files/zoom_x86_64.tar.xz"; fi; curl -L -o files/zoom_x86_64.tar.xz $EXISTFLAG "https://zoom.us/client/latest/zoom_x86_64.tar.xz" && rm -rf ~/zoom && mkdir ~/zoom && cd ~/zoom && tar -xvf ~/files/zoom_x86_64.tar.xz && mkdir -p ~/.local/share/applications && echo -e '[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/${USER}/zoom/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nEncoding=UTF-8\nCategories=Network;Application;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher' > ~/.local/share/applications/ZoomLauncher.desktop && update-desktop-database ~/.local/share/applications/
+      LAUNCH_COMMAND: echo "INSTALL"; mkdir -p files; EXISTFLAG=""; if [ -e files/zoom_x86_64.tar.xz ]; then EXISTFLAG="-z files/zoom_x86_64.tar.xz"; fi; curl -L -o files/zoom_x86_64.tar.xz $$EXISTFLAG "https://zoom.us/client/latest/zoom_x86_64.tar.xz" && rm -rf ~/zoom && mkdir ~/zoom && cd ~/zoom && tar -xvf ~/files/zoom_x86_64.tar.xz && mkdir -p ~/.local/share/applications && echo -e '[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/$$USER/zoom/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nEncoding=UTF-8\nCategories=Network;Application;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher' > ~/.local/share/applications/ZoomLauncher.desktop && update-desktop-database ~/.local/share/applications/
 
-  exec:
+  zoom:
     <<: *common
 
     container_name: zoom_container_runtime
@@ -108,5 +136,5 @@ services:
 
     environment:
       <<: *common-env
-      LAUNCH_COMMAND: "cd zoom/zoom; pipewire-pulse & LD_LIBRARY_PATH=/home/rar/zoom/zoom:/home/rar/zoom/zoom/Qt/lib exec ./zoom"
+      LAUNCH_COMMAND: echo "ZOOM"; cd zoom/zoom; pipewire-pulse & LD_LIBRARY_PATH=/home/rar/zoom/zoom:/home/rar/zoom/zoom/Qt/lib exec ./zoom
 
