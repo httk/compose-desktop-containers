@@ -1,0 +1,168 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    Zoom: videotelephony software program.
+
+    This container uses the x11 server on your desktop (i.e., likely xwayland if you are
+    running Wayland), which is not great from a security barrier perspective. Zoom has support
+    to run directly under wayland, but in present versions this support seem to cause issues
+    (crashes, incomplete user interface, etc.), which is probably why current versions of Zoom
+    at the time of writing this defaults to x11 even if Wayland is available.
+
+    Use together with legacy-screenshare-helper (https://github.com/httk/legacy-screenshare-helper)
+    to support screensharing.
+
+  config-default: |
+    version: "3.8"
+    
+    # This container has no configurable options
+
+  launchers:
+
+    zoom:
+
+      dbus: filter
+      devices:
+        - video
+
+      desktop:
+
+        file: |
+          [Desktop Entry]
+          Name=Zoom (container)
+          StartupWMClass=zoom
+          Comment=Zoom Video Conference
+          Exec=zoom %U
+          Terminal=false
+          Type=Application
+          Encoding=UTF-8
+          Icon=zoom
+          Categories=Network;Application;
+          MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;
+          X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall
+          
+        icons:
+          - source: zoom/Zoom.png
+            size: 256
+            dest: zoom.png
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    working_dir: /home/$USER
+    hostname: "zoom_container"
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
+      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
+      XDG_CURRENT_DESKTOP: "GNOME"
+      BROWSER: "falkon"
+      TERM: "xterm"
+      XTERM_LOCALE: "en_US.UTF-8"
+      XTERM_SHELL: "/usr/bin/bash"
+      DISPLAY: "${DISPLAY}"
+      XAUTHORITY: "${XAUTHORITY}"
+      DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/${USER}/run/bus"
+
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_CHROOT
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "512m"
+
+    volumes: &common-volumes
+      - "${APP_HOME}/home:/home/${USER}:rw"
+      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+      - "${XAUTHORITY}:${XAUTHORITY}:rw"
+      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
+      - "${XDG_RUNTIME_DIR}/bus:/tmp/${USER}/run/bus:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+      - "/dev/snd:/dev/snd"
+
+    security_opt:
+      - "label=disable"
+
+    userns_mode: "keep-id"
+
+
+  ## INSTALL ##
+  
+  install-prepare: &install-prepare
+    <<: *common
+
+    image: "desktop-container-default"
+
+    environment:
+      <<: *common-env
+
+      # Note: the deb archive is needed just to get the icon, which does not seem to be included in the standalone install (?)
+      LAUNCH_COMMAND: echo "INSTALL/UPDATE PREPARE"; mkdir -p files; curl -L -o files/zoom_x86_64.tar.xz "https://zoom.us/client/latest/zoom_x86_64.tar.xz"; curl -L -o files/zoom_amd64.deb "https://zoom.us/client/latest/zoom_amd64.deb"
+
+  install: &install
+    <<: *common 
+
+    image: "desktop-container-default"
+
+    environment:
+      <<: *common-env
+      LAUNCH_COMMAND: echo "INSTALL"; rm -rf ~/zoom && mkdir ~/zoom && cd ~/zoom && mkdir tmp && cd tmp && ar x ~/files/zoom_amd64.deb && tar -xf data.tar.xz && cp ./usr/share/pixmaps/Zoom.png ../. && cd .. && rm -rf tmp && tar -xf ~/files/zoom_x86_64.tar.xz && mkdir -p ~/.local/share/applications && echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/$USER/zoom/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nEncoding=UTF-8\nCategories=Network;Application;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop && update-desktop-database ~/.local/share/applications/
+
+
+  ## UPDATE ##
+
+  update-check: &update-check
+    <<: *common 
+
+    image: "desktop-container-default"
+
+    environment:
+      <<: *common-env
+      LAUNCH_COMMAND: echo "UPDATE CHECK"; mkdir -p files; if [ -e files/zoom_x86_64.tar.xz ]; then LASTMOD_LINE="$$(curl -sI -L "https://zoom.us/client/latest/zoom_x86_64.tar.xz" | grep -i '^Last-Modified:' | cut "-d:" -f2- | sed 's/^\s*\|\s$//g')"; if [ -z "$$LASTMOD_LINE" ]; then echo "Could not get last modified date"; exit 0; fi; REMOTE_TS="$$(date -d "$${LASTMOD_LINE}" +%s)"; LOCAL_TS="$$(date -r "files/zoom_x86_64.tar.xz" +%s)"; if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ]; then echo "No new version"; exit 0; fi; fi; echo "File missing, or server-side file newer"; exit 1 
+
+  update-prepare: &update-prepare
+    <<: *install-prepare   
+
+  update: &update
+    <<: *install 
+
+
+  ## EXECUTE ###
+
+  zoom:
+    <<: *common
+
+    container_name: htdc_zoom_zoom
+    image: "desktop-container-default"
+
+    environment:
+      <<: *common-env
+      LAUNCH_COMMAND: echo "ZOOM"; cd zoom/zoom; pipewire-pulse & LD_LIBRARY_PATH=/home/rar/zoom/zoom:/home/rar/zoom/zoom/Qt/lib exec ./zoom
+
+  ## INTERACTIVE ##
+
+  interactive:
+    <<: *common
+
+    image: "desktop-container-default"
+
+    environment:
+      <<: *common-env
+      LAUNCH_COMMAND: echo "INTERACTIVE"; bash
