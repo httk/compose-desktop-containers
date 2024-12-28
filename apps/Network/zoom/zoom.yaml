@@ -105,7 +105,7 @@ services:
 
     environment:
       <<: *common-env
-      LAUNCH_COMMAND: echo "UPDATE CHECK"; mkdir -p files; if [ -e files/zoom_x86_64.tar.xz ]; then LASTMOD_LINE="$$(curl -sI -L "https://zoom.us/client/latest/zoom_x86_64.tar.xz" | grep -i '^Last-Modified:' | cut "-d:" -f2- | sed 's/^[ \t]*//')"; if [ -z "$$LASTMOD_LINE" ]; then echo "Could not get last modified date"; exit 0; fi; REMOTE_TS="$$(date -d "$${LASTMOD_STR# }" +%s)"; LOCAL_TS="$$(date -r "files/zoom_x86_64.tar.xz" +%s)"; if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ]; then echo "No new version"; exit 0; fi; fi; echo "File missing, or server-side file newer"; exit 1 
+      LAUNCH_COMMAND: echo "UPDATE CHECK"; mkdir -p files; if [ -e files/zoom_x86_64.tar.xz ]; then LASTMOD_LINE="$$(curl -sI -L "https://zoom.us/client/latest/zoom_x86_64.tar.xz" | grep -i '^Last-Modified:' | cut "-d:" -f2- | sed 's/^\s*\|\s$//g')"; if [ -z "$$LASTMOD_LINE" ]; then echo "Could not get last modified date"; exit 0; fi; REMOTE_TS="$$(date -d "$${LASTMOD_LINE}" +%s)"; LOCAL_TS="$$(date -r "files/zoom_x86_64.tar.xz" +%s)"; if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ]; then echo "No new version"; exit 0; fi; fi; echo "File missing, or server-side file newer"; exit 1 
 
 
   update-prepare:
