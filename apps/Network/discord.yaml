@@ -3,29 +3,23 @@ version: "3.8"
 x-application:
 
   readme: |
-    Zoom: videotelephony software program.
+    Discord: instant messaging and VoIP social platform.
 
     This container uses the x11 server on your desktop (i.e., likely xwayland if you are
-    running Wayland), which is not great from a security barrier perspective. Zoom has support
-    to run directly under wayland, but in present versions this support seem to cause issues
-    (crashes, incomplete user interface, etc.), which is probably why current versions of Zoom
-    at the time of writing this defaults to x11 even if Wayland is available.
+    running Wayland), which is not great from a security barrier perspective. 
 
     Use together with legacy-screenshare-helper (https://github.com/httk/legacy-screenshare-helper)
     to support screensharing.
 
   config-default: |
     version: "3.8"
-    
+
     # This container has no configurable options
 
   launchers:
 
-    zoom:
+    discord:
 
-      # zoom in x11 mode does not need dbus?
-      #dbus-proxy: ""
-      
       devices:
         - video
 
@@ -33,22 +27,21 @@ x-application:
 
         file: |
           [Desktop Entry]
-          Name=Zoom (container)
-          StartupWMClass=zoom
-          Comment=Zoom Video Conference
-          Exec=zoom %U
+          Name=Discord (container)
+          StartupWMClass=discord
+          Comment=Internet Messenger
+          Exec=discord %U
           Terminal=false
           Type=Application
           Encoding=UTF-8
-          Icon=zoom
-          Categories=Network;Application;
-          MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;
-          X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall
+          Icon=discord
+          Categories=Network;InstantMessaging;
+          MimeType=x-scheme-handler/discord;
           
         icons:
-          - source: zoom/Zoom.png
+          - source: discord/Discord/discord.png
             size: 256
-            dest: zoom.png
+            dest: discord.png
 
 services:
 
@@ -57,7 +50,7 @@ services:
   common: &common
 
     working_dir: /home/$USER
-    hostname: "zoom_container"
+    hostname: "discord_container"
     user: "${USER}"
 
     environment: &common-env
@@ -66,9 +59,6 @@ services:
       XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
       XDG_CURRENT_DESKTOP: "GNOME"
       BROWSER: "falkon"
-      TERM: "xterm"
-      XTERM_LOCALE: "en_US.UTF-8"
-      XTERM_SHELL: "/usr/bin/bash"
       DISPLAY: "${DISPLAY}"
       XAUTHORITY: "${XAUTHORITY}"
       
@@ -94,7 +84,8 @@ services:
       - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
       - "${XAUTHORITY}:${XAUTHORITY}:rw"
       - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
-
+      - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
+      
     # - "${COMPOSE_APP_DBUS_PATH}:/tmp/${USER}/run/bus:rw"
 
     devices:
@@ -117,12 +108,10 @@ services:
     environment:
       <<: *common-env
 
-      # Note: the deb archive is needed just to get the icon, which does not seem to be included in the standalone install (?)
       LAUNCH_COMMAND: >
         echo "INSTALL PREPARE";
         mkdir -p files;
-        curl -L -o files/zoom_x86_64.tar.xz "https://zoom.us/client/latest/zoom_x86_64.tar.xz";
-        curl -L -o files/zoom_amd64.deb "https://zoom.us/client/latest/zoom_amd64.deb"
+        curl -L -o files/discord.tar.gz "https://discordapp.com/api/download?platform=linux&format=tar.gz"
 
   install: &install
     <<: *common 
@@ -133,19 +122,13 @@ services:
       <<: *common-env
       LAUNCH_COMMAND: >
         echo "INSTALL";
-        rm -rf ~/zoom &&
-        mkdir ~/zoom &&
-        cd ~/zoom &&
-        mkdir tmp &&
-        cd tmp &&
-        ar x ~/files/zoom_amd64.deb &&
-        tar -xf data.tar.xz &&
-        cp ./usr/share/pixmaps/Zoom.png ../. &&
-        cd .. && rm -rf tmp &&
-        tar -xf ~/files/zoom_x86_64.tar.xz &&
+        rm -rf ~/discord &&
+        mkdir ~/discord &&
+        cd ~/discord &&
+        tar -xf ~/files/discord.tar.gz &&
         mkdir -p ~/.local/share/applications &&
-        echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/$USER/zoom/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nEncoding=UTF-8\nCategories=Network;Application;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
-        update-desktop-database ~/.local/share/applications/
+        cp Discord/discord.desktop ~/.local/share/applications/discord.desktop &&
+        sed -i 's%/usr/share/discord/Discord%/home/$USER/discord/Discord/Discord%'  ~/.local/share/applications/discord.desktop
 
   ## UPDATE ##
 
@@ -159,14 +142,14 @@ services:
       LAUNCH_COMMAND: >
         echo "UPDATE CHECK";
         mkdir -p files;
-        if [ -e files/zoom_x86_64.tar.xz ]; then
-          LASTMOD_LINE="$$(curl -sI -L "https://zoom.us/client/latest/zoom_x86_64.tar.xz" | grep -i '^Last-Modified:' | cut "-d:" -f2- | sed 's/^\s*\|\s$//g')";
+        if [ -e files/discord.tar.gz ]; then
+          LASTMOD_LINE="$$(curl -sI -L "https://discordapp.com/api/download?platform=linux&format=tar.gz" | grep -i '^Last-Modified:' | cut "-d:" -f2- | sed 's/^\s*\|\s$//g')";
           if [ -z "$$LASTMOD_LINE" ]; then
             echo "Could not get last modified date";
             exit 0;
           fi;
           REMOTE_TS="$$(date -d "$${LASTMOD_LINE}" +%s)";
-          LOCAL_TS="$$(date -r "files/zoom_x86_64.tar.xz" +%s)";
+          LOCAL_TS="$$(date -r "files/discord.tar.gz" +%s)";
           if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ];
             then echo "No new version";
             exit 0;
@@ -184,19 +167,19 @@ services:
 
   ## EXECUTE ###
 
-  zoom:
+  discord:
     <<: *common
 
-    container_name: htdc_zoom_zoom
+    container_name: htdc_discord_discord
     image: "desktop-container-default"
 
     environment:
       <<: *common-env
       LAUNCH_COMMAND: >
-        echo "ZOOM";
-        cd zoom/zoom;
+        echo "DISCORD";
+        cd discord/Discord;
         pipewire-pulse &
-        LD_LIBRARY_PATH=/home/rar/zoom/zoom:/home/rar/zoom/zoom/Qt/lib exec ./zoom
+        exec ./Discord
 
   ## INTERACTIVE ##
 

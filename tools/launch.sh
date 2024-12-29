@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# Launch sets the following environment variables for use in docker-compose
+#
+#   COMPOSE_APP_HOME: the home directory of the compose app
+#   COMPOSE_APP_DBUS_PATH: the path to the unix socket used by dbus or dbus-proxy
 
 set -e
 
@@ -93,11 +98,23 @@ echo "Container name: $CONTAINER_NAME $(pwd -P)"
 RUNNING_ID="$(podman ps -q -f "name=$CONTAINER_NAME")"
 echo "Running ID: $RUNNING_ID"
 
-export APP_HOME="$(pwd -P)"
+export COMPOSE_APP_HOME="$(pwd -P)"
 
-if [ -z "$RUNNING_ID" ]; then
-    podman-compose  --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 run --name "$CONTAINER_NAME" --rm "$ACTION" bash -c 'eval $LAUNCH_COMMAND \"\$@\"' bash "$@"
-else
+if [ -n "$RUNNING_ID" ]; then
     echo "Container already running; starting process inside running container."
     podman-compose  --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 exec "$ACTION" bash -c 'eval $LAUNCH_COMMAND \"\$@\"' bash "$@"
+    exit 0
 fi
+
+DBUS_PROXY_ARGS="$(yq -r ".\"x-application\".launchers.\"$APP\".\"dbus-proxy\"" compose.yaml)"
+if [ -n "$DBUS_PROXY_ARGS" -a "$DBUS_PROXY_ARGS" != "null" ]; then
+    echo "Launching: xdg-dbus-proxy $DBUS_SESSION_BUS_ADDRESS $XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION $DBUS_PROXY_ARGS"
+    xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION" --filter $DBUS_PROXY_ARGS &
+    DBUS_PROXY_PID=$?
+    trap "kill $DBUS_PROXY_PID" EXIT
+    export COMPOSE_APP_DBUS_PATH="$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION-x"
+else
+    export COMPOSE_APP_DBUS_PATH="${DBUS_SESSION_BUS_ADDRESS/unix:path=}"
+fi
+
+podman-compose  --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 run --name "$CONTAINER_NAME" --rm "$ACTION" bash -c 'eval $LAUNCH_COMMAND \"\$@\"' bash "$@"
