@@ -8,6 +8,9 @@
 !/README.md
 !/.gitignore
 Containerfile
+images/*/outputs
+images/*/opt
+images/*/files
 /**/home/*
 !/**/home/.gitignore
 *~
