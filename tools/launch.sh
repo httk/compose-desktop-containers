@@ -2,8 +2,8 @@
 #
 # Launch sets the following environment variables for use in docker-compose
 #
-#   COMPOSE_APP_HOME: the home directory of the compose app
-#   COMPOSE_APP_DBUS_PATH: the path to the unix socket used by dbus or dbus-proxy
+#   CDC_HOME: the home directory of the compose app
+#   CDC_DBUS_PATH: the path to the unix socket used by dbus or dbus-proxy
 
 set -e
 
@@ -42,9 +42,15 @@ x-common:
 EOF
 
 CONFIG_FILE=""
-if [ -e config.yaml ]; then
-    CONFIG_FILE="-f config.yaml"
+if [ -e override.yaml ]; then
+    CONFIG_FILE="-f override.yaml"
 fi
+
+ENV_FILE=""
+if [ -e .env ]; then
+    ENV_FILE="--env-file .env"
+fi
+
 
 CRUNVER="$(crun --version | awk '/crun version /{print $3}')"
 if ! sort -C -V <<< $'1.9.1\n'"$CRUNVER"; then
@@ -59,8 +65,8 @@ services:
     x-dummy: dummy
 EOF
 
-if [ "$(yq ".\"x-application\".launchers.\"$APP\".devices" compose.yaml)" != "null" ]; then
-    for DEVICE in $(yq -r ".\"x-application\".launchers.\"$APP\".devices[]" compose.yaml); do
+if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq ".services.\"$ACTION\".\"x-launcher\".devices")" != "null" ]; then
+    for DEVICE in $(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".devices[]"); do
 	if [ "$DEVICE" = "video" ]; then
 	    cat <<EOF >> "$OVERRIDE_FILE"
     devices:
@@ -86,35 +92,69 @@ if [ "$ACTION" == "interactive" ]; then
 fi
 
 # Look up container name
-CONTAINER_NAME="$(yq -r ".services.\"$APP\".container_name" compose.yaml)"
+CONTAINER_NAME="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$APP\".container_name")"
 if [ -z "$CONTAINER_NAME" ]; then
-    CONTAINER_NAME="htdc_$APP_$ACTION"
+    CONTAINER_NAME="cdc_$APP_$ACTION"
 fi
 echo "Container name: $CONTAINER_NAME $(pwd -P)"
 
-# Alternative way of finding running container, but I prefer just going directly through podman
+# Alternative wayy of finding running container, but I prefer just going directly through podman
 #RUNNING_NAME=$(podman-compose -f ./compose.yaml ps --format "{{.Names}}" | awk -F_ -vaction="$ACTION" '{if ($2 == action) { print $2} }')
 
 RUNNING_ID="$(podman ps -q -f "name=$CONTAINER_NAME")"
 echo "Running ID: $RUNNING_ID"
 
-export COMPOSE_APP_HOME="$(pwd -P)"
+export CDC_HOME="$(pwd -P)"
+
+LAUNCH_COMMAND="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".command | .[]")"
+if [ -z "$LAUNCH_COMMAND" -o "$LAUNCH_COMMAND" == "null" ]; then
+    echo "No launch command defined for this service"
+    exit 1
+fi
 
 if [ -n "$RUNNING_ID" ]; then
     echo "Container already running; starting process inside running container."
-    podman-compose  --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 exec "$ACTION" bash -c 'eval $LAUNCH_COMMAND \"\$@\"' bash "$@"
+    #podman-compose  --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 exec "$ACTION" bash -c 'eval $LAUNCH_COMMAND \"\$@\"' bash "$@"
+    podman-compose --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 exec "$ACTION" bash -c "$LAUNCH_COMMAND" bash "$@"
     exit 0
 fi
 
-DBUS_PROXY_ARGS="$(yq -r ".\"x-application\".launchers.\"$APP\".\"dbus-proxy\"" compose.yaml)"
-if [ -n "$DBUS_PROXY_ARGS" -a "$DBUS_PROXY_ARGS" != "null" ]; then
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${UID}/bus"
+fi
+
+DBUS_PROXY_ARGS="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".\"dbus-proxy\"")"
+if [ "$DBUS_PROXY_ARGS" != "null" ]; then
     echo "Launching: xdg-dbus-proxy $DBUS_SESSION_BUS_ADDRESS $XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION $DBUS_PROXY_ARGS"
     xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION" --filter $DBUS_PROXY_ARGS &
     DBUS_PROXY_PID=$?
     trap "kill $DBUS_PROXY_PID" EXIT
-    export COMPOSE_APP_DBUS_PATH="$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION-x"
+    export CDC_DBUS_PATH="$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION"
 else
-    export COMPOSE_APP_DBUS_PATH="${DBUS_SESSION_BUS_ADDRESS/unix:path=}"
+    export CDC_DBUS_PATH="${DBUS_SESSION_BUS_ADDRESS/unix:path=}"
 fi
 
-podman-compose  --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 run --name "$CONTAINER_NAME" --rm "$ACTION" bash -c 'eval $LAUNCH_COMMAND \"\$@\"' bash "$@"
+if [ -z "$DBUS_SYSTEM_BUS_ADDRESS" ]; then
+    export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/run/dbus/system_bus_socket"
+fi
+
+DBUS_SYSTEM_PROXY_ARGS="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".\"dbus-system-proxy\"")"
+if [ "$DBUS_SYSTEM_PROXY_ARGS" != "null" ]; then
+    echo "Launching: xdg-dbus-proxy $DBUS_SYSTEM_BUS_ADDRESS $XDG_RUNTIME_DIR/bus-system-proxy-$APP-$ACTION $DBUS_SYSTEM_PROXY_ARGS"
+    xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION" $DBUS_SYSTEM_PROXY_ARGS &
+    DBUS_SYSTEM_PROXY_PID=$?
+    trap "kill $DBUS_SYSTEM_PROXY_PID" EXIT
+    export CDC_DBUS_SYSTEM_PATH="$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION"
+else
+    export CDC_DBUS_SYSTEM_PATH="${DBUS_SESSION_BUS_ADDRESS/unix:path=}"
+fi
+
+#podman-compose  --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 run --name "$CONTAINER_NAME" --rm "$ACTION" bash -c 'eval $LAUNCH_COMMAND \"\$@\"' bash "$@"
+
+if [ -n "$CDC_DEBUG" ]; then
+    echo "=== CONFIG ==="
+    podman-compose  --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 config
+    echo "=============="
+fi
+    
+podman-compose  --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 run --name "$CONTAINER_NAME" --rm "$ACTION" bash -c "$LAUNCH_COMMAND" bash "$@"

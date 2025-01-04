@@ -30,15 +30,26 @@ DEST_ABSPATH="$(cd -- "$DEST"; pwd -P)"
 ln -sf "$(realpath -- "$SOURCE")" "$DEST_ABSPATH/compose.yaml"
 cd "$DEST_ABSPATH"
 
-if [ ! -e config.yaml ]; then
-    if [ "$(yq -r '."x-application"."config-default"' compose.yaml)" != "null" ]; then
-	yq -r '."x-application"."config-default"' compose.yaml > config.yaml
+if [ ! -e override.yaml ]; then
+    if [ "$(yq -r '."x-application"."override-default"' compose.yaml)" != "null" ]; then
+	yq -r '."x-application"."override-default"' compose.yaml > override.yaml
     else
-	cat <<EOF > config.yaml
+	cat <<EOF > override.yaml
 version: "3.8"
-
-# This container has no configurable options
 EOF
+    fi
+fi
+
+if [ ! -e .env ]; then
+    if [ "$(yq -r '."x-application"."env-default"' compose.yaml)" != "null" ]; then
+	yq -r '."x-application"."env-default"' compose.yaml > .env
+    else
+	cat <<EOF > .env
+# No configurable options
+EOF
+    fi
+    if [ ! -e env ]; then
+	ln -s .env env
     fi
 fi
 

@@ -14,12 +14,135 @@ x-application:
   config-default: |
     version: "3.8"
 
+  env-default: |
     # This container has no configurable options
 
-  launchers:
+services:
 
-    discord:
+  ## COMMON PART ##
 
+  common: &common
+
+    image: "desktop-container-default"
+
+    working_dir: /home/$USER
+    hostname: "discord_container"
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
+      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
+      XDG_CURRENT_DESKTOP: "GNOME"
+      BROWSER: "falkon"
+      DISPLAY: "${DISPLAY}"
+      XAUTHORITY: "${XAUTHORITY}"
+
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_CHROOT
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "512m"
+
+    volumes: &common-volumes
+      - "${CDC_HOME}/home:/home/${USER}:rw"
+      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+      - "${XAUTHORITY}:${XAUTHORITY}:rw"
+      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
+      - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
+      
+    devices:
+      - "/dev/dri:/dev/dri"
+      - "/dev/snd:/dev/snd"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+
+  ## INSTALL ##
+  
+  install-prepare: &install-prepare
+    <<: *common
+
+    environment:
+      <<: *common-env
+
+    command: 
+      - echo "INSTALL PREPARE"
+      - mkdir -p files
+      - curl -L -o files/discord.tar.gz "https://discordapp.com/api/download?platform=linux&format=tar.gz"
+
+
+  install: &install
+    <<: *common 
+
+    command: 
+      - echo "INSTALL"
+      - rm -rf ~/discord &&
+        mkdir ~/discord &&
+        cd ~/discord &&
+        tar -xf ~/files/discord.tar.gz &&
+        mkdir -p ~/.local/share/applications &&
+        cp Discord/discord.desktop ~/.local/share/applications/discord.desktop &&
+        sed -i 's%/usr/share/discord/Discord%/home/$USER/discord/Discord/Discord%' ~/.local/share/applications/discord.desktop
+
+  ## UPDATE ##
+
+  update-check: &update-check
+    <<: *common 
+
+    command: 
+      - echo "UPDATE CHECK"
+      - mkdir -p files
+      - if [ -e files/discord.tar.gz ]; then
+          LASTMOD_LINE="$$(curl -sI -L "https://discordapp.com/api/download?platform=linux&format=tar.gz" | grep -i '^Last-Modified:' | cut "-d:" -f2- | sed 's/^\s*\|\s$$//g')";
+          if [ -z "$$LASTMOD_LINE" ]; then
+            echo "Could not get last modified date";
+            exit 0;
+          fi;
+          REMOTE_TS="$$(date -d "$${LASTMOD_LINE}" +%s)";
+          LOCAL_TS="$$(date -r "files/discord.tar.gz" +%s)";
+          if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ]; then
+            echo "No new version";
+            exit 0;
+          fi;
+        fi
+      - echo "File missing, or server-side file newer"
+      - exit 1 
+
+  update-prepare: &update-prepare
+    <<: *install-prepare   
+
+  update: &update
+    <<: *install 
+
+
+  ## EXECUTE ###
+
+  discord:
+    <<: *common
+
+    container_name: cdc_discord_discord
+
+    command: 
+      - echo "DISCORD"
+      - cd discord/Discord
+      - pipewire-pulse &
+      - exec ./Discord
+
+    x-launcher:
+    
       devices:
         - video
 
@@ -43,151 +166,11 @@ x-application:
             size: 256
             dest: discord.png
 
-services:
-
-  ## COMMON PART ##
-
-  common: &common
-
-    working_dir: /home/$USER
-    hostname: "discord_container"
-    user: "${USER}"
-
-    environment: &common-env
-      LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
-      XDG_CURRENT_DESKTOP: "GNOME"
-      BROWSER: "falkon"
-      DISPLAY: "${DISPLAY}"
-      XAUTHORITY: "${XAUTHORITY}"
-      
-      #DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/${USER}/run/bus"
-
-    cap_drop:
-      - ALL
-    cap_add:
-      - SYS_CHROOT
-
-    security_opt:
-      - no-new-privileges
-
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /run
-
-    shm_size: "512m"
-
-    volumes: &common-volumes
-      - "${COMPOSE_APP_HOME}/home:/home/${USER}:rw"
-      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
-      - "${XAUTHORITY}:${XAUTHORITY}:rw"
-      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
-      - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
-      
-    # - "${COMPOSE_APP_DBUS_PATH}:/tmp/${USER}/run/bus:rw"
-
-    devices:
-      - "/dev/dri:/dev/dri"
-      - "/dev/snd:/dev/snd"
-
-    security_opt:
-      - "label=disable"
-
-    userns_mode: "keep-id"
-
-
-  ## INSTALL ##
-  
-  install-prepare: &install-prepare
-    <<: *common
-
-    image: "desktop-container-default"
-
-    environment:
-      <<: *common-env
-
-      LAUNCH_COMMAND: >
-        echo "INSTALL PREPARE";
-        mkdir -p files;
-        curl -L -o files/discord.tar.gz "https://discordapp.com/api/download?platform=linux&format=tar.gz"
-
-  install: &install
-    <<: *common 
-
-    image: "desktop-container-default"
-
-    environment:
-      <<: *common-env
-      LAUNCH_COMMAND: >
-        echo "INSTALL";
-        rm -rf ~/discord &&
-        mkdir ~/discord &&
-        cd ~/discord &&
-        tar -xf ~/files/discord.tar.gz &&
-        mkdir -p ~/.local/share/applications &&
-        cp Discord/discord.desktop ~/.local/share/applications/discord.desktop &&
-        sed -i 's%/usr/share/discord/Discord%/home/$USER/discord/Discord/Discord%'  ~/.local/share/applications/discord.desktop
-
-  ## UPDATE ##
-
-  update-check: &update-check
-    <<: *common 
-
-    image: "desktop-container-default"
-
-    environment:
-      <<: *common-env
-      LAUNCH_COMMAND: >
-        echo "UPDATE CHECK";
-        mkdir -p files;
-        if [ -e files/discord.tar.gz ]; then
-          LASTMOD_LINE="$$(curl -sI -L "https://discordapp.com/api/download?platform=linux&format=tar.gz" | grep -i '^Last-Modified:' | cut "-d:" -f2- | sed 's/^\s*\|\s$//g')";
-          if [ -z "$$LASTMOD_LINE" ]; then
-            echo "Could not get last modified date";
-            exit 0;
-          fi;
-          REMOTE_TS="$$(date -d "$${LASTMOD_LINE}" +%s)";
-          LOCAL_TS="$$(date -r "files/discord.tar.gz" +%s)";
-          if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ];
-            then echo "No new version";
-            exit 0;
-          fi;
-        fi;
-        echo "File missing, or server-side file newer";
-        exit 1 
-
-  update-prepare: &update-prepare
-    <<: *install-prepare   
-
-  update: &update
-    <<: *install 
-
-
-  ## EXECUTE ###
-
-  discord:
-    <<: *common
-
-    container_name: htdc_discord_discord
-    image: "desktop-container-default"
-
-    environment:
-      <<: *common-env
-      LAUNCH_COMMAND: >
-        echo "DISCORD";
-        cd discord/Discord;
-        pipewire-pulse &
-        exec ./Discord
-
   ## INTERACTIVE ##
 
   interactive:
     <<: *common
 
-    image: "desktop-container-default"
-
-    environment:
-      <<: *common-env
-      LAUNCH_COMMAND: echo "INTERACTIVE"; bash
+    command: 
+      - echo "INTERACTIVE"
+      - bash
