@@ -18,16 +18,16 @@ x-application:
       icon: microsoft365
       entries:
         - name: "OneDrive"
-          wmclass-file: install/microsoft365/onedrive.appid
+          wmclass-file: install/microsoft365/onedrive.wmclass
           launch: onedrive
         - name: "Outlook"
-          wmclass-file: install/microsoft365/outlook.appid
+          wmclass-file: install/microsoft365/outlook.wmclass
           launch: outlook
         - name: "Teams"
-          wmclass-file: install/microsoft365/msteams.appid
+          wmclass-file: install/microsoft365/msteams.wmclass
           launch: msteams
         - name: "Forms"
-          wmclass-file: install/microsoft365/msforms.appid
+          wmclass-file: install/microsoft365/msforms.wmclass
           launch: msforms
     desktop:
       file: |
@@ -55,7 +55,6 @@ services:
     image: "desktop-container-default"
 
     working_dir: /home/$USER
-    hostname: "microsoft365_container"
     user: "${USER}"
 
     environment: &common-env
@@ -188,11 +187,14 @@ services:
           Name=Microsoft Teams (container)
           Comment=Microsoft Teams
           GenericName=Internet Messenger
+          StartupWMClass=msteams
           Exec=msteams
           Icon=msteams
           Type=Application
           Categories=Network;InstantMessaging;
           Path=/usr/bin
+
+        wmclass-file: install/microsoft365/msteams.wmclass
 
         icons:
           - source: .local/share/icons/hicolor/256x256/apps/msteams.png
@@ -227,6 +229,8 @@ services:
           Categories=Network;
           Path=/usr/bin
 
+        wmclass-file: install/microsoft365/onedrive.wmclass
+
         icons:
           - source: .local/share/icons/hicolor/256x256/apps/onedrive.png
             size: 256
@@ -253,6 +257,7 @@ services:
           Name=Outlook (PWA) (container)
           Comment=Microsoft Outlook
           GenericName=Email and calendar
+          StartupWMClass=outlook
           Exec=outlook
           Icon=outlook
           Type=Application
@@ -272,6 +277,8 @@ services:
           [Desktop Action Open-calendar]
           Name=Open calendar
           Exec=outlook --app-launch-url-for-shortcuts-menu-item=https://outlook.office.com/calendar
+
+        wmclass-file: install/microsoft365/outlook.wmclass
 
         icons:
           - source: .local/share/icons/hicolor/256x256/apps/outlook.png
@@ -299,11 +306,14 @@ services:
           Name=Microsoft Forms (container)
           Comment=Tool to create online surveys, forms, polls and quizzies
           GenericName=Form tool
-          Exec=forms
-          Icon=forms
+          StartupWMClass=msforms  
+          Exec=msforms
+          Icon=msforms
           Type=Application
           Categories=Network;
           Path=/usr/bin
+
+        wmclass-file: install/microsoft365/msforms.wmclass
 
         icons:
           - source: .local/share/icons/hicolor/256x256/apps/msforms.png

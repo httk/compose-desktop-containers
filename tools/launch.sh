@@ -8,6 +8,8 @@
 set -e
 
 SCRIPTPATH="$(cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)"
+TOOLPATH="$(dirname -- "$(realpath -- "$0")")"
+PODMAN_RUN_ARGS=""
 
 if [ -z "$(readlink "$0")" ]; then
     # Non-symlink invokation
@@ -59,9 +61,17 @@ if ! sort -C -V <<< $'1.9.1\n'"$CRUNVER"; then
 EOF
 fi
 
+export CDC_HOSTNAME=$(hostname)
+# To avoid confusion in interactive mode we set a different hostname
+# However, for .desktop-file mapping to work otherwise, we must use the same hostname (!)
+if [ "$ACTION" = "interactive" ]; then
+    CDC_HOSTNAME="cdc_$APP_$ACTION_container"
+fi
+PODMAN_RUN_ARGS="--podman-run-args \"\\\--hostname $CDC_HOSTNAME\""
+
 cat <<EOF >> "$OVERRIDE_FILE"
 services:
-  $APP:
+  $ACTION:
     x-dummy: dummy
 EOF
 
@@ -84,9 +94,8 @@ echo "==== OVERRIDE FILE ===="
 cat "$OVERRIDE_FILE"
 echo "======================="
 
-INTERACTIVE=""
 if [ "$ACTION" == "interactive" ]; then
-    INTERACTIVE="--podman-run-args \"\-it\""
+    PODMAN_RUN_ARGS="$PODMAN_RUN_ARGS --podman-run-args \\\-it"
 fi
 
 # Look up container name
@@ -112,7 +121,7 @@ fi
 
 if [ -n "$RUNNING_ID" ]; then
     echo "Container already running; starting process inside running container."
-    exec /usr/bin/env --split-string="podman-compose --env-file \"$CDC_HOME/.env\" --in-pod false -f compose.yaml -f \"$OVERRIDE_FILE\" $CONFIG_FILE $INTERACTIVE exec \"$ACTION\"" bash -c "$LAUNCH_COMMAND" bash "$@"
+    exec /usr/bin/env --split-string="podman-compose --env-file \"$CDC_HOME/.env\" --in-pod false -f compose.yaml -f \"$OVERRIDE_FILE\" $CONFIG_FILE $PODMAN_RUN_ARGS exec \"$ACTION\"" bash -c "$LAUNCH_COMMAND" bash "$@"
     exit 1
 fi
 
@@ -162,15 +171,18 @@ if [ -n "$TRAY" -a "$TRAY" != "null" ]; then
     else
       TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
     fi
-    PRELAUNCHER="\"${SCRIPTPATH}/../dependencies/submodules/tray-tools/bin/tray-wrapper\" --app-name \"$TRAY_NAME\" --icon \"home/$TRAY_ICON\" $TRAY_WMCLASS_ARG --"
+    PRELAUNCHER="\"${TOOLPATH}/../dependencies/submodules/tray-utils/bin/tray-wrapper\" --app-name \"$TRAY_NAME\" --icon \"home/$TRAY_ICON\" $TRAY_WMCLASS_ARG --"
 else
     PRELAUNCHER=""
 fi
 
 if [ -n "$CDC_DEBUG" ]; then
     echo "=== CONFIG ==="
-    podman-compose  --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 config
+    podman-compose  --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $PODMAN_RUN_ARGS config
     echo "=============="
 fi
 
-exec /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_HOME}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${INTERACTIVE} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
+echo /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_HOME}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
+
+# Do not use exec here, we need the TRAPS to run once done
+/usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_HOME}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"

@@ -20,7 +20,6 @@ services:
     image: "desktop-container-default"
 
     working_dir: /home/${USER}
-    hostname: "flashprint_container"
     user: "${USER}"
 
     environment: &common-env
@@ -142,6 +141,7 @@ services:
           [Desktop Entry]
           GenericName=FlashPrint5
           Name=FlashForge 3D Printer Control Software v5 (container)
+          StartupWMClass=FlashPrint
           MimeType=text/plain;
           Exec=flashprint
           Icon=flashforge5

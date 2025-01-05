@@ -23,7 +23,6 @@ services:
     image: "desktop-container-default"
 
     working_dir: /home/$USER
-    hostname: "google_chrome_container"
     user: "${USER}"
 
     environment: &common-env
@@ -130,6 +129,7 @@ services:
           Comment=Access the Internet
           Exec=google-chrome %U
           StartupNotify=true
+          StartupWMClass=google-chrome
           Terminal=false
           Icon=google-chrome
           Type=Application

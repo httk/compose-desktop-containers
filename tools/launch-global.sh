@@ -4,6 +4,7 @@
 set -e
 
 SCRIPTPATH="$(cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)"
+TOOLPATH="$(dirname -- "$(realpath -- "$0")")"
 
 if [ -z "$(readlink "$0")" ]; then
     # Non-symlink invokation
@@ -49,7 +50,7 @@ if [ "$ACTION" == "tray" ]; then
 	MULTI_TRAY_ARGS="$MULTI_TRAY_ARGS --app \"$ENTRY_NAME\" \"$ENTRY_WMCLASS\" \"./$ENTRY_LAUNCH\""
     done
     
-    /usr/bin/env --split-string="\"$SCRIPTPATH/../dependencies/submodules/tray-tools/bin/multi-app-tray\" --icon \"$ICON\" $MULTI_TRAY_ARGS"
+    /usr/bin/env --split-string="\"$TOOLPATH/../dependencies/submodules/tray-utils/bin/multi-app-tray\" --icon \"$ICON\" $MULTI_TRAY_ARGS"
     RUNNING_CONTAINERS="$(podman ps -q -f "name=cdc_$APP_*")"
     if [ -n "$RUNNING_CONTAINERS" ]; then
 	   podman kill ${RUNNING_CONTAINERS}
