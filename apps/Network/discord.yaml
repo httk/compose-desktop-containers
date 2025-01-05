@@ -156,7 +156,6 @@ services:
           Exec=discord %U
           Terminal=false
           Type=Application
-          Encoding=UTF-8
           Icon=discord
           Categories=Network;InstantMessaging;
           MimeType=x-scheme-handler/discord;

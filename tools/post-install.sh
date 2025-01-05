@@ -88,7 +88,6 @@ if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq -r '."x-appl
 	ICONS_NBR=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".\"x-application\".\"global-launcher\".desktop.icons | length")
 	for (( ICON_IDX=0; ICON_IDX<ICONS_NBR; ICON_IDX++ )); do
 	    # Sanetize icon paths somewhat
-	    echo "HERE3?"
 	    ICON_SRC=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".\"x-application\".\"global-launcher\".desktop.icons[$ICON_IDX].source")
 	    ICON_SRC=${ICON_SRC//[^[:ascii:]]}
 	    ICON_SRC=${ICON_SRC//../}

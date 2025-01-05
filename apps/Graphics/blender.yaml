@@ -45,7 +45,7 @@ services:
     shm_size: "1G"
 
     volumes: &common-volumes
-      - "${CDC_APP_HOME}/home:/home/${USER}:rw"
+      - "${CDC_HOME}/home:/home/${USER}:rw"
       - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
       - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
       
@@ -144,7 +144,6 @@ services:
           Exec=blender %f
           Terminal=false
           Type=Application
-          Encoding=UTF-8
           Icon=blender
           Categories=Graphics;3DGraphics;
           MimeType=application/x-blender;

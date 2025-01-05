@@ -34,37 +34,5 @@ DEST_ABSPATH="$(cd -- "$DEST"; pwd -P)"
 ln -sf "$(realpath -- "$SOURCE")" "$DEST_ABSPATH/compose.yaml"
 cd "$DEST_ABSPATH"
 
-if [ ! -e override.yaml ]; then
-    if [ "$(yq -r '."x-application"."override-default"' compose.yaml)" != "null" ]; then
-	yq -r '."x-application"."override-default"' compose.yaml > override.yaml
-    else
-	cat <<EOF > override.yaml
-version: "3.8"
-EOF
-    fi
-fi
+"$SCRIPTPATH/reinstall.sh"
 
-if [ ! -e .env ]; then
-    if [ "$(yq -r '."x-application"."env-default"' compose.yaml)" != "null" ]; then
-	yq -r '."x-application"."env-default"' compose.yaml > .env
-    else
-	cat <<EOF > .env
-# No configurable options
-EOF
-    fi
-    if [ ! -e env ]; then
-	ln -s .env env
-    fi
-fi
-
-if [ "$(yq -r '."x-application"."readme"' compose.yaml)" != "null" ]; then
-    yq -r '."x-application"."readme"' compose.yaml > README.md
-else
-    cat <<EOF > README.md
-This app is missing a README.
-EOF
-fi
-
-"$SCRIPTPATH/launch.sh" install-prepare
-"$SCRIPTPATH/launch.sh" install
-"$SCRIPTPATH/post-install.sh"
