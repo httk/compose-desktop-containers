@@ -89,13 +89,13 @@ services:
 
     command: 
       - echo "INSTALL"
-      - rm -rf ~/discord &&
-        mkdir ~/discord &&
-        cd ~/discord &&
+      - rm -rf ~/install &&
+        mkdir ~/install &&
+        cd ~/install &&
         tar -xf ~/files/discord.tar.gz &&
         mkdir -p ~/.local/share/applications &&
         cp Discord/discord.desktop ~/.local/share/applications/discord.desktop &&
-        sed -i 's%/usr/share/discord/Discord%/home/$USER/discord/Discord/Discord%' ~/.local/share/applications/discord.desktop
+        sed -i 's%/usr/share/discord/Discord%/home/$${USER}/discord/Discord/Discord%' ~/.local/share/applications/discord.desktop
 
   ## UPDATE ##
 
@@ -139,7 +139,7 @@ services:
       - echo "DISCORD"
       - cd discord/Discord
       - pipewire-pulse &
-      - exec ./Discord
+      - exec ./Discord "$$@"
 
     x-launcher:
     
@@ -162,7 +162,7 @@ services:
           MimeType=x-scheme-handler/discord;
           
         icons:
-          - source: discord/Discord/discord.png
+          - source: install/Discord/discord.png
             size: 256
             dest: discord.png
 
@@ -173,4 +173,4 @@ services:
 
     command: 
       - echo "INTERACTIVE"
-      - bash
+      - bash "$$@"

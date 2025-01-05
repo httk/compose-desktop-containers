@@ -1,0 +1,178 @@
+version: "3.8"
+
+# Note: google chrome is installed in the image itself as it is needed for progressive web apps.
+# Hence, this app file is just wrapping running the container-installed google-crome.
+
+x-application:
+
+  readme: |
+    Google Chrome: web browser developed by Google.
+
+  override-default: |
+    version: "3.8"
+
+  env-default: |
+    # This container has no configurable options
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "desktop-container-default"
+
+    working_dir: /home/$USER
+    hostname: "google_chrome_container"
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
+      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
+      XDG_CURRENT_DESKTOP: "GNOME"
+      BROWSER: "falkon"
+      WAYLAND_DISPLAY: "${WAYLAND_DISPLAY}"
+
+    cap_drop:
+      - ALL
+
+    cap_add:
+      - SYS_CHROOT
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_HOME}/home:/home/${USER}:rw"
+      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
+      - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+      - "/dev/snd:/dev/snd"
+
+    security_opt:
+      - "label=no-new-privileges"
+
+    userns_mode: "keep-id"
+
+
+  ## INSTALL ##
+
+  install-prepare: &install-prepare
+    <<: *common
+
+    command:
+      - echo "INSTALL PREPARE";
+
+  install: &install
+    <<: *common
+
+    command:
+      - echo "INSTALL";
+      - mkdir -p ~/.local/share/icons/hicolor/16x16/apps
+      - mkdir -p ~/.local/share/icons/hicolor/24x24/apps
+      - mkdir -p ~/.local/share/icons/hicolor/32x32/apps
+      - mkdir -p ~/.local/share/icons/hicolor/48x48/apps
+      - mkdir -p ~/.local/share/icons/hicolor/64x64/apps
+      - mkdir -p ~/.local/share/icons/hicolor/128x128/apps
+      - mkdir -p ~/.local/share/icons/hicolor/256x256/apps
+      - cp /usr/share/icons/hicolor/16x16/apps/google-chrome.png ~/.local/share/icons/hicolor/16x16/apps/.
+      - cp /usr/share/icons/hicolor/24x24/apps/google-chrome.png ~/.local/share/icons/hicolor/24x24/apps/.
+      - cp /usr/share/icons/hicolor/32x32/apps/google-chrome.png ~/.local/share/icons/hicolor/32x32/apps/.
+      - cp /usr/share/icons/hicolor/48x48/apps/google-chrome.png ~/.local/share/icons/hicolor/48x48/apps/.
+      - cp /usr/share/icons/hicolor/64x64/apps/google-chrome.png ~/.local/share/icons/hicolor/64x64/apps/.
+      - cp /usr/share/icons/hicolor/128x128/apps/google-chrome.png ~/.local/share/icons/hicolor/128x128/apps/.
+      - cp /usr/share/icons/hicolor/256x256/apps/google-chrome.png ~/.local/share/icons/hicolor/256x256/apps/.
+
+  ## UPDATE ##
+
+  update-check: &update-check
+    <<: *common
+
+    command:
+      - echo "UPDATE CHECK"
+      - echo "No new version" "$$@"
+      - exit 0
+
+  update-prepare: &update-prepare
+    <<: *install-prepare
+
+  update: &update
+    <<: *install
+
+
+  ## EXECUTE ###
+
+  google-chrome:
+    <<: *common
+
+    container_name: cdc_google_chrome_google_chrome
+
+    command:
+      - echo "GOOGLE_CHROME"
+      - pipewire-pulse &
+      - exec google-chrome --ozone-platform=wayland "$$@"
+
+    x-launcher:
+      desktop:
+        file: |
+          [Desktop Entry]
+          Name=Google Chrome (container)
+          Comment=Access the Internet
+          Exec=google-chrome %U
+          StartupNotify=true
+          Terminal=false
+          Icon=google-chrome
+          Type=Application
+          Categories=Network;WebBrowser;
+          MimeType=application/pdf;application/rdf+xml;application/rss+xml;application/xhtml+xml;application/xhtml_xml;application/xml;image/gif;image/jpeg;image/png;image/webp;text/html;text/xml;x-scheme-handler/http;x-scheme-handler/https;
+          Actions=new-window;new-private-window;
+
+          [Desktop Action new-window]
+          Name=New Window
+          Exec=/usr/bin/google-chrome
+
+          [Desktop Action new-private-window]
+          Name=New Incognito Window
+          Exec=/usr/bin/google-chrome --incognito
+
+        icons:
+          - source: .local/share/icons/hicolor/16x16/apps/google-chrome.png
+            size: 16
+            dest: google-chrome.png
+          - source: .local/share/icons/hicolor/24x24/apps/google-chrome.png
+            size: 24
+            dest: google-chrome.png
+          - source: .local/share/icons/hicolor/32x32/apps/google-chrome.png
+            size: 32
+            dest: google-chrome.png
+          - source: .local/share/icons/hicolor/48x48/apps/google-chrome.png
+            size: 48
+            dest: google-chrome.png
+          - source: .local/share/icons/hicolor/64x64/apps/google-chrome.png
+            size: 64
+            dest: google-chrome.png
+          - source: .local/share/icons/hicolor/128x128/apps/google-chrome.png
+            size: 128
+            dest: google-chrome.png
+          - source: .local/share/icons/hicolor/256x256/apps/google-chrome.png
+            size: 256
+            dest: google-chrome.png
+
+  ## INTERACTIVE ##
+
+  interactive:
+    <<: *common
+
+    command:
+      - echo "INTERACTIVE"
+      - bash "$$@"

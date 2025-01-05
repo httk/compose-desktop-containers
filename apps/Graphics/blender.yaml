@@ -17,7 +17,9 @@ services:
 
   common: &common
 
-    working_dir: /home/$USER
+    image: "desktop-container-default"
+
+    working_dir: /home/${USER}
     hostname: "blender_container"
     user: "${USER}"
 
@@ -62,58 +64,53 @@ services:
   install-prepare: &install-prepare
     <<: *common
 
-    image: "desktop-container-default"
-
-    command: >
-      echo "INSTALL PREPARE";
-      mkdir -p files;
-      THANKSURL="$(curl -L 'https://www.blender.org/download/' | cat | sed -n '\|^.*"\(https://www.blender.org/download/release/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz[^\"]*\)".*$|{s||\1|p;q}')";
-      LATESTURL="$(curl -L "$THANKSURL" | cat | sed -n '\|^.*"\(https:.*/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz\)".*$|{s||\1|p;q}')";
-      LATESTFILENAME="${LATESTURL##*/}";
-      if [ -z "$LATESTFILENAME" ]; then
-        echo "Failed to determine latest version.";
-        exit 1;
-      fi;
-      curl -L -o files/$LATESTFILENAME "$LATESTURL" && ln -sf $LATESTFILENAME files/blender-latest-linux-x64.tar.xz
+    command: 
+      - echo "INSTALL PREPARE"
+      - mkdir -p files
+      - THANKSURL="$$(curl -L 'https://www.blender.org/download/' | cat | sed -n '\|^.*"\(https://www.blender.org/download/release/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz[^\"]*\)".*$$|{s||\1|p;q}')"
+      - LATESTURL="$$(curl -L "$$THANKSURL" | cat | sed -n '\|^.*"\(https:.*/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz\)".*$$|{s||\1|p;q}')"
+      - LATESTFILENAME="$${LATESTURL##*/}"
+      - if [ -z "$$LATESTFILENAME" ]; then
+          echo "Failed to determine latest version.";
+          exit 1;
+        fi;
+      - curl -L -o files/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME files/blender-latest-linux-x64.tar.xz
 
   install: &install
     <<: *common 
 
-    image: "desktop-container-default"
-
-    command: >
-      echo "INSTALL";
-      rm -rf ~/install &&
-      mkdir ~/install &&
-      cd ~/install &&
-      tar -xf ~/files/blender-latest-linux-x64.tar.xz &&
-      mv blender-* blender &&
-      mkdir -p ~/.local/share/applications &&
-      cp blender/blender.desktop ~/.local/share/applications/blender.desktop &&
-      sed -i 's%^Exec=.*$%Exec=/home/${USER}/install/blender/blender%'  ~/.local/share/applications/blender.desktop
+    command: 
+      - echo "INSTALL"
+      - rm -rf ~/install &&
+        mkdir ~/install &&
+        cd ~/install &&
+        tar -xf ~/files/blender-latest-linux-x64.tar.xz &&
+        mv blender-* blender &&
+        mkdir -p ~/.local/share/applications &&
+        cp blender/blender.desktop ~/.local/share/applications/blender.desktop &&
+        sed -i 's%^Exec=.*$$%Exec=/home/$${USER}/install/blender/blender%'  ~/.local/share/applications/blender.desktop
 
   ## UPDATE ##
 
   update-check: &update-check
     <<: *common 
 
-    image: "desktop-container-default"
-
-    command: >
-      echo "UPDATE CHECK";
-      THANKSURL="$(curl -L -N 'https://www.blender.org/download/' | cat | sed -n '\|^.*"\(https://www.blender.org/download/release/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz[^\"]*\)".*$|{s||\1|p;q}')";
-      LATESTURL="$(curl -L -N "$THANKSURL" | sed -n '\|^.*"\(https:.*/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz\)".*$|{s||\1|p;q}')";
-      LATESTFILENAME="${LATESTURL##*/}";
-      if [ -z "$LATESTFILENAME" ]; then
+    command: 
+      - echo "UPDATE CHECK"
+      - THANKSURL="$$(curl -L -N 'https://www.blender.org/download/' | cat | sed -n '\|^.*"\(https://www.blender.org/download/release/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz[^\"]*\)".*$$|{s||\1|p;q}')"
+      - LATESTURL="$$(curl -L -N "$$THANKSURL" | sed -n '\|^.*"\(https:.*/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz\)".*$$|{s||\1|p;q}')"
+      - LATESTFILENAME="$${LATESTURL##*/}";
+      - if [ -z "$$LATESTFILENAME" ]; then
           echo "Failed to determine latest version.";
           exit 1;
-      fi;
-      mkdir -p files;
-          echo "No new version" "$GURK" "$@";
+      - fi
+      - mkdir -p files
+      - if [ -e "files/$$LATESTFILENAME" ]; then
+          echo "No new version";
           exit 0;
-      fi;
-      echo "File missing, or server-side file newer";
-      exit 1;
+        fi
+      - echo "File missing, or server-side file newer"
+      - exit 1
 
   update-prepare: &update-prepare
     <<: *install-prepare   
@@ -127,14 +124,13 @@ services:
   blender:
     <<: *common
 
-    container_name: htdc_blender_blender
-    image: "desktop-container-default"
+    container_name: cdc_blender_blender
 
-    command: >
-      echo "BLENDER";
-      cd install/blender;
-      pipewire-pulse &
-      exec ./blender
+    command: 
+      - echo "BLENDER"
+      - cd install/blender
+      - pipewire-pulse &
+      - exec ./blender "$$@"
 
     x-launcher:
       desktop:
@@ -164,8 +160,6 @@ services:
   interactive:
     <<: *common
 
-    image: "desktop-container-default"
-
-    command: >
-      echo "INTERACTIVE";
-      bash
+    command: 
+      - echo "INTERACTIVE"
+      - bash "$$@"

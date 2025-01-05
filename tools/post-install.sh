@@ -21,7 +21,8 @@ for LAUNCHER in $(podman-compose -f compose.yaml -f override.yaml config | yq -r
 	ln -sf "$SCRIPTPATH/launch.sh" "$LAUNCHER"
 	if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq ".services.\"$LAUNCHER\".\"x-launcher\".desktop")" != "null" ]; then
 	    mkdir -p ~/.local/share/applications
-	    podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\".desktop.file" | sed "s|^Exec=.*\$|Exec=\"${DEST_ABSPATH}/$APP\" %U|" > ~/.local/share/applications/"${LAUNCHER}_container.desktop"
+	    podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\".desktop.file" | sed "s|^Exec=$LAUNCHER|Exec=\"${DEST_ABSPATH}/$LAUNCHER\"|" > ~/.local/share/applications/"${LAUNCHER}_container.desktop"
+	    desktop-file-validate ~/.local/share/applications/"${LAUNCHER}_container.desktop"
 	    echo "Wrote: ~/.local/share/applications/${LAUNCHER}_container.desktop"
 
 	    ICONS_NBR=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\".desktop.icons | length")

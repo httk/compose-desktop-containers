@@ -20,8 +20,12 @@ else
 fi
 
 if ! yq -r '."x-application"' "$SOURCE" > /dev/null 2>&1 || [ "$(yq -r '."x-application"' "$SOURCE" 2>/dev/null)" == "null" ]; then
-    echo "This is not a desktop-container yaml file."
-    #yq -r '."x-application"' "$SOURCE" ## uncomment to debug
+
+    echo "=== Error dump ==="
+    yq -r '."x-application"' "$SOURCE" && true
+    echo "=================="
+
+    echo "This does not seem to be a valid desktop-container yaml file."
     exit 1
 fi
 

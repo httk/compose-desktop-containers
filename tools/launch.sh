@@ -92,11 +92,11 @@ if [ "$ACTION" == "interactive" ]; then
 fi
 
 # Look up container name
-CONTAINER_NAME="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$APP\".container_name")"
-if [ -z "$CONTAINER_NAME" ]; then
+CONTAINER_NAME="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".container_name")"
+if [ -z "$CONTAINER_NAME" -o "$CONTAINER_NAME" == "null" ]; then
     CONTAINER_NAME="cdc_$APP_$ACTION"
 fi
-echo "Container name: $CONTAINER_NAME $(pwd -P)"
+echo "Container name: $CONTAINER_NAME"
 
 # Alternative wayy of finding running container, but I prefer just going directly through podman
 #RUNNING_NAME=$(podman-compose -f ./compose.yaml ps --format "{{.Names}}" | awk -F_ -vaction="$ACTION" '{if ($2 == action) { print $2} }')
@@ -151,10 +151,35 @@ fi
 
 #podman-compose  --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 run --name "$CONTAINER_NAME" --rm "$ACTION" bash -c 'eval $LAUNCH_COMMAND \"\$@\"' bash "$@"
 
+TRAY="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray")"
+if [ -n "$TRAY" -a "$TRAY" != "null" ]; then
+    echo "====TRAY===="
+    TRAY_NAME="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.name")"
+    TRAY_ICON="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.icon")"
+    TRAY_WMCLASS="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.\"wmclass\"")"
+    TRAY_WMCLASS_ARG=""
+    if [ "$TRAY_WMCLASS" == "null" ]; then
+	TRAY_WMCLASS_FILE="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.\"wmclass-file\"")"
+	if [ "$TRAY_WMCLASS_FILE" != "null" ]; then
+	    TRAY_WMCLASS="$(cat "home/$TRAY_WMCLASS_FILE")"
+      	    TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
+	fi
+    else
+	TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
+    fi
+
+    TRAY_LAUNCHER="${SCRIPTPATH}/../dependencies/submodules/minimize-to-tray-wrapper/bin/minimize-to-tray-wrapper"
+    TRAY_ARGS="--app-name $TRAY_NAME --icon home/$TRAY_ICON $TRAY_WMCLASS_ARG --"
+    echo "TRAY: $TRAY_LAUNCHER $TRAY_ARGS"
+else
+    TRAY_LAUNCHER="exec"
+    TRAY_ARGS=""
+fi
+
 if [ -n "$CDC_DEBUG" ]; then
     echo "=== CONFIG ==="
     podman-compose  --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 config
     echo "=============="
 fi
     
-podman-compose  --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 run --name "$CONTAINER_NAME" --rm "$ACTION" bash -c "$LAUNCH_COMMAND" bash "$@"
+"$TRAY_LAUNCHER" $TRAY_ARGS podman-compose  --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 run --name "$CONTAINER_NAME" --rm "$ACTION" bash -c "$LAUNCH_COMMAND" bash "$@"
