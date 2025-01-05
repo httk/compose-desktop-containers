@@ -11,38 +11,18 @@ x-application:
     # This container has no configurable options
 
   image:
-    packages:
-      - texlive-latex-base
-      - texlive-latex-extra
-
-  launchers:
-
-    obsidian:
-
-      desktop:
-
-        file: |
-          [Desktop Entry]
-          Name=Obsidian (container)
-          StartupWMClass=obsidian
-          Comment=Personal knowledge base and note-taking software application.
-          Exec=obsidian %U
-          Terminal=false
-          Type=Application
-          Encoding=UTF-8
-          Icon=obsidian
-          Categories=Utility;Office;
-          
-        icons:
-          - source: install/obsidian/usr/share/icons/hicolor/256x256/apps/obsidian.png
-            size: 256
-            dest: obsidian.png
+    ubuntu-22.04:
+      packages:
+        - texlive-latex-base
+        - texlive-latex-extra
 
 services:
 
   ## COMMON PART ##
 
   common: &common
+
+    image: "desktop-container-default"
 
     working_dir: /home/$USER
     hostname: "obsidian_container"
@@ -75,13 +55,13 @@ services:
     shm_size: "1G"
 
     volumes: &common-volumes
-      - "${COMPOSE_APP_HOME}/home:/home/${USER}:rw"
+      - "${CDC_HOME}/home:/home/${USER}:rw"
       - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
       - "${XAUTHORITY}:${XAUTHORITY}:rw"
       - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
       - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
       
-    # - "${COMPOSE_APP_DBUS_PATH}:/tmp/${USER}/run/bus:rw"
+    # - "${CDC_DBUS_PATH}:/tmp/${USER}/run/bus:rw"
 
     devices:
       - "/dev/dri:/dev/dri"
@@ -97,60 +77,52 @@ services:
   install-prepare: &install-prepare
     <<: *common
 
-    image: "desktop-container-default"
-
     environment:
       <<: *common-env
 
-      LAUNCH_COMMAND: >
-        echo "INSTALL PREPARE";
-        mkdir -p files;
-        LATESTURL="$$(curl -L 'https://obsidian.md/download' | sed -n 's|^.*"\(https://.*/obsidian_[0-9.]\+_amd64\.deb\)".*$$|\1|p')";
-        LATESTFILENAME="$${LATESTURL##*/}";
-        if [ -z "$$LATESTFILENAME" ]; then
+    command:
+      - echo "INSTALL PREPARE"
+      - mkdir -p Downloads
+      - LATESTURL="$$(curl -L 'https://obsidian.md/download' | sed -n 's|^.*"\(https://.*/obsidian_[0-9.]\+_amd64\.deb\)".*$$|\1|p')"
+      - LATESTFILENAME="$${LATESTURL##*/}"
+      - if [ -z "$$LATESTFILENAME" ]; then
           echo "Failed to determine latest version.";
           exit 1;
-        fi;
-        curl -L -o files/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME files/obsidian_latest_amd64.deb
+        fi
+      - echo curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/obsidian_latest_amd64.deb
+      - curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/obsidian_latest_amd64.deb
 
   install: &install
     <<: *common 
 
-    image: "desktop-container-default"
-
-    environment:
-      <<: *common-env
-      LAUNCH_COMMAND: >
-        echo "INSTALL";
-        rm -rf ~/install &&
-        mkdir ~/install &&
-        cd ~/install &&
-        dpkg-deb -x ~/files/obsidian_latest_amd64.deb obsidian &&
+    command:
+      - echo "INSTALL";
+      - rm -rf ~/Installation &&
+        mkdir ~/Installation &&
+        cd ~/Installation &&
+        dpkg-deb -x ~/Downloads/obsidian_latest_amd64.deb obsidian &&
         mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps/ &&
         cp obsidian/usr/share/applications/obsidian.desktop ~/.local/share/applications/obsidian.desktop &&
         sed -i 's%^Exec=.*%Exec=/home/${USER}/obsidian/obsidian/opt/Obsidian/%' ~/.local/share/applications/obsidian.desktop ~/.local/share/applications/obsidian.desktop &&
         cp obsidian/usr/share/icons/hicolor/256x256/apps/obsidian.png ~/.local/share/icons/hicolor/256x256/apps/.
+
 
   ## UPDATE ##
 
   update-check: &update-check
     <<: *common 
 
-    image: "desktop-container-default"
-
-    environment:
-      <<: *common-env
-      LAUNCH_COMMAND: >
-        echo "UPDATE CHECK";
-        mkdir -p files;
-        LATESTURL="$$(curl -L 'https://obsidian.md/download' | sed -n 's|^.*"\(https://.*/obsidian_[0-9.]\+_amd64\.deb\)".*$$|\1|p')";
-        LATESTFILENAME="$${LATESTURL##*/}";
-        if [ -e "files/$$LATESTFILENAME" ]; then
+    command:
+      - echo "UPDATE CHECK"
+      - mkdir -p Downloads
+      - LATESTURL="$$(curl -L 'https://obsidian.md/download' | sed -n 's|^.*"\(https://.*/obsidian_[0-9.]\+_amd64\.deb\)".*$$|\1|p')"
+      - LATESTFILENAME="$${LATESTURL##*/}"
+      - if [ -e "Downloads/$$LATESTFILENAME" ]; then
           echo "No new version";
           exit 0;
         fi;
-        echo "File missing, or server-side file newer";
-        exit 1 
+      - echo "File missing, or server-side file newer"
+      - exit 1 
 
   update-prepare: &update-prepare
     <<: *install-prepare   
@@ -164,15 +136,32 @@ services:
   obsidian:
     <<: *common
 
-    container_name: htdc_obsidian_obsidian
-    image: "desktop-container-default"
+    container_name: cdc_obsidian_obsidian
 
-    environment:
-      <<: *common-env
-      LAUNCH_COMMAND: >
-        echo "OBSIDIAN";
-        xdg-settings set default-web-browser org.kde.falkon.desktop;
-        LD_LIBRARY_PATH=/home/${USER}/install/obsidian/opt/Obsidian exec install/obsidian/opt/Obsidian/obsidian
+    command:
+      - echo "OBSIDIAN";
+      - xdg-settings set default-web-browser org.kde.falkon.desktop;
+      - LD_LIBRARY_PATH=~/Installation/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian
+
+    x-launcher:
+    
+      desktop:
+
+        file: |
+          [Desktop Entry]
+          Name=Obsidian (container)
+          StartupWMClass=obsidian
+          Comment=Personal knowledge base and note-taking software application.
+          Exec=obsidian %U
+          Terminal=false
+          Type=Application
+          Icon=obsidian
+          Categories=Utility;
+          
+        icons:
+          - source: Installation/obsidian/usr/share/icons/hicolor/256x256/apps/obsidian.png
+            size: 256
+            dest: obsidian.png
 
   ## INTERACTIVE ##
 
@@ -181,6 +170,6 @@ services:
 
     image: "desktop-container-default"
 
-    environment:
-      <<: *common-env
-      LAUNCH_COMMAND: echo "INTERACTIVE"; bash
+    command:
+      - echo "INTERACTIVE"
+      - bash

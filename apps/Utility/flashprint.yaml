@@ -1,0 +1,164 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    Flashprint: slicing software by Flashforge
+
+  override-default: |
+    version: "3.8"
+
+  env-default: |
+    # This container has no configurable options
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "desktop-container-default"
+
+    working_dir: /home/${USER}
+    hostname: "flashprint_container"
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
+      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      ### Flashprint does not presently seem to work under wayland (at least not with addition configuration); the 3D window doesn't render
+      #WAYLAND_DISPLAY: "${WAYLAND_DISPLAY}"
+      #QT_QPA_PLATFORM: wayland
+      ### Do X11 instead:
+      DISPLAY: "${DISPLAY}"
+      XAUTHORITY: "${XAUTHORITY}"
+      
+    cap_drop:
+      - ALL
+      
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_HOME}/home:/home/${USER}:rw"
+      ### Flashprint does not presently seem to work under wayland (at least not with addition configuration); the 3D window doesn't render
+      #- "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
+      ### Do X11 instead:
+      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+      - "${XAUTHORITY}:${XAUTHORITY}:rw"
+
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - "label=no-new-privileges"
+
+    userns_mode: "keep-id"
+
+
+  ## INSTALL ##
+
+  install-prepare: &install-prepare
+    <<: *common
+
+    command:
+      - echo "INSTALL PREPARE"
+      - mkdir -p files
+      - LATESTURL="$$(curl -L -N 'https://flashforge.com/blogs/download-software/software' | sed -n '\|^.*"\(https://[^/]\+/FlashPrint_[0-9.]\+/flashprint5_[0-9.]\+_amd64.deb\)".*$$|{s||\1|p;q}')"
+      - LATESTFILENAME="$${LATESTURL##*/}"
+      - if [ -z "$$LATESTFILENAME" ]; then
+          echo "Failed to determine latest version.";
+          exit 1;
+        fi;
+      - curl -L -o files/$$LATESTFILENAME "$$LATESTURL" &&
+        ln -sf $$LATESTFILENAME files/flashprint5_latest_amd64.deb
+
+  install: &install
+    <<: *common
+
+    command:
+      - echo "INSTALL"
+      - rm -rf ~/install &&
+        mkdir ~/install &&
+        cd ~/install &&
+        dpkg-deb -x ~/files/flashprint5_latest_amd64.deb flashprint &&
+        mkdir -p ~/.local/share/applications &&
+        cp flashprint/usr/share/applications/FlashPrint5.desktop ~/.local/share/applications/FlashPrint5.desktop &&
+        sed -i 's%^Exec=/usr/share/FlashPrint5$$%Exec=/home/$${USER}/install/flashprint/usr/share/FlashPrint5/%' ~/.local/share/applications/FlashPrint5.desktop
+
+  ## UPDATE ##
+
+  update-check: &update-check
+    <<: *common
+
+    command:
+      - echo "UPDATE CHECK"
+      - LATESTURL="$$(curl -L -N 'https://flashforge.com/blogs/download-software/software' | sed -n '\|^.*"\(https:[^/]\+/FlashPrint_[0-9.]\+/flashprint5_[0-9.]\+-amd64.deb\)".*$$|{s||\1|p;q}')"
+      - LATESTFILENAME="$${LATESTURL##*/}"
+      - if [ -z "$$LATESTFILENAME" ]; then
+          echo "Failed to determine latest version.";
+          exit 0;
+      - fi
+      - mkdir -p files
+      - if [ -e "files/$$LATESTFILENAME" ]; then
+          echo "No new version";
+          exit 0;
+        fi
+      - echo "File missing, or server-side file newer"
+      - exit 1
+
+  update-prepare: &update-prepare
+    <<: *install-prepare
+
+  update: &update
+    <<: *install
+
+
+  ## EXECUTE ###
+
+  flashprint:
+    <<: *common
+
+    container_name: cdc_flashprint_flashprint
+
+    command:
+      - echo "FLASHPRINT"
+      - cd install/flashprint
+      - LD_LIBRARY_PATH=~/install/flashprint/usr/lib exec ~/install/flashprint/usr/share/FlashPrint5/FlashPrint "$$@"
+
+    x-launcher:
+      desktop:
+        file: |
+          [Desktop Entry]
+          GenericName=FlashPrint5
+          Name=FlashForge 3D Printer Control Software v5 (container)
+          MimeType=text/plain;
+          Exec=flashprint
+          Icon=flashforge5
+          Type=Application
+          Terminal=false
+          Categories=Utility;
+
+        icons:
+          - source: install/flashprint/usr/share/icons/hicolor/64x64/apps/flashforge5.png
+            size: 64
+            dest: flashforge5.png
+
+  ## INTERACTIVE ##
+
+  interactive:
+    <<: *common
+
+    command:
+      - echo "INTERACTIVE"
+      - bash "$$@"
