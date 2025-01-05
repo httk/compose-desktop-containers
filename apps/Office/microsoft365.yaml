@@ -11,6 +11,41 @@ x-application:
   env-default: |
     # This container has no configurable options
 
+  global-launcher:
+    name: microsoft365
+    default-action: tray
+    tray:
+      icon: microsoft365
+      entries:
+        - name: "OneDrive"
+          wmclass-file: install/microsoft365/onedrive.appid
+          launch: onedrive
+        - name: "Outlook"
+          wmclass-file: install/microsoft365/outlook.appid
+          launch: outlook
+        - name: "Teams"
+          wmclass-file: install/microsoft365/msteams.appid
+          launch: msteams
+        - name: "Forms"
+          wmclass-file: install/microsoft365/msforms.appid
+          launch: msforms
+    desktop:
+      file: |
+        [Desktop Entry]
+        Name=Microsoft 365 tray (container)
+        Comment=Tray app for Microsoft 365 PWA tools
+        GenericName=Office utils
+        Exec=microsoft365 tray
+        Icon=microsoft365
+        Type=Application
+        Categories=Network;
+        Path=/usr/bin
+
+      icons:
+        - source: .local/share/icons/hicolor/256x256/apps/outlook.png
+          size: 256
+          dest: microsoft365.png
+
 services:
 
   ## COMMON PART ##
@@ -147,11 +182,6 @@ services:
 
     x-launcher:
 
-      tray:
-        name: "Teams"
-        icon: .local/share/icons/hicolor/256x256/apps/msteams.png
-        wmclass-file: install/microsoft365/msteams.wmclass
-
       desktop:
         file: |
           [Desktop Entry]
@@ -173,11 +203,6 @@ services:
     <<: *common
 
     container_name: cdc_microsoft365
-
-    tray:
-      name: "OneDrive"
-      icon: .local/share/icons/hicolor/256x256/apps/onedrive.png
-      wmclass-file: install/microsoft365/onedrive.appid
 
     command:
       - echo "ONEDRIVE"
@@ -221,11 +246,6 @@ services:
       - exec install/microsoft365/outlook.sh ${OZONE_FLAG} "$$@"
 
     x-launcher:
-
-      tray:
-        name: "Outlook"
-        icon: .local/share/icons/hicolor/256x256/apps/outlook.png
-        wmclass-file: install/microsoft365/outlook.appid
 
       desktop:
         file: |
@@ -272,6 +292,7 @@ services:
       - exec install/microsoft365/msforms.sh ${OZONE_FLAG} "$$@"
 
     x-launcher:
+
       desktop:
         file: |
           [Desktop Entry]
@@ -288,6 +309,7 @@ services:
           - source: .local/share/icons/hicolor/256x256/apps/msforms.png
             size: 256
             dest: msforms.png
+
 
   ## INTERACTIVE ##
 

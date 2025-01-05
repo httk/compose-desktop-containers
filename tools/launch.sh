@@ -84,11 +84,9 @@ echo "==== OVERRIDE FILE ===="
 cat "$OVERRIDE_FILE"
 echo "======================="
 
-INTERACTIVE1=""
-INTERACTIVE2=""
+INTERACTIVE=""
 if [ "$ACTION" == "interactive" ]; then
-    INTERACTIVE1="--podman-run-args"
-    INTERACTIVE2="\-it"
+    INTERACTIVE="--podman-run-args \"\-it\""
 fi
 
 # Look up container name
@@ -114,9 +112,8 @@ fi
 
 if [ -n "$RUNNING_ID" ]; then
     echo "Container already running; starting process inside running container."
-    #podman-compose  --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 exec "$ACTION" bash -c 'eval $LAUNCH_COMMAND \"\$@\"' bash "$@"
-    podman-compose --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 exec "$ACTION" bash -c "$LAUNCH_COMMAND" bash "$@"
-    exit 0
+    exec /usr/bin/env --split-string="podman-compose --env-file \"$CDC_HOME/.env\" --in-pod false -f compose.yaml -f \"$OVERRIDE_FILE\" $CONFIG_FILE $INTERACTIVE exec \"$ACTION\"" bash -c "$LAUNCH_COMMAND" bash "$@"
+    exit 1
 fi
 
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
@@ -149,31 +146,25 @@ else
     export CDC_DBUS_SYSTEM_PATH="${DBUS_SESSION_BUS_ADDRESS/unix:path=}"
 fi
 
-#podman-compose  --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 run --name "$CONTAINER_NAME" --rm "$ACTION" bash -c 'eval $LAUNCH_COMMAND \"\$@\"' bash "$@"
-
+PRELAUNCHER=""
 TRAY="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray")"
 if [ -n "$TRAY" -a "$TRAY" != "null" ]; then
-    echo "====TRAY===="
-    TRAY_NAME="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.name")"
     TRAY_ICON="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.icon")"
+    TRAY_NAME="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.name")"
     TRAY_WMCLASS="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.\"wmclass\"")"
     TRAY_WMCLASS_ARG=""
     if [ "$TRAY_WMCLASS" == "null" ]; then
-	TRAY_WMCLASS_FILE="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.\"wmclass-file\"")"
-	if [ "$TRAY_WMCLASS_FILE" != "null" ]; then
-	    TRAY_WMCLASS="$(cat "home/$TRAY_WMCLASS_FILE")"
-      	    TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
-	fi
+        TRAY_WMCLASS_FILE="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.\"wmclass-file\"")"
+        if [ "$TRAY_WMCLASS_FILE" != "null" ]; then
+            TRAY_WMCLASS="$(cat "home/$TRAY_WMCLASS_FILE")"
+            TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
+        fi
     else
-	TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
+      TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
     fi
-
-    TRAY_LAUNCHER="${SCRIPTPATH}/../dependencies/submodules/minimize-to-tray-wrapper/bin/minimize-to-tray-wrapper"
-    TRAY_ARGS="--app-name $TRAY_NAME --icon home/$TRAY_ICON $TRAY_WMCLASS_ARG --"
-    echo "TRAY: $TRAY_LAUNCHER $TRAY_ARGS"
+    PRELAUNCHER="\"${SCRIPTPATH}/../dependencies/submodules/minimize-to-tray-wrapper/bin/minimize-to-tray-wrapper\" --app-name \"$TRAY_NAME\" --icon \"home/$TRAY_ICON\" $TRAY_WMCLASS_ARG --"
 else
-    TRAY_LAUNCHER="exec"
-    TRAY_ARGS=""
+    PRELAUNCHER=""
 fi
 
 if [ -n "$CDC_DEBUG" ]; then
@@ -181,5 +172,5 @@ if [ -n "$CDC_DEBUG" ]; then
     podman-compose  --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 config
     echo "=============="
 fi
-    
-"$TRAY_LAUNCHER" $TRAY_ARGS podman-compose  --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $INTERACTIVE1 $INTERACTIVE2 run --name "$CONTAINER_NAME" --rm "$ACTION" bash -c "$LAUNCH_COMMAND" bash "$@"
+
+exec /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_HOME}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${INTERACTIVE} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
