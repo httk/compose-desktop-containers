@@ -45,7 +45,6 @@ services:
     image: "desktop-container-default"
 
     working_dir: /home/$USER
-    hostname: "zoom_container"
     user: "${USER}"
 
     environment: &common-env

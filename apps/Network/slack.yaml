@@ -39,7 +39,6 @@ services:
     image: "desktop-container-default"
 
     working_dir: /home/$USER
-    hostname: "slack_container"
     user: "${USER}"
 
     environment: &common-env

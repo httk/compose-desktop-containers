@@ -26,7 +26,6 @@ services:
     image: "desktop-container-default"
 
     working_dir: /home/$USER
-    hostname: "discord_container"
     user: "${USER}"
 
     environment: &common-env
