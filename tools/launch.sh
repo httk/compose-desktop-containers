@@ -162,7 +162,7 @@ if [ -n "$TRAY" -a "$TRAY" != "null" ]; then
     else
       TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
     fi
-    PRELAUNCHER="\"${SCRIPTPATH}/../dependencies/submodules/minimize-to-tray-wrapper/bin/minimize-to-tray-wrapper\" --app-name \"$TRAY_NAME\" --icon \"home/$TRAY_ICON\" $TRAY_WMCLASS_ARG --"
+    PRELAUNCHER="\"${SCRIPTPATH}/../dependencies/submodules/tray-tools/bin/tray-wrapper\" --app-name \"$TRAY_NAME\" --icon \"home/$TRAY_ICON\" $TRAY_WMCLASS_ARG --"
 else
     PRELAUNCHER=""
 fi

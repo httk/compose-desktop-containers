@@ -49,8 +49,7 @@ if [ "$ACTION" == "tray" ]; then
 	MULTI_TRAY_ARGS="$MULTI_TRAY_ARGS --app \"$ENTRY_NAME\" \"$ENTRY_WMCLASS\" \"./$ENTRY_LAUNCH\""
     done
     
-    echo Executing: /usr/bin/env --split-string="\"$SCRIPTPATH/../dependencies/submodules/minimize-to-tray-wrapper/bin/multi-app-tray\" --icon \"$ICON\" $MULTI_TRAY_ARGS"
-    /usr/bin/env --split-string="\"$SCRIPTPATH/../dependencies/submodules/minimize-to-tray-wrapper/bin/multi-app-tray\" --icon \"$ICON\" $MULTI_TRAY_ARGS"
+    /usr/bin/env --split-string="\"$SCRIPTPATH/../dependencies/submodules/tray-tools/bin/multi-app-tray\" --icon \"$ICON\" $MULTI_TRAY_ARGS"
     RUNNING_CONTAINERS="$(podman ps -q -f "name=cdc_$APP_*")"
     if [ -n "$RUNNING_CONTAINERS" ]; then
 	   podman kill ${RUNNING_CONTAINERS}
