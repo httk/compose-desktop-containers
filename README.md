@@ -90,6 +90,25 @@ cd ~/Containers
 ```
 Now try to start discord from your system launcher, or run `./discord` in the application directory.
 
+### Exchanging files between the container, host system, and other containers
+
+All application directories have a subdirectory `home` which is mounted inside containers at the location of `/home/<username>/`.
+This stores the internal installation and state of the application.
+
+You can use the host system file browser or command line to copy/move files between locations inside these container-specific home directories and the host system.
+
+To give the container access to other places in the host system, edit the `override.yaml` file.
+For example, to give `blender` access to `~/Documents/blender` in the host system, edit it to contain:
+```
+version: "3.8"
+
+services:
+  blender:
+    volumes: 
+      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+      - "/home/${USER}/Documents/blender:/home/${USER}/Documents/blender:rw"
+```
+
 ### Update an app
 ```
 cd <app directory>

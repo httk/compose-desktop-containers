@@ -75,7 +75,7 @@ services:
     shm_size: "512m"
 
     volumes: &common-volumes
-      - "${CDC_HOME}/home:/home/${USER}:rw"
+      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
       - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
       - "${XAUTHORITY}:${XAUTHORITY}:rw"
       - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"

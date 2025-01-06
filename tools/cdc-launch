@@ -2,7 +2,7 @@
 #
 # Launch sets the following environment variables for use in docker-compose
 #
-#   CDC_HOME: the home directory of the compose app
+#   CDC_APP_DIR: the application directory of the compose app
 #   CDC_DBUS_PATH: the path to the unix socket used by dbus or dbus-proxy
 
 set -e
@@ -111,7 +111,7 @@ echo "Container name: $CONTAINER_NAME"
 RUNNING_ID="$(podman ps -q -f "name=$CONTAINER_NAME")"
 echo "Running ID: $RUNNING_ID"
 
-export CDC_HOME="$(pwd -P)"
+export CDC_APP_DIR="$(pwd -P)"
 
 LAUNCH_COMMAND="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".command | .[]")"
 if [ -z "$LAUNCH_COMMAND" -o "$LAUNCH_COMMAND" == "null" ]; then
@@ -121,7 +121,7 @@ fi
 
 if [ -n "$RUNNING_ID" ]; then
     echo "Container already running; starting process inside running container."
-    exec /usr/bin/env --split-string="podman-compose --env-file \"$CDC_HOME/.env\" --in-pod false -f compose.yaml -f \"$OVERRIDE_FILE\" $CONFIG_FILE $PODMAN_RUN_ARGS exec \"$ACTION\"" bash -c "$LAUNCH_COMMAND" bash "$@"
+    exec /usr/bin/env --split-string="podman-compose --env-file \"$CDC_APP_DIR/.env\" --in-pod false -f compose.yaml -f \"$OVERRIDE_FILE\" $CONFIG_FILE $PODMAN_RUN_ARGS exec \"$ACTION\"" bash -c "$LAUNCH_COMMAND" bash "$@"
     exit 1
 fi
 
@@ -178,11 +178,11 @@ fi
 
 if [ -n "$CDC_DEBUG" ]; then
     echo "=== CONFIG ==="
-    podman-compose  --env-file "$CDC_HOME/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $PODMAN_RUN_ARGS config
+    podman-compose  --env-file "$CDC_APP_DIR/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $PODMAN_RUN_ARGS config
     echo "=============="
 fi
 
-#echo /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_HOME}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
+#echo /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_APP_DIR}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
 
 # Do not use exec here, we need the TRAPS to run once done
-/usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_HOME}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
+/usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_APP_DIR}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"

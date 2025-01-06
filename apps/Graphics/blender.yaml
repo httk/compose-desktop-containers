@@ -44,7 +44,7 @@ services:
     shm_size: "1G"
 
     volumes: &common-volumes
-      - "${CDC_HOME}/home:/home/${USER}:rw"
+      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
       - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
       - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
       
