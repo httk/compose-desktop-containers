@@ -182,7 +182,7 @@ if [ -n "$CDC_DEBUG" ]; then
     echo "=============="
 fi
 
-echo /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_HOME}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
+#echo /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_HOME}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
 
 # Do not use exec here, we need the TRAPS to run once done
 /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_HOME}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"

@@ -86,10 +86,9 @@ services:
 
   ## INSTALL ##
   
-  install-prepare: &install-prepare
+  download: &download
     <<: *common
 
-    # Note: the deb archive is needed just to get the icon, which does not seem to be included in the standalone install (?)
     command:
       - echo "INSTALL PREPARE"
       - mkdir -p Downloads
@@ -105,11 +104,12 @@ services:
     <<: *common 
 
     command:
-      - echo "INSTALL"
+      - VERSION="$${1-slack-latest-amd64.deb}";
+      - echo "INSTALL $$VERSION";
       - rm -rf ~/Installation &&
         mkdir ~/Installation &&
         cd ~/Installation &&
-        dpkg-deb -x ~/Downloads/slack-latest-amd64.deb slack &&
+        dpkg-deb -x ~/Downloads/"$$VERSION" slack &&
         mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps &&
         cp slack/usr/share/applications/slack.desktop ~/.local/share/applications/slack.desktop &&
         sed -i 's%/usr/bin/slack%/home/$USER/Installation/slack/usr/bin/slack%' ~/.local/share/applications/slack.desktop &&
@@ -137,9 +137,6 @@ services:
         fi
       - echo "File missing, or server-side file newer"
       - exit 1
-
-  update-prepare: &update-prepare
-    <<: *install-prepare   
 
   update: &update
     <<: *install 

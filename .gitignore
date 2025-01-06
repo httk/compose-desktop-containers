@@ -6,6 +6,7 @@
 !/setup
 !/dependencies
 !/README.md
+!/TODO.md
 !/.gitignore
 Containerfile
 images/*/outputs

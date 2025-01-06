@@ -104,29 +104,29 @@ services:
 
   ## INSTALL ##
 
-  install-prepare: &install-prepare
+  download: &download
     <<: *common
 
     command:
-      - echo "INSTALL PREPARE";
+      - echo "DOWNLOAD"
+      - mkdir -p ~/install/microsoft365
+      - echo "***********************************************************"
+      - echo "Running chrome, please navigate to the microsoft 365 apps"
+      - echo "and use the 'install' icon in the navigator field for:"
+      - echo "- OneDrive"
+      - echo "- Teams"
+      - echo "- Outlook"
+      - echo "- Forms"
+      - echo "The easiest way to trigger the install icon is to"
+      - echo "go via the '9-dots-menu' to these applications."
+      - echo "***********************************************************"
+      - google-chrome ${OZONE_FLAG} 'https://www.microsoft365.com/'
 
   install: &install
     <<: *common
 
     command:
       - echo "INSTALL"
-      - mkdir -p ~/install/microsoft365
-      - echo "***********************************************************"
-      - echo "Running chrome, please navigate to the microsoft 365 apps"
-      - echo "and use the icon in the navigator-field to install"
-      - echo "- OneDrive"
-      - echo "- Teams"
-      - echo "- Outlook"
-      - echo "- Forms"
-      - echo "OneDrive. The easiest way to trigger the install icon is to"
-      - echo "go via the '9-dots-menu' to Teams and OneDrive."
-      - echo "***********************************************************"
-      - google-chrome ${OZONE_FLAG} 'https://www.microsoft365.com/'
       - for APPNAME in "Microsoft Teams|msteams" "Microsoft OneDrive|onedrive" "Outlook (PWA)|outlook" "Microsoft Forms|msforms"; do
           DESKTOP_FILE="$$(find ~/.local/share/applications/ -name "*.desktop" | xargs grep -l "^Name=$${APPNAME%|*}$$")";
           if [ -n "$$DESKTOP_FILE" ]; then
@@ -140,6 +140,8 @@ services:
             echo -n "$$CHROMIUM_APP_ID" > ~/install/microsoft365/$${APPNAME#*|}.appid;
             echo -n "crx_$$CHROMIUM_APP_ID" > ~/install/microsoft365/$${APPNAME#*|}.wmclass;  
             cp ~/.local/share/icons/hicolor/256x256/apps/"chrome-$${CHROMIUM_APP_ID}-Default.png" ~/.local/share/icons/hicolor/256x256/apps/$${APPNAME#*|}.png;
+	  else
+	    echo "Warning: ${APPNAME%|*} does not seem to be downloaded and will thus not be installed, re-run the download step and retry.";
           fi;
         done
 
@@ -152,9 +154,6 @@ services:
       - echo "UPDATE CHECK"
       - echo "Progressive web app: updates are automatic" "$$@"
       - exit 0
-
-  update-prepare: &update-prepare
-    <<: *install-prepare
 
   update: &update
     <<: *install

@@ -73,14 +73,14 @@ services:
 
   ## INSTALL ##
   
-  install-prepare: &install-prepare
+  download: &download
     <<: *common
 
     environment:
       <<: *common-env
 
     command:
-      - echo "INSTALL PREPARE"
+      - echo "DOWNLOAD"
       - mkdir -p Downloads
       - LATESTURL="$$(curl -L 'https://obsidian.md/download' | sed -n 's|^.*"\(https://.*/obsidian_[0-9.]\+_amd64\.deb\)".*$$|\1|p')"
       - LATESTFILENAME="$${LATESTURL##*/}"
@@ -95,11 +95,12 @@ services:
     <<: *common 
 
     command:
-      - echo "INSTALL";
+      - VERSION="$${1-obsidian_latest_amd64.deb}";
+      - echo "INSTALL $$VERSION";
       - rm -rf ~/Installation &&
         mkdir ~/Installation &&
         cd ~/Installation &&
-        dpkg-deb -x ~/Downloads/obsidian_latest_amd64.deb obsidian &&
+        dpkg-deb -x ~/Downloads/"$$VERSION" obsidian &&
         mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps/ &&
         cp obsidian/usr/share/applications/obsidian.desktop ~/.local/share/applications/obsidian.desktop &&
         sed -i 's%^Exec=.*%Exec=/home/${USER}/obsidian/obsidian/opt/Obsidian/%' ~/.local/share/applications/obsidian.desktop ~/.local/share/applications/obsidian.desktop &&
@@ -123,9 +124,6 @@ services:
       - echo "File missing, or server-side file newer"
       - exit 1 
 
-  update-prepare: &update-prepare
-    <<: *install-prepare   
-
   update: &update
     <<: *install 
 
@@ -140,7 +138,7 @@ services:
     command:
       - echo "OBSIDIAN";
       - xdg-settings set default-web-browser org.kde.falkon.desktop;
-      - LD_LIBRARY_PATH=~/Installation/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian
+      - LD_LIBRARY_PATH=~/Installation/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian "$$@"
 
     x-launcher:
     

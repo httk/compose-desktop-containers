@@ -67,11 +67,11 @@ services:
 
   ## INSTALL ##
 
-  install-prepare: &install-prepare
+  download: &download
     <<: *common
 
     command:
-      - echo "INSTALL PREPARE"
+      - echo "DOWNLOAD"
       - mkdir -p files
       - LATESTURL="$$(curl -L -N 'https://flashforge.com/blogs/download-software/software' | sed -n '\|^.*"\(https://[^/]\+/FlashPrint_[0-9.]\+/flashprint5_[0-9.]\+_amd64.deb\)".*$$|{s||\1|p;q}')"
       - LATESTFILENAME="$${LATESTURL##*/}"
@@ -86,11 +86,12 @@ services:
     <<: *common
 
     command:
-      - echo "INSTALL"
+      - VERSION="$${1-flashprint5_latest_amd64.deb}";
+      - echo "INSTALL $$VERSION";
       - rm -rf ~/install &&
         mkdir ~/install &&
         cd ~/install &&
-        dpkg-deb -x ~/files/flashprint5_latest_amd64.deb flashprint &&
+        dpkg-deb -x ~/files/"$$VERSION" flashprint &&
         mkdir -p ~/.local/share/applications &&
         cp flashprint/usr/share/applications/FlashPrint5.desktop ~/.local/share/applications/FlashPrint5.desktop &&
         sed -i 's%^Exec=/usr/share/FlashPrint5$$%Exec=/home/$${USER}/install/flashprint/usr/share/FlashPrint5/%' ~/.local/share/applications/FlashPrint5.desktop
@@ -115,9 +116,6 @@ services:
         fi
       - echo "File missing, or server-side file newer"
       - exit 1
-
-  update-prepare: &update-prepare
-    <<: *install-prepare
 
   update: &update
     <<: *install

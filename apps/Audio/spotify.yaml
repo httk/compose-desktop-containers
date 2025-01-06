@@ -82,12 +82,11 @@ services:
 
   ## INSTALL ##
 
-  install-prepare: &install-prepare
+  download: &download
     <<: *common
 
-    # Note: the deb archive is needed just to get the icon, which does not seem to be included in the standalone install (?)
     command:
-      - echo "INSTALL PREPARE"
+      - echo "DOWNLOAD"
       - mkdir -p Downloads
       - LATESTURL="http://repository.spotify.com/pool/non-free/s/spotify-client/$(curl -L 'http://repository.spotify.com/pool/non-free/s/spotify-client/' | sed -n 's|^.*"\(spotify-client_.\+_amd64\.deb\)".*$|\1|p' | sort --version-sort | tail -n 1)"
       - LATESTFILENAME="$${LATESTURL##*/}"
@@ -103,12 +102,13 @@ services:
     # Note: the spotify install MUST be under ~/.local/share/spotify for the handling of icons to work
     # because sometimes icon file names are sent from container to host
     command:
-      - echo "INSTALL"
+      - VERSION="$${1-spotify-client_latest_amd64.deb}";
+      - echo "INSTALL $$VERSION";
       - rm -rf ~/Installation 
       - rm -rf ~/.local/share/spotify
       - mkdir ~/Installation &&
         cd ~/Installation &&
-        dpkg-deb -x ~/Downloads/spotify-client_latest_amd64.deb spotify &&
+        dpkg-deb -x ~/Downloads/"$$VERSION" spotify &&
         mv spotify/usr/share/spotify ~/.local/share/spotify &&
         mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps &&
         cp ~/.local/share/spotify/spotify.desktop ~/.local/share/applications/spotify.desktop &&
@@ -145,9 +145,6 @@ services:
         fi
       - echo "File missing, or server-side file newer"
       - exit 1
-
-  update-prepare: &update-prepare
-    <<: *install-prepare
 
   update: &update
     <<: *install

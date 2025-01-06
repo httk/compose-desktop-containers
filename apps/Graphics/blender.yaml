@@ -60,11 +60,11 @@ services:
 
   ## INSTALL ##
   
-  install-prepare: &install-prepare
+  download: &download
     <<: *common
 
     command: 
-      - echo "INSTALL PREPARE"
+      - echo "DOWNLOAD"
       - mkdir -p files
       - THANKSURL="$$(curl -L 'https://www.blender.org/download/' | cat | sed -n '\|^.*"\(https://www.blender.org/download/release/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz[^\"]*\)".*$$|{s||\1|p;q}')"
       - LATESTURL="$$(curl -L "$$THANKSURL" | cat | sed -n '\|^.*"\(https:.*/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz\)".*$$|{s||\1|p;q}')"
@@ -79,7 +79,8 @@ services:
     <<: *common 
 
     command: 
-      - echo "INSTALL"
+      - VERSION="$${1-blender-latest-linux-x64.tar.xz}";
+      - echo "INSTALL $$VERSION";
       - rm -rf ~/install &&
         mkdir ~/install &&
         cd ~/install &&
@@ -110,9 +111,6 @@ services:
         fi
       - echo "File missing, or server-side file newer"
       - exit 1
-
-  update-prepare: &update-prepare
-    <<: *install-prepare   
 
   update: &update
     <<: *install 

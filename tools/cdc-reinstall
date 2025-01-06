@@ -46,6 +46,11 @@ This app is missing a README.
 EOF
 fi
 
-"$SCRIPTPATH/launch.sh" install-prepare
-"$SCRIPTPATH/launch.sh" install
-"$SCRIPTPATH/post-install.sh"
+if [ -z "$1" ]; then
+    "$SCRIPTPATH/cdc-launch" download
+elif [ ! -e "home/Downloads/$1" ]; then
+    echo "There is no download matching the requested version."
+    exit 1
+fi
+"$SCRIPTPATH/cdc-launch" install "$1"
+"$SCRIPTPATH/cdc-post-install"

@@ -34,5 +34,5 @@ DEST_ABSPATH="$(cd -- "$DEST"; pwd -P)"
 ln -sf "$(realpath -- "$SOURCE")" "$DEST_ABSPATH/compose.yaml"
 cd "$DEST_ABSPATH"
 
-"$SCRIPTPATH/reinstall.sh"
+"$SCRIPTPATH/cdc-reinstall"
 

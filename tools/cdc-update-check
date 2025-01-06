@@ -21,4 +21,4 @@ shift 1
 DEST_ABSPATH="$(cd -- "$DEST"; pwd -P)"
 cd "$DEST_ABSPATH"
 
-"$SCRIPTPATH/launch.sh" update-check
+"$SCRIPTPATH/cdc-launch" update-check

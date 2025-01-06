@@ -1,0 +1,24 @@
+#!/bin/bash
+
+set -e 
+
+SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
+
+if [ "$1" == "-h" ]; then
+    echo "Usage: $0 [<app dir>]"
+    exit 0
+fi
+
+DEST="$1"
+if [ -n "$DEST" ]; then
+    cd "$DEST"
+fi
+APP="$(basename -- "$(pwd -P)")"
+
+if ! "$SCRIPTPATH/cdc-launch" update-check; then
+    "$SCRIPTPATH/cdc-launch" download
+    "$SCRIPTPATH/cdc-launch" update
+    "$SCRIPTPATH/cdc-post-install"
+else
+    echo "Update not needed. Use 'reinstall' to force reinstall)."
+fi

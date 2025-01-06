@@ -71,14 +71,15 @@ services:
 
   ## INSTALL ##
   
-  install-prepare: &install-prepare
+  download: &download
     <<: *common
 
     environment:
       <<: *common-env
 
+    # Discord doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
     command: 
-      - echo "INSTALL PREPARE"
+      - echo "DOWNLOAD"
       - mkdir -p files
       - curl -L -o files/discord.tar.gz "https://discordapp.com/api/download?platform=linux&format=tar.gz"
 
@@ -87,14 +88,16 @@ services:
     <<: *common 
 
     command: 
-      - echo "INSTALL"
+      - VERSION="$${1-discord.tar.gz}";
+      - echo "INSTALL $$VERSION";
       - rm -rf ~/install &&
         mkdir ~/install &&
         cd ~/install &&
-        tar -xf ~/files/discord.tar.gz &&
+        tar -xf ~/files/"$$VERSION" &&
         mkdir -p ~/.local/share/applications &&
         cp Discord/discord.desktop ~/.local/share/applications/discord.desktop &&
         sed -i 's%/usr/share/discord/Discord%/home/$${USER}/discord/Discord/Discord%' ~/.local/share/applications/discord.desktop
+
 
   ## UPDATE ##
 
@@ -119,9 +122,6 @@ services:
         fi
       - echo "File missing, or server-side file newer"
       - exit 1 
-
-  update-prepare: &update-prepare
-    <<: *install-prepare   
 
   update: &update
     <<: *install 

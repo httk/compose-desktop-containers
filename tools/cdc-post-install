@@ -18,7 +18,7 @@ DEST_ABSPATH="$(pwd -P)"
 
 for LAUNCHER in $(podman-compose -f compose.yaml -f override.yaml config | yq -r '.services | keys[]'); do
     if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\"")" != "null" ]; then
-	ln -sf "$SCRIPTPATH/launch.sh" "$LAUNCHER"
+	ln -sf "$SCRIPTPATH/cdc-launch" "$LAUNCHER"
 	if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq ".services.\"$LAUNCHER\".\"x-launcher\".desktop")" != "null" ]; then
 	    mkdir -p ~/.local/share/applications
 	    podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\".desktop.file" > ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
@@ -72,7 +72,7 @@ done
 
 if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq -r '."x-application"."global-launcher"')" != "null" ]; then
     LAUNCHER="$(podman-compose -f compose.yaml -f override.yaml config | yq -r '."x-application"."global-launcher".name')"
-    ln -sf "$SCRIPTPATH/launch-global.sh" "$LAUNCHER"
+    ln -sf "$SCRIPTPATH/cdc-launch-global" "$LAUNCHER"
     if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq '."x-application"."global-launcher".desktop')" != "null" ]; then
 	mkdir -p ~/.local/share/applications
 	podman-compose -f compose.yaml -f override.yaml config | yq -r '."x-application"."global-launcher".desktop.file' > ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"

@@ -66,24 +66,20 @@ services:
 
   ## INSTALL ##
 
-  install-prepare: &install-prepare
+  download: &download
     <<: *common
 
     command:
-      - echo "INSTALL PREPARE";
+      - echo "DOWNLOAD";
+      - echo "(Nothing to download: google-chrome is part of the system image.)"
 
   install: &install
     <<: *common
 
+    # This install just makes the icons available to the outer parts of the installer
     command:
       - echo "INSTALL";
-      - mkdir -p ~/.local/share/icons/hicolor/16x16/apps
-      - mkdir -p ~/.local/share/icons/hicolor/24x24/apps
-      - mkdir -p ~/.local/share/icons/hicolor/32x32/apps
-      - mkdir -p ~/.local/share/icons/hicolor/48x48/apps
-      - mkdir -p ~/.local/share/icons/hicolor/64x64/apps
-      - mkdir -p ~/.local/share/icons/hicolor/128x128/apps
-      - mkdir -p ~/.local/share/icons/hicolor/256x256/apps
+      - mkdir -p ~/.local/share/icons/hicolor/16x16/apps ~/.local/share/icons/hicolor/24x24/apps ~/.local/share/icons/hicolor/32x32/apps ~/.local/share/icons/hicolor/48x48/apps ~/.local/share/icons/hicolor/64x64/apps ~/.local/share/icons/hicolor/128x128/apps ~/.local/share/icons/hicolor/256x256/apps
       - cp /usr/share/icons/hicolor/16x16/apps/google-chrome.png ~/.local/share/icons/hicolor/16x16/apps/.
       - cp /usr/share/icons/hicolor/24x24/apps/google-chrome.png ~/.local/share/icons/hicolor/24x24/apps/.
       - cp /usr/share/icons/hicolor/32x32/apps/google-chrome.png ~/.local/share/icons/hicolor/32x32/apps/.
@@ -99,11 +95,8 @@ services:
 
     command:
       - echo "UPDATE CHECK"
-      - echo "No new version" "$$@"
+      - echo "No new version"
       - exit 0
-
-  update-prepare: &update-prepare
-    <<: *install-prepare
 
   update: &update
     <<: *install

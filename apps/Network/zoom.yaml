@@ -92,12 +92,13 @@ services:
 
   ## INSTALL ##
   
-  install-prepare: &install-prepare
+  download: &download
     <<: *common
 
     # Note: the deb archive is needed just to get the icon, which does not seem to be included in the standalone install (?)
+    # Zoom doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
     command:
-      - echo "INSTALL PREPARE"
+      - echo "DOWNLOAD"
       - mkdir -p files
       - curl -L -o files/zoom_x86_64.tar.xz "https://zoom.us/client/latest/zoom_x86_64.tar.xz"
       - curl -L -o files/zoom_amd64.deb "https://zoom.us/client/latest/zoom_amd64.deb"
@@ -106,7 +107,8 @@ services:
     <<: *common 
 
     command:
-      - echo "INSTALL"
+      - VERSION="$${1-zoom_x86_64.tar.xz}";
+      - echo "INSTALL $$VERSION";
       - rm -rf ~/zoom &&
         mkdir ~/zoom &&
         cd ~/zoom &&
@@ -116,7 +118,7 @@ services:
         tar -xf data.tar.xz &&
         cp ./usr/share/pixmaps/Zoom.png ../. &&
         cd .. && rm -rf tmp &&
-        tar -xf ~/files/zoom_x86_64.tar.xz &&
+        tar -xf ~/files/"$$VERSION" &&
         mkdir -p ~/.local/share/applications &&
         echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/$${USER}/zoom/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
         update-desktop-database ~/.local/share/applications/
@@ -144,9 +146,6 @@ services:
         fi;
       - echo "File missing, or server-side file newer"
       - exit 1 
-
-  update-prepare: &update-prepare
-    <<: *install-prepare   
 
   update: &update
     <<: *install 
