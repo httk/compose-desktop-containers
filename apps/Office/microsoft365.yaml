@@ -141,7 +141,7 @@ services:
             echo -n "crx_$$CHROMIUM_APP_ID" > ~/install/microsoft365/$${APPNAME#*|}.wmclass;
             cp ~/.local/share/icons/hicolor/256x256/apps/"chrome-$${CHROMIUM_APP_ID}-Default.png" ~/.local/share/icons/hicolor/256x256/apps/$${APPNAME#*|}.png;
           else
-            echo "Warning: ${APPNAME%|*} does not seem to be downloaded and will thus not be installed, re-run the download step and retry.";
+            echo "Warning, ${APPNAME%|*} does not seem to be downloaded and will thus not be installed, re-run the download step and retry.";
           fi;
         done
 
