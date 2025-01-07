@@ -91,7 +91,7 @@ services:
 
 
   ## INSTALL ##
-  
+
   download: &download
     <<: *common
 
@@ -99,26 +99,26 @@ services:
     # Zoom doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
     command:
       - echo "DOWNLOAD"
-      - mkdir -p files
-      - curl -L -o files/zoom_x86_64.tar.xz "https://zoom.us/client/latest/zoom_x86_64.tar.xz"
-      - curl -L -o files/zoom_amd64.deb "https://zoom.us/client/latest/zoom_amd64.deb"
+      - mkdir -p Downloads
+      - curl -L -o Downloads/zoom_x86_64.tar.xz "https://zoom.us/client/latest/zoom_x86_64.tar.xz"
+      - curl -L -o Downloads/zoom_amd64.deb "https://zoom.us/client/latest/zoom_amd64.deb"
 
   install: &install
-    <<: *common 
+    <<: *common
 
-    command:
-      - VERSION="$${1-zoom_x86_64.tar.xz}";
+    Command:
+      - VERSION="$${1:-zoom_x86_64.tar.xz}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/zoom &&
         mkdir ~/zoom &&
         cd ~/zoom &&
         mkdir tmp &&
         cd tmp &&
-        ar x ~/files/zoom_amd64.deb &&
+        ar x ~/Downloads/zoom_amd64.deb &&
         tar -xf data.tar.xz &&
         cp ./usr/share/pixmaps/Zoom.png ../. &&
         cd .. && rm -rf tmp &&
-        tar -xf ~/files/"$$VERSION" &&
+        tar -xf ~/Downloads/"$$VERSION" &&
         mkdir -p ~/.local/share/applications &&
         echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/$${USER}/zoom/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
         update-desktop-database ~/.local/share/applications/
@@ -126,29 +126,29 @@ services:
   ## UPDATE ##
 
   update-check: &update-check
-    <<: *common 
+    <<: *common
 
-    command: 
+    command:
       - echo "UPDATE CHECK"
-      - mkdir -p files
-      - if [ -e files/zoom_x86_64.tar.xz ]; then
+      - mkdir -p Downloads
+      - if [ -e Downloads/zoom_x86_64.tar.xz ]; then
           LASTMOD_LINE="$$(curl -sI -L "https://zoom.us/client/latest/zoom_x86_64.tar.xz" | grep -i '^last-modified:' | cut "-d:" -f2- | sed 's/^\s*\|\s$$//g')";
           if [ -z "$$LASTMOD_LINE" ]; then
             echo "Could not get last modified date";
             exit 0;
           fi;
           REMOTE_TS="$$(date -d "${LASTMOD_LINE}" +%s)";
-          LOCAL_TS="$$(date -r "files/zoom_x86_64.tar.xz" +%s)";
+          LOCAL_TS="$$(date -r "Downloads/zoom_x86_64.tar.xz" +%s)";
           if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ]; then
             echo "No new version";
             exit 0;
           fi;
         fi;
       - echo "File missing, or server-side file newer"
-      - exit 1 
+      - exit 1
 
   update: &update
-    <<: *install 
+    <<: *install
 
 
   ## EXECUTE ###
@@ -158,7 +158,7 @@ services:
 
     container_name: cdc_zoom_zoom
 
-    command: 
+    command:
       - echo "ZOOM"
       - cd zoom/zoom
       - pipewire-pulse &
@@ -168,7 +168,7 @@ services:
 
       # zoom in x11 mode does not need dbus?
       #dbus-proxy: ""
-      
+
       devices:
         - video
 
@@ -186,7 +186,7 @@ services:
           Categories=Network
           MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;
           X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall
-          
+
         icons:
           - source: zoom/Zoom.png
             size: 256

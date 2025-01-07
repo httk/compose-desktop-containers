@@ -14,7 +14,7 @@ NAME=${NAME#wrap-}
 
 echo "Modifying wrap image from $(cat image.info) -> wrap-u24-img"
 
-podman rm -fi wrap-upgrade-tmp 
+podman rm -fi wrap-upgrade-tmp
 
 if [ -n "$1" ]; then
   podman run \
@@ -34,6 +34,7 @@ if [ -n "$1" ]; then
        --systemd=false \
        --security-opt=no-new-privileges \
        --userns=keep-id \
+       --volume="${IMAGE_DIR}/files:/files:ro" \
        -e LANG \
        "$IMAGE_NAME" "$@"
 else
@@ -56,9 +57,10 @@ else
        --security-opt=no-new-privileges \
        --userns=keep-id \
        -e LANG \
+       --volume="${IMAGE_DIR}/files:/files:ro" \
        "$IMAGE_NAME" /bin/bash
 fi
-  
+
 podman commit wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=$USER" desktop-container-u24
 podman tag desktop-container-u24 desktop-container-default
 podman rm -fi wrap-upgrade-tmp

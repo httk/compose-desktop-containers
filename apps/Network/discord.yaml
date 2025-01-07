@@ -6,7 +6,7 @@ x-application:
     Discord: instant messaging and VoIP social platform.
 
     This container uses the x11 server on your desktop (i.e., likely xwayland if you are
-    running Wayland), which is not great from a security barrier perspective. 
+    running Wayland), which is not great from a security barrier perspective.
 
     Use together with legacy-screenshare-helper (https://github.com/httk/legacy-screenshare-helper)
     to support screensharing.
@@ -58,7 +58,7 @@ services:
       - "${XAUTHORITY}:${XAUTHORITY}:rw"
       - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
       - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
-      
+
     devices:
       - "/dev/dri:/dev/dri"
       - "/dev/snd:/dev/snd"
@@ -70,7 +70,7 @@ services:
 
 
   ## INSTALL ##
-  
+
   download: &download
     <<: *common
 
@@ -78,22 +78,22 @@ services:
       <<: *common-env
 
     # Discord doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
-    command: 
+    command:
       - echo "DOWNLOAD"
-      - mkdir -p files
-      - curl -L -o files/discord.tar.gz "https://discordapp.com/api/download?platform=linux&format=tar.gz"
+      - mkdir -p Downloads
+      - curl -L -o Downloads/discord.tar.gz "https://discordapp.com/api/download?platform=linux&format=tar.gz"
 
 
   install: &install
-    <<: *common 
+    <<: *common
 
-    command: 
-      - VERSION="$${1-discord.tar.gz}";
+    command:
+      - VERSION="$${1:-discord.tar.gz}";
       - echo "INSTALL $$VERSION";
-      - rm -rf ~/install &&
-        mkdir ~/install &&
-        cd ~/install &&
-        tar -xf ~/files/"$$VERSION" &&
+      - rm -rf ~/Installation &&
+        mkdir ~/Installation &&
+        cd ~/Installation &&
+        tar -xf ~/Downloads/"$$VERSION" &&
         mkdir -p ~/.local/share/applications &&
         cp Discord/discord.desktop ~/.local/share/applications/discord.desktop &&
         sed -i 's%/usr/share/discord/Discord%/home/$${USER}/discord/Discord/Discord%' ~/.local/share/applications/discord.desktop
@@ -102,29 +102,29 @@ services:
   ## UPDATE ##
 
   update-check: &update-check
-    <<: *common 
+    <<: *common
 
-    command: 
+    command:
       - echo "UPDATE CHECK"
-      - mkdir -p files
-      - if [ -e files/discord.tar.gz ]; then
+      - mkdir -p Downloads
+      - if [ -e Downloads/discord.tar.gz ]; then
           LASTMOD_LINE="$$(curl -sI -L "https://discordapp.com/api/download?platform=linux&format=tar.gz" | grep -i '^Last-Modified:' | cut "-d:" -f2- | sed 's/^\s*\|\s$$//g')";
           if [ -z "$$LASTMOD_LINE" ]; then
             echo "Could not get last modified date";
             exit 0;
           fi;
           REMOTE_TS="$$(date -d "$${LASTMOD_LINE}" +%s)";
-          LOCAL_TS="$$(date -r "files/discord.tar.gz" +%s)";
+          LOCAL_TS="$$(date -r "Downloads/discord.tar.gz" +%s)";
           if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ]; then
             echo "No new version";
             exit 0;
           fi;
         fi
       - echo "File missing, or server-side file newer"
-      - exit 1 
+      - exit 1
 
   update: &update
-    <<: *install 
+    <<: *install
 
 
   ## EXECUTE ###
@@ -134,14 +134,14 @@ services:
 
     container_name: cdc_discord_discord
 
-    command: 
+    command:
       - echo "DISCORD"
-      - cd discord/Discord
+      - cd Installation/Discord
       - pipewire-pulse &
       - exec ./Discord "$$@"
 
     x-launcher:
-    
+
       devices:
         - video
 
@@ -158,9 +158,9 @@ services:
           Icon=discord
           Categories=Network;InstantMessaging;
           MimeType=x-scheme-handler/discord;
-          
+
         icons:
-          - source: install/Discord/discord.png
+          - source: Installation/Discord/discord.png
             size: 256
             dest: discord.png
 
@@ -169,6 +169,6 @@ services:
   interactive:
     <<: *common
 
-    command: 
+    command:
       - echo "INTERACTIVE"
       - bash "$$@"

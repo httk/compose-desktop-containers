@@ -23,7 +23,8 @@ NAME=${NAME#wrap-}
 
 echo "***********************************************************"
 echo "Running chrome: please navigate to the microsoft 365 apps"
-echo "and use the navigator-field icon to install Teams and"
+echo "by using the 9-dots app navigator icon, and then in the"
+echo "browser navigator-field click the icon to install Teams and"
 echo "OneDrive"
 echo "***********************************************************"
 
@@ -39,6 +40,10 @@ podman run --rm \
        --security-opt=no-new-privileges \
        -e LANG \
        -e WAYLAND_DISPLAY \
+       -e DISPLAY \
+       -v /tmp/.X11-unix:/tmp/.X11-unix \
+       -v $XAUTHORITY:$XAUTHORITY \
+       -e XAUTHORITY \
        -e XDG_RUNTIME_DIR="/tmp/$USER/run" \
        --userns=keep-id \
        -v "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:/tmp/$USER/run/$WAYLAND_DISPLAY:ro" \
@@ -46,7 +51,9 @@ podman run --rm \
        -v /dev/dri:/dev/dri \
        -v "$IMAGE_DIR/home:/home/$USER:rw" \
        $FIXES \
-       "$IMAGE_NAME" bash -c "google-chrome --ozone-platform=wayland 'https://www.microsoft365.com/'"
+       "$IMAGE_NAME" bash -c "google-chrome 'https://www.microsoft365.com/'"
+
+# "$IMAGE_NAME" bash -c "google-chrome --ozone-platform=wayland 'https://www.microsoft365.com/'"
 
 mkdir -p ~/.local/share/icons/hicolor/256x256/apps ~/.local/share/applications
 

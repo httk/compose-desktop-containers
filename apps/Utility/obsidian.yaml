@@ -35,7 +35,7 @@ services:
       BROWSER: "falkon"
       DISPLAY: "${DISPLAY}"
       XAUTHORITY: "${XAUTHORITY}"
-      
+
       #DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/${USER}/run/bus"
 
     cap_drop:
@@ -59,7 +59,7 @@ services:
       - "${XAUTHORITY}:${XAUTHORITY}:rw"
       - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
       - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
-      
+
     # - "${CDC_DBUS_PATH}:/tmp/${USER}/run/bus:rw"
 
     devices:
@@ -72,7 +72,7 @@ services:
 
 
   ## INSTALL ##
-  
+
   download: &download
     <<: *common
 
@@ -92,10 +92,10 @@ services:
       - curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/obsidian_latest_amd64.deb
 
   install: &install
-    <<: *common 
+    <<: *common
 
     command:
-      - VERSION="$${1-obsidian_latest_amd64.deb}";
+      - VERSION="$${1:-obsidian_latest_amd64.deb}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/Installation &&
         mkdir ~/Installation &&
@@ -110,7 +110,7 @@ services:
   ## UPDATE ##
 
   update-check: &update-check
-    <<: *common 
+    <<: *common
 
     command:
       - echo "UPDATE CHECK"
@@ -122,10 +122,10 @@ services:
           exit 0;
         fi;
       - echo "File missing, or server-side file newer"
-      - exit 1 
+      - exit 1
 
   update: &update
-    <<: *install 
+    <<: *install
 
 
   ## EXECUTE ###
@@ -141,7 +141,7 @@ services:
       - LD_LIBRARY_PATH=~/Installation/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian "$$@"
 
     x-launcher:
-    
+
       desktop:
 
         file: |
@@ -154,7 +154,7 @@ services:
           Type=Application
           Icon=obsidian
           Categories=Utility;
-          
+
         icons:
           - source: Installation/obsidian/usr/share/icons/hicolor/256x256/apps/obsidian.png
             size: 256

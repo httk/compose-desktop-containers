@@ -102,9 +102,9 @@ services:
     # Note: the spotify install MUST be under ~/.local/share/spotify for the handling of icons to work
     # because sometimes icon file names are sent from container to host
     command:
-      - VERSION="$${1-spotify-client_latest_amd64.deb}";
+      - VERSION="$${1:-spotify-client_latest_amd64.deb}";
       - echo "INSTALL $$VERSION";
-      - rm -rf ~/Installation 
+      - rm -rf ~/Installation
       - rm -rf ~/.local/share/spotify
       - mkdir ~/Installation &&
         cd ~/Installation &&
@@ -195,7 +195,7 @@ services:
             dest: spotify.png
           - source: .local/share/icons/hicolor/512x512/apps/spotify-linux-512.png
             size: 512
-            dest: spotify-linux-512.png     
+            dest: spotify-linux-512.png
           - source: .local/share/icons/hicolor/128x128/apps/spotify-linux-128.png
             size: 128
             dest: spotify-linux-128.png
@@ -216,7 +216,7 @@ services:
             dest: spotify-linux-48.png
           - source: .local/share/icons/hicolor/64x64/apps/spotify-linux-64.png
             size: 64
-            dest: spotify-linux-64.png      
+            dest: spotify-linux-64.png
           - source: .local/share/icons/hicolor/512x512/apps/spotify-linux-512.png
             size: 512
             dest: spotify-linux-512.png
@@ -225,7 +225,7 @@ services:
           - source: .local/share/icons/hicolor/256x256/apps/spotify-linux-256.png
             dest: icons/spotify-linux-256.png
           - source: .local/share/icons/hicolor/64x64/apps/spotify-linux-64.png
-            dest: icons/spotify-linux-64.png        
+            dest: icons/spotify-linux-64.png
 
 
   ## INTERACTIVE ##

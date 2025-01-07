@@ -47,7 +47,7 @@ services:
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
       - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
       - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
-      
+
     devices:
       - "/dev/dri:/dev/dri"
       - "/dev/snd:/dev/snd"
@@ -59,13 +59,13 @@ services:
 
 
   ## INSTALL ##
-  
+
   download: &download
     <<: *common
 
-    command: 
+    command:
       - echo "DOWNLOAD"
-      - mkdir -p files
+      - mkdir -p Downloads
       - THANKSURL="$$(curl -L 'https://www.blender.org/download/' | cat | sed -n '\|^.*"\(https://www.blender.org/download/release/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz[^\"]*\)".*$$|{s||\1|p;q}')"
       - LATESTURL="$$(curl -L "$$THANKSURL" | cat | sed -n '\|^.*"\(https:.*/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz\)".*$$|{s||\1|p;q}')"
       - LATESTFILENAME="$${LATESTURL##*/}"
@@ -73,18 +73,18 @@ services:
           echo "Failed to determine latest version.";
           exit 1;
         fi;
-      - curl -L -o files/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME files/blender-latest-linux-x64.tar.xz
+      - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/blender-latest-linux-x64.tar.xz
 
   install: &install
-    <<: *common 
+    <<: *common
 
-    command: 
-      - VERSION="$${1-blender-latest-linux-x64.tar.xz}";
+    command:
+      - VERSION="$${1:-blender-latest-linux-x64.tar.xz}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/install &&
         mkdir ~/install &&
         cd ~/install &&
-        tar -xf ~/files/blender-latest-linux-x64.tar.xz &&
+        tar -xf ~/Downloads/blender-latest-linux-x64.tar.xz &&
         mv blender-* blender &&
         mkdir -p ~/.local/share/applications &&
         cp blender/blender.desktop ~/.local/share/applications/blender.desktop &&
@@ -93,9 +93,9 @@ services:
   ## UPDATE ##
 
   update-check: &update-check
-    <<: *common 
+    <<: *common
 
-    command: 
+    command:
       - echo "UPDATE CHECK"
       - THANKSURL="$$(curl -L -N 'https://www.blender.org/download/' | cat | sed -n '\|^.*"\(https://www.blender.org/download/release/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz[^\"]*\)".*$$|{s||\1|p;q}')"
       - LATESTURL="$$(curl -L -N "$$THANKSURL" | sed -n '\|^.*"\(https:.*/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz\)".*$$|{s||\1|p;q}')"
@@ -104,8 +104,8 @@ services:
           echo "Failed to determine latest version.";
           exit 1;
       - fi
-      - mkdir -p files
-      - if [ -e "files/$$LATESTFILENAME" ]; then
+      - mkdir -p Downloads
+      - if [ -e "Downloads/$$LATESTFILENAME" ]; then
           echo "No new version";
           exit 0;
         fi
@@ -113,7 +113,7 @@ services:
       - exit 1
 
   update: &update
-    <<: *install 
+    <<: *install
 
 
   ## EXECUTE ###
@@ -123,7 +123,7 @@ services:
 
     container_name: cdc_blender_blender
 
-    command: 
+    command:
       - echo "BLENDER"
       - cd install/blender
       - pipewire-pulse &
@@ -145,17 +145,17 @@ services:
           Categories=Graphics;3DGraphics;
           MimeType=application/x-blender;
           Keywords=3d;cg;modeling;animation;painting;sculpting;texturing;video editing;video tracking;rendering;render engine;cycles;python;
-          
+
         icons:
           - source: install/blender/blender.svg
             size: scalable
-            dest: blender.svg    
+            dest: blender.svg
 
   ## INTERACTIVE ##
 
   interactive:
     <<: *common
 
-    command: 
+    command:
       - echo "INTERACTIVE"
       - bash "$$@"

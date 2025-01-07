@@ -33,10 +33,10 @@ services:
       ### Do X11 instead:
       DISPLAY: "${DISPLAY}"
       XAUTHORITY: "${XAUTHORITY}"
-      
+
     cap_drop:
       - ALL
-      
+
     security_opt:
       - no-new-privileges
 
@@ -72,26 +72,26 @@ services:
 
     command:
       - echo "DOWNLOAD"
-      - mkdir -p files
+      - mkdir -p Downloads
       - LATESTURL="$$(curl -L -N 'https://flashforge.com/blogs/download-software/software' | sed -n '\|^.*"\(https://[^/]\+/FlashPrint_[0-9.]\+/flashprint5_[0-9.]\+_amd64.deb\)".*$$|{s||\1|p;q}')"
       - LATESTFILENAME="$${LATESTURL##*/}"
       - if [ -z "$$LATESTFILENAME" ]; then
           echo "Failed to determine latest version.";
           exit 1;
         fi;
-      - curl -L -o files/$$LATESTFILENAME "$$LATESTURL" &&
-        ln -sf $$LATESTFILENAME files/flashprint5_latest_amd64.deb
+      - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" &&
+        ln -sf $$LATESTFILENAME Downloads/flashprint5_latest_amd64.deb
 
   install: &install
     <<: *common
 
     command:
-      - VERSION="$${1-flashprint5_latest_amd64.deb}";
+      - VERSION="$${1:-flashprint5_latest_amd64.deb}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/install &&
         mkdir ~/install &&
         cd ~/install &&
-        dpkg-deb -x ~/files/"$$VERSION" flashprint &&
+        dpkg-deb -x ~/Downloads/"$$VERSION" flashprint &&
         mkdir -p ~/.local/share/applications &&
         cp flashprint/usr/share/applications/FlashPrint5.desktop ~/.local/share/applications/FlashPrint5.desktop &&
         sed -i 's%^Exec=/usr/share/FlashPrint5$$%Exec=/home/$${USER}/install/flashprint/usr/share/FlashPrint5/%' ~/.local/share/applications/FlashPrint5.desktop
@@ -109,8 +109,8 @@ services:
           echo "Failed to determine latest version.";
           exit 0;
       - fi
-      - mkdir -p files
-      - if [ -e "files/$$LATESTFILENAME" ]; then
+      - mkdir -p Downloads
+      - if [ -e "Downloads/$$LATESTFILENAME" ]; then
           echo "No new version";
           exit 0;
         fi

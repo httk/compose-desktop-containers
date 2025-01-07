@@ -85,7 +85,7 @@ services:
 
 
   ## INSTALL ##
-  
+
   download: &download
     <<: *common
 
@@ -101,10 +101,10 @@ services:
       - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/slack-latest-amd64.deb
 
   install: &install
-    <<: *common 
+    <<: *common
 
     command:
-      - VERSION="$${1-slack-latest-amd64.deb}";
+      - VERSION="$${1:-slack-latest-amd64.deb}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/Installation &&
         mkdir ~/Installation &&
@@ -115,14 +115,14 @@ services:
         sed -i 's%/usr/bin/slack%/home/$USER/Installation/slack/usr/bin/slack%' ~/.local/share/applications/slack.desktop &&
         cp "slack/usr/share/pixmaps/slack.png" ~/.local/share/icons/hicolor/256x256/apps/slack.png &&
         gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor &&
-        update-desktop-database ~/.local/share/applications/ 
+        update-desktop-database ~/.local/share/applications/
 
   ## UPDATE ##
 
   update-check: &update-check
-    <<: *common 
+    <<: *common
 
-    command: 
+    command:
       - echo "UPDATE CHECK"
       - LATESTURL="$$(curl -L 'https://slack.com/downloads/instructions/linux?ddl=1&build=deb' | sed -n 's|^.*src="\(https://downloads.slack-edge.com/desktop-releases/linux/x64/[^/]*/[^/]*-amd64.deb\).*$$|\1|p')"
       - LATESTFILENAME="$${LATESTURL##*/}";
@@ -139,7 +139,7 @@ services:
       - exit 1
 
   update: &update
-    <<: *install 
+    <<: *install
 
 
   ## EXECUTE ###
@@ -149,7 +149,7 @@ services:
 
     container_name: cdc_slack_slack
 
-    command: 
+    command:
       - echo "SLACK"
       - cd Installation/slack
       - pipewire-pulse &
@@ -159,7 +159,7 @@ services:
 
       # slack in x11 mode does not need dbus?
       #dbus-proxy: ""
-      
+
       devices:
         - video
 
@@ -177,7 +177,7 @@ services:
           StartupNotify=true
           Categories=Network;InstantMessaging;
           MimeType=x-scheme-handler/slack;
-          
+
         icons:
           - source: .local/share/icons/hicolor/256x256/apps/slack.png
             size: 256

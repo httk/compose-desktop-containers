@@ -138,10 +138,10 @@ services:
             echo -e "#!/bin/bash\nexec $${COMMAND} \"\$$@\" \n" > ~/install/microsoft365/$${APPNAME#*|}.sh;
             chmod +x ~/install/microsoft365/$${APPNAME#*|}.sh;
             echo -n "$$CHROMIUM_APP_ID" > ~/install/microsoft365/$${APPNAME#*|}.appid;
-            echo -n "crx_$$CHROMIUM_APP_ID" > ~/install/microsoft365/$${APPNAME#*|}.wmclass;  
+            echo -n "crx_$$CHROMIUM_APP_ID" > ~/install/microsoft365/$${APPNAME#*|}.wmclass;
             cp ~/.local/share/icons/hicolor/256x256/apps/"chrome-$${CHROMIUM_APP_ID}-Default.png" ~/.local/share/icons/hicolor/256x256/apps/$${APPNAME#*|}.png;
-	  else
-	    echo "Warning: ${APPNAME%|*} does not seem to be downloaded and will thus not be installed, re-run the download step and retry.";
+          else
+            echo "Warning: ${APPNAME%|*} does not seem to be downloaded and will thus not be installed, re-run the download step and retry.";
           fi;
         done
 
@@ -305,7 +305,7 @@ services:
           Name=Microsoft Forms (container)
           Comment=Tool to create online surveys, forms, polls and quizzies
           GenericName=Form tool
-          StartupWMClass=msforms  
+          StartupWMClass=msforms
           Exec=msforms
           Icon=msforms
           Type=Application

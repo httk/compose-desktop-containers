@@ -48,8 +48,28 @@ if [ -n "${PRECOMMANDS_FILES// }" ]; then
     PRECOMMANDS="$(awk 1 $PRECOMMANDS_FILES)"
 fi
 
+cp /etc/timezone files/timezone
+
 cat > ./Containerfile <<EOF
 FROM $BASE
+COPY files/timezone /etc/timezone
+EOF
+
+LOCALTIME=$(readlink /etc/localtime)
+if [ -n "$LOCALTIME" ]; then
+    TZ_LOCATION="${LOCALTIME##*/}"
+    TZ_AREA="${LOCALTIME%/*}"
+    TZ_AREA="${TZ_AREA##*/}"
+    echo "RUN ln -sf \"/usr/share/zoneinfo/${TZ_AREA}/${TZ_LOCATION}\" /etc/localtime" >> ./Containerfile
+else
+    cp /etc/localtime files/localtime
+    echo "RUN rm -f /etc/localtime" >> ./Containerfile
+    echo "COPY files/localtime /etc/localtime" >> ./Containerfile
+fi
+
+cat >> ./Containerfile <<EOF
+COPY files/localtime /etc/localtime
+COPY files/timezone /etc/timezone
 $PRECOMMANDS
 RUN apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates
 $PKGS_NODEPS

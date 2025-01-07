@@ -184,5 +184,14 @@ fi
 
 #echo /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_APP_DIR}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
 
+# Handle changes between versions of podman in how to not create a pod
+# (we need "--userns", which cannot be used in pods)
+VERSION=$(podman-compose --version | grep "^podman-compose")
+if sort -CV <<< $"$VERSION"'\n'"1.2.0"; then
+    NOPOD=""
+else
+    NOPOD="--in-pod false"
+fi
+
 # Do not use exec here, we need the TRAPS to run once done
-/usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_APP_DIR}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
+/usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_APP_DIR}/.env\" ${NOPOD} -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
