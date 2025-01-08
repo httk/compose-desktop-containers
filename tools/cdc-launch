@@ -34,10 +34,11 @@ else
 fi
 
 APP="$(basename -- "$(pwd -P)")"
+PODMAN_CONFIG=$(podman-compose -f compose.yaml -f override.yaml config 2>/dev/null)
 
-OVERRIDE_FILE=$(mktemp /tmp/desktop-containers-override.XXXXXX.yaml)
-trap "rm -f '$OVERRIDE_FILE'" EXIT
-cat <<EOF > "$OVERRIDE_FILE"
+ADJUSTMENT_FILE=$(mktemp /tmp/desktop-containers-override.XXXXXX.yaml)
+trap "rm -f '$ADJUSTMENT_FILE'" EXIT
+cat <<EOF > "$ADJUSTMENT_FILE"
 version: "3.8"
 x-common:
   x-dummy: dummy
@@ -56,7 +57,7 @@ fi
 
 CRUNVER="$(crun --version | awk '/crun version /{print $3}')"
 if ! sort -C -V <<< $'1.9.1\n'"$CRUNVER"; then
-    cat <<EOF >> "$OVERRIDE_FILE"
+    cat <<EOF >> "$ADJUSTMENT_FILE"
   read_only: false
 EOF
 fi
@@ -69,29 +70,29 @@ if [ "$ACTION" = "interactive" ]; then
 fi
 PODMAN_RUN_ARGS="--podman-run-args \"\\\--hostname $CDC_HOSTNAME\""
 
-cat <<EOF >> "$OVERRIDE_FILE"
+cat <<EOF >> "$ADJUSTMENT_FILE"
 services:
   $ACTION:
     x-dummy: dummy
 EOF
 
-if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq ".services.\"$ACTION\".\"x-launcher\".devices")" != "null" ]; then
-    for DEVICE in $(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".devices[]"); do
+if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-launcher\".devices")" != "null" ]; then
+    for DEVICE in $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".devices[]"); do
 	if [ "$DEVICE" = "video" ]; then
-	    cat <<EOF >> "$OVERRIDE_FILE"
+	    cat <<EOF >> "$ADJUSTMENT_FILE"
     devices:
 EOF
 	    for dev in /dev/video*; do
 		if [ -c "$dev" ]; then
-		    echo "      - \"$dev:$dev\"" >> "$OVERRIDE_FILE"
+		    echo "      - \"$dev:$dev\"" >> "$ADJUSTMENT_FILE"
 		fi
 	    done
 	fi
     done
 fi
 
-echo "==== OVERRIDE FILE ===="
-cat "$OVERRIDE_FILE"
+echo "==== ADJUSTMENT FILE ===="
+cat "$ADJUSTMENT_FILE"
 echo "======================="
 
 if [ "$ACTION" == "interactive" ]; then
@@ -99,7 +100,7 @@ if [ "$ACTION" == "interactive" ]; then
 fi
 
 # Look up container name
-CONTAINER_NAME="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".container_name")"
+CONTAINER_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".container_name")"
 if [ -z "$CONTAINER_NAME" -o "$CONTAINER_NAME" == "null" ]; then
     CONTAINER_NAME="cdc_$APP_$ACTION"
 fi
@@ -113,7 +114,10 @@ echo "Running ID: $RUNNING_ID"
 
 export CDC_APP_DIR="$(pwd -P)"
 
-LAUNCH_COMMAND="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".command | .[]")"
+LAUNCH_COMMAND=""
+if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".command")" != "null" ]; then
+    LAUNCH_COMMAND="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".command | .[]")"
+fi
 if [ -z "$LAUNCH_COMMAND" -o "$LAUNCH_COMMAND" == "null" ]; then
     echo "No launch command defined for this service"
     exit 1
@@ -121,7 +125,7 @@ fi
 
 if [ -n "$RUNNING_ID" ]; then
     echo "Container already running; starting process inside running container."
-    exec /usr/bin/env --split-string="podman-compose --env-file \"$CDC_APP_DIR/.env\" --in-pod false -f compose.yaml -f \"$OVERRIDE_FILE\" $CONFIG_FILE $PODMAN_RUN_ARGS exec \"$ACTION\"" bash -c "$LAUNCH_COMMAND" bash "$@"
+    exec /usr/bin/env --split-string="podman-compose --env-file \"$CDC_APP_DIR/.env\" --in-pod false -f compose.yaml -f \"$ADJUSTMENT_FILE\" $CONFIG_FILE $PODMAN_RUN_ARGS exec \"$ACTION\"" bash -c "$LAUNCH_COMMAND" bash "$@"
     exit 1
 fi
 
@@ -129,7 +133,7 @@ if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
     export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${UID}/bus"
 fi
 
-DBUS_PROXY_ARGS="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".\"dbus-proxy\"")"
+DBUS_PROXY_ARGS="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".\"dbus-proxy\"")"
 if [ "$DBUS_PROXY_ARGS" != "null" ]; then
     echo "Launching: xdg-dbus-proxy $DBUS_SESSION_BUS_ADDRESS $XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION $DBUS_PROXY_ARGS"
     xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION" --filter $DBUS_PROXY_ARGS &
@@ -144,7 +148,7 @@ if [ -z "$DBUS_SYSTEM_BUS_ADDRESS" ]; then
     export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/run/dbus/system_bus_socket"
 fi
 
-DBUS_SYSTEM_PROXY_ARGS="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".\"dbus-system-proxy\"")"
+DBUS_SYSTEM_PROXY_ARGS="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".\"dbus-system-proxy\"")"
 if [ "$DBUS_SYSTEM_PROXY_ARGS" != "null" ]; then
     echo "Launching: xdg-dbus-proxy $DBUS_SYSTEM_BUS_ADDRESS $XDG_RUNTIME_DIR/bus-system-proxy-$APP-$ACTION $DBUS_SYSTEM_PROXY_ARGS"
     xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION" $DBUS_SYSTEM_PROXY_ARGS &
@@ -156,14 +160,14 @@ else
 fi
 
 PRELAUNCHER=""
-TRAY="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray")"
+TRAY="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".tray")"
 if [ -n "$TRAY" -a "$TRAY" != "null" ]; then
-    TRAY_ICON="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.icon")"
-    TRAY_NAME="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.name")"
-    TRAY_WMCLASS="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.\"wmclass\"")"
+    TRAY_ICON="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.icon")"
+    TRAY_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.name")"
+    TRAY_WMCLASS="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.\"wmclass\"")"
     TRAY_WMCLASS_ARG=""
     if [ "$TRAY_WMCLASS" == "null" ]; then
-        TRAY_WMCLASS_FILE="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.\"wmclass-file\"")"
+        TRAY_WMCLASS_FILE="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.\"wmclass-file\"")"
         if [ "$TRAY_WMCLASS_FILE" != "null" ]; then
             TRAY_WMCLASS="$(cat "home/$TRAY_WMCLASS_FILE")"
             TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
@@ -178,11 +182,11 @@ fi
 
 if [ -n "$CDC_DEBUG" ]; then
     echo "=== CONFIG ==="
-    podman-compose  --env-file "$CDC_APP_DIR/.env" --in-pod false -f compose.yaml -f "$OVERRIDE_FILE" $CONFIG_FILE $PODMAN_RUN_ARGS config
+    podman-compose  --env-file "$CDC_APP_DIR/.env" --in-pod false -f compose.yaml -f "$ADJUSTMENT_FILE" $CONFIG_FILE $PODMAN_RUN_ARGS config
     echo "=============="
 fi
 
-#echo /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_APP_DIR}/.env\" --in-pod false -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
+#echo /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_APP_DIR}/.env\" --in-pod false -f compose.yaml -f \"${ADJUSTMENT_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
 
 # Handle changes between versions of podman in how to not create a pod
 # (we need "--userns", which cannot be used in pods)
@@ -194,4 +198,4 @@ else
 fi
 
 # Do not use exec here, we need the TRAPS to run once done
-/usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_APP_DIR}/.env\" ${NOPOD} -f compose.yaml -f \"${OVERRIDE_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
+/usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_APP_DIR}/.env\" ${NOPOD} -f compose.yaml -f \"${ADJUSTMENT_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"

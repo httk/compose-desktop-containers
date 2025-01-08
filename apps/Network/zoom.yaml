@@ -106,7 +106,7 @@ services:
   install: &install
     <<: *common
 
-    Command:
+    command:
       - VERSION="$${1:-zoom_x86_64.tar.xz}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/zoom &&

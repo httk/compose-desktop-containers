@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e 
+set -e
 
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 DEST_ABSPATH="$(cd -- "$DEST"; pwd -P)"
