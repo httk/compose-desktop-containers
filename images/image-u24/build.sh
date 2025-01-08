@@ -55,6 +55,14 @@ FROM $BASE
 COPY files/timezone /etc/timezone
 EOF
 
+cat >> ./Containerfile <<EOF
+$PRECOMMANDS
+RUN apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates
+$PKGS_NODEPS
+$PKGS
+$COMMANDS
+EOF
+
 LOCALTIME=$(readlink /etc/localtime)
 if [ -n "$LOCALTIME" ]; then
     TZ_LOCATION="${LOCALTIME##*/}"
@@ -68,13 +76,6 @@ else
 fi
 
 cat >> ./Containerfile <<EOF
-COPY files/localtime /etc/localtime
-COPY files/timezone /etc/timezone
-$PRECOMMANDS
-RUN apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates
-$PKGS_NODEPS
-$PKGS
-$COMMANDS
 RUN test ! -e /usr/share/i18n/locales/en_SE && cp /tmp/en_SE.locale /usr/share/i18n/locales/en_SE && localedef -i en_SE -f UTF-8 en_SE.UTF-8 && echo "# en_SE.UTF-8 UTF-8" >> "/etc/locale.gen" && echo "en_SE.UTF-8 UTF-8" >> "/usr/share/i18n/SUPPORTED"
 RUN locale-gen ${LOCALES} && update-locale "LANG=$LANG"
 ENV LANG $LANG
