@@ -70,8 +70,8 @@ services:
     <<: *common
 
     command:
-      - echo "DOWNLOAD";
-      - echo "(Nothing to download: google-chrome is part of the system image.)"
+      - echo "DOWNLOAD"
+      - echo "(Nothing to download, google-chrome is part of the system image.)"
 
   install: &install
     <<: *common

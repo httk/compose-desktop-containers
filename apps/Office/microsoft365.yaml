@@ -128,20 +128,21 @@ services:
     command:
       - echo "INSTALL"
       - for APPNAME in "Microsoft Teams|msteams" "Microsoft OneDrive|onedrive" "Outlook (PWA)|outlook" "Microsoft Forms|msforms"; do
-          DESKTOP_FILE="$$(find ~/.local/share/applications/ -name "*.desktop" | xargs grep -l "^Name=$${APPNAME%|*}$$")";
+          APP_FULL_NAME=$${APPNAME%|*};
+          DESKTOP_FILE="$$(find ~/.local/share/applications/ -name "*.desktop" | xargs grep -l "^Name=$${APP_FULL_NAME}$$")";
           if [ -n "$$DESKTOP_FILE" ]; then
             DESKTOP_FILE_NAME=$$(basename $$DESKTOP_FILE .desktop);
             COMMAND=$$(awk -FExec= '/^Exec=/{print $2; exit}' "$$DESKTOP_FILE");
             CHROMIUM_APP_ID="$${DESKTOP_FILE_NAME%*-Default}";
             CHROMIUM_APP_ID="$${CHROMIUM_APP_ID##chrome-}";
-            echo "Chromium app ID for $$APPNAME is $$CHROMIUM_APP_ID";
+            echo "Chromium app ID for $$APP_FULL_NAME is $$CHROMIUM_APP_ID";
             echo -e "#!/bin/bash\nexec $${COMMAND} \"\$$@\" \n" > ~/install/microsoft365/$${APPNAME#*|}.sh;
             chmod +x ~/install/microsoft365/$${APPNAME#*|}.sh;
             echo -n "$$CHROMIUM_APP_ID" > ~/install/microsoft365/$${APPNAME#*|}.appid;
             echo -n "crx_$$CHROMIUM_APP_ID" > ~/install/microsoft365/$${APPNAME#*|}.wmclass;
             cp ~/.local/share/icons/hicolor/256x256/apps/"chrome-$${CHROMIUM_APP_ID}-Default.png" ~/.local/share/icons/hicolor/256x256/apps/$${APPNAME#*|}.png;
           else
-            echo "Warning, ${APPNAME%|*} does not seem to be downloaded and will thus not be installed, re-run the download step and retry.";
+            echo "Warning, $${APPNAME_FULL_NAME} does not seem to be downloaded and will thus not be installed, re-run the download step and retry.";
           fi;
         done
 

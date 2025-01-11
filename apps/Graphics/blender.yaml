@@ -78,7 +78,7 @@ services:
   install: &install
     <<: *common
 
-    command:
+    command: 
       - VERSION="$${1:-blender-latest-linux-x64.tar.xz}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/install &&
