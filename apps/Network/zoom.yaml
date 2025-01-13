@@ -50,7 +50,7 @@ services:
     environment: &common-env
       LANG: "${LANG}"
       XDG_RUNTIME_DIR: "/tmp/${USER}/run"
-      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"      
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
 
     cap_drop:
       - ALL
@@ -78,7 +78,7 @@ services:
 
     userns_mode: "keep-id"
 
-    network_mode: none 
+    network_mode: none
 
   ## INSTALL ##
 
