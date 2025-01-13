@@ -17,15 +17,15 @@ x-application:
     tray:
       icon: microsoft365
       entries:
+        - name: "Teams"
+          wmclass-file: install/microsoft365/msteams.wmclass
+          launch: msteams
         - name: "OneDrive"
           wmclass-file: install/microsoft365/onedrive.wmclass
           launch: onedrive
         - name: "Outlook"
           wmclass-file: install/microsoft365/outlook.wmclass
           launch: outlook
-        - name: "Teams"
-          wmclass-file: install/microsoft365/msteams.wmclass
-          launch: msteams
         - name: "Forms"
           wmclass-file: install/microsoft365/msforms.wmclass
           launch: msforms
@@ -42,8 +42,7 @@ x-application:
         Path=/usr/bin
 
       icons:
-        - source: .local/share/icons/hicolor/256x256/apps/outlook.png
-          size: 256
+        - source: outlook.png
           dest: microsoft365.png
 
 services:
@@ -52,21 +51,15 @@ services:
 
   common: &common
 
-    image: "desktop-container-default"
+    image: "cdc-u24"
 
     working_dir: /home/$USER
     user: "${USER}"
 
     environment: &common-env
       LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
-      WAYLAND_DISPLAY: "${WAYLAND_DISPLAY}"
-      # X11 is necessary for current tray-icon wrapper, may be removable in the future
-      OZONE_FLAG: "--ozone-platform=x11"
-      # OZONE_FLAG: "--ozone-platform=wayland"
-      DISPLAY: "${DISPLAY}"
-      XAUTHORITY: "${XAUTHORITY}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
 
     cap_drop:
       - ALL
@@ -86,26 +79,23 @@ services:
 
     volumes:
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-      - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
-      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
-      # X11 is necessary for current tray-icon wrapper, may be removable in the future
-      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
-      - "${XAUTHORITY}:${XAUTHORITY}:rw"
 
     devices:
       - "/dev/dri:/dev/dri"
-      - "/dev/snd:/dev/snd"
-
-    security_opt:
-      - "label=no-new-privileges"
 
     userns_mode: "keep-id"
 
+    network_mode: none
 
   ## INSTALL ##
 
   download: &download
     <<: *common
+
+    network_mode: bridge
+
+    x-app-features:
+      - x11
 
     command:
       - echo "DOWNLOAD"
@@ -165,7 +155,13 @@ services:
   msteams:
     <<: *common
 
-    container_name: cdc_microsoft365
+    x-app-container_name: cdc_microsoft365
+    x-app-features:
+      - video
+      - sound
+      - x11
+
+    network_mode: bridge
 
     command:
       - echo "MSTEAMS"
@@ -197,14 +193,17 @@ services:
         wmclass-file: install/microsoft365/msteams.wmclass
 
         icons:
-          - source: .local/share/icons/hicolor/256x256/apps/msteams.png
-            size: 256
+          - source: msteams.png
             dest: msteams.png
 
   onedrive:
     <<: *common
 
-    container_name: cdc_microsoft365
+    x-app-container_name: cdc_microsoft365
+    x-app-features:
+      - x11
+      
+    network_mode: bridge
 
     command:
       - echo "ONEDRIVE"
@@ -232,14 +231,17 @@ services:
         wmclass-file: install/microsoft365/onedrive.wmclass
 
         icons:
-          - source: .local/share/icons/hicolor/256x256/apps/onedrive.png
-            size: 256
+          - source: onedrive.png
             dest: onedrive.png
 
   outlook:
     <<: *common
 
-    container_name: cdc_microsoft365
+    x-app-container_name: cdc_microsoft365
+    x-app-features:
+      - x11
+      
+    network_mode: bridge
 
     command:
       - echo "OUTLOOK"
@@ -281,14 +283,17 @@ services:
         wmclass-file: install/microsoft365/outlook.wmclass
 
         icons:
-          - source: .local/share/icons/hicolor/256x256/apps/outlook.png
-            size: 256
+          - source: outlook.png
             dest: outlook.png
 
   msforms:
     <<: *common
 
-    container_name: cdc_microsoft365
+    x-app-container_name: cdc_microsoft365
+    x-app-features:
+      - x11
+
+    network_mode: bridge
 
     command:
       - echo "MSFORMS"
@@ -316,8 +321,7 @@ services:
         wmclass-file: install/microsoft365/msforms.wmclass
 
         icons:
-          - source: .local/share/icons/hicolor/256x256/apps/msforms.png
-            size: 256
+          - source: msforms.png
             dest: msforms.png
 
 
@@ -325,6 +329,12 @@ services:
 
   interactive:
     <<: *common
+
+    x-app-container_name: cdc_microsoft365
+    x-app-features:
+      - video
+      - sound
+      - x11
 
     command:
       - echo "INTERACTIVE"

@@ -5,7 +5,7 @@ set -e
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 DEST_ABSPATH="$(cd -- "$DEST"; pwd -P)"
 
-if ! yq -r '."x-application"' compose.yaml > /dev/null 2>&1 || [ "$(yq -r '."x-application"' "$SOURCE" 2>/dev/null)" == "null" ]; then
+if ! yq -r '."x-application"' compose.yaml > /dev/null 2>&1 || [ "$(yq -r '."x-application"' compose.yaml 2>/dev/null)" == "null" ]; then
 
     echo "=== Error dump ==="
     yq -r '."x-application"' "$SOURCE" && true
@@ -26,7 +26,7 @@ EOF
 fi
 
 if [ ! -e .env ]; then
-    if [ "$(yq -r '."x-application"."env-default"' compose.yaml)" != "null" ]; then
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."env-default"')" != "null" ]; then
 	yq -r '."x-application"."env-default"' compose.yaml > .env
     else
 	cat <<EOF > .env
@@ -38,7 +38,7 @@ EOF
     fi
 fi
 
-if [ "$(yq -r '."x-application"."readme"' compose.yaml)" != "null" ]; then
+if [ "$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."readme"')" != "null" ]; then
     yq -r '."x-application"."readme"' compose.yaml > README.md
 else
     cat <<EOF > README.md
@@ -52,5 +52,12 @@ elif [ ! -e "home/Downloads/$1" ]; then
     echo "There is no download matching the requested version."
     exit 1
 fi
-"$SCRIPTPATH/cdc-launch" install "$1"
+BUILD_ACTION="$(echo "$PODMAN_CONFIG" | yq -r '.service.build')"
+if [ -n "$ACTION" -a "$ACTION" != "null" ]; then
+    "$SCRIPTPATH/cdc-launch" build "$1"
+fi
+if [ "$(echo "$PODMAN_CONFIG" | yq -r '.service.install')" != "null" ]; then
+    "$SCRIPTPATH/cdc-launch" install "$1"
+fi
+    
 "$SCRIPTPATH/cdc-post-install"

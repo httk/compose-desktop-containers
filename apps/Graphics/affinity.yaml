@@ -1,0 +1,308 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    Affinity: 3D computer graphics software tool.
+
+  override-default: |
+    version: "3.8"
+
+  env-default: |
+    # This container has no configurable options
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    working_dir: /home/${USER}
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: false
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+    network_mode: none
+
+  ## INSTALL ##
+
+  clean: &clean
+    <<: *common
+
+    command:
+      - echo "CLEAN"
+      - rm -rf Downloads Build Installation 
+
+  download: &download
+    <<: *common
+
+    network_mode: bridge
+
+    command:
+      - echo "DOWNLOAD"
+      - mkdir -p Downloads Downloads-manual
+      - DESIGNER_DOWNLOAD="$$(cd Downloads-manual; ls affinity-designer-msi-*.exe 2>/dev/null | grep -v latest | sort --version-sort | tail -n 1)"
+      - PUBLISHER_DOWNLOAD="$$(cd Downloads-manual; ls affinity-publisher-msi-*.exe 2>/dev/null | grep -v latest | sort --version-sort | tail -n 1)"
+      - PHOTO_DOWNLOAD="$$(cd Downloads-manual; ls affinity-photo-msi-*.exe 2>/dev/null | grep -v latest | sort --version-sort | tail -n 1)"
+      - METADATA_DOWNLOAD="$$(cd Downloads-manual; ls WinMetadata 2>/dev/null)"
+      - if [ -z "$$DESIGNER_DOWNLOAD" -a -z "$$NBR_PUBLISHER_DOWNLOAD" -a -z "$$NBR_PHOTO_DOWNLOAD" ]; then
+          echo "***************************************************************************************************************************";
+          echo "You must manually download the Windows affinity-<something>-msi-<version>.exe installers and place in home/Downloads-manual";
+          echo "***************************************************************************************************************************";
+          exit 1;
+        fi
+      - if [ -z "$$METADATA_DOWNLOAD" ]; then
+          echo "********************************************************************************************************************";
+          echo "You must manually retrive the WinMetadata directory from C:\Windows\System32\WinMetadata from a Windows installation";
+          echo "and place it in home/Downloads";
+          echo "********************************************************************************************************************";
+          exit 1;
+        fi
+      - if [ -n "$$DESIGNER_DOWNLOAD" ]; then
+          ln -sf ~/Downloads/"$$DESIGNER_DOWNLOAD" Downloads/affinity-designer-msi-latest.exe;
+        fi
+      - if [ -n "$$PUBLISHER_DOWNLOAD" ]; then
+          ln -sf ~/Downloads/"$$PUBLISHER_DOWNLOAD" Downloads/affinity-publisher-msi-latest.exe;
+        fi
+      - if [ -n "$$PHOTO_DOWNLOAD" ]; then
+          ln -sf ~/Downloads/"$$PHOTO_DOWNLOAD" Downloads/affinity-photo-msi-latest.exe;
+        fi
+      - ln -sf ~/Downloads/WinMetadata Downloads/.
+      - mkdir -p Downloads/repos
+      - cd Downloads/repos
+      - if [ ! -e ElementalWarrior-wine ]; then
+          git clone https://gitlab.winehq.org/ElementalWarrior/wine.git ElementalWarrior-wine;
+        fi
+      - git -C ElementalWarrior-wine switch affinity-photo2-wine8.14
+      - git -C ElementalWarrior-wine checkout c12ed146
+
+  build: &build
+    <<: *common
+
+    container_name: cdc_affinity_build
+
+    user: root
+
+    cap_add:    
+      - SYS_CHROOT
+      - CAP_FOWNER
+      - CAP_CHOWN
+      - CAP_DAC_OVERRIDE
+      - CAP_DAC_READ_SEARCH
+      - CAP_SETUID
+      - CAP_SETGID
+
+    command:
+      - echo "BUILD"
+      - whoami
+      - export DEBIAN_FRONTEND=noninteractive
+      - apt-get update
+      - apt-get -y dist-upgrade
+      - apt-get -y install python3-netifaces gcc-mingw-w64 gcc-multilib libasound2-dev libcups2-dev libdbus-1-dev libfontconfig-dev libfreetype-dev libgl-dev libgnutls28-dev libgphoto2-dev libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev libosmesa6-dev libpcap-dev libpulse-dev libsane-dev libsdl2-dev libudev-dev libunwind-dev libusb-1.0-0-dev libvulkan-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxfixes-dev libxi-dev libxrandr-dev libxrender-dev ocl-icd-opencl-dev samba-dev git flex bison
+      - su ${USER} <<<'     
+          whoami;
+          rm -rf ~/Build ~/Installation;
+          cd ~/Build;
+          ln -s ~/Downloads/repos/ElementalWarrior-wine ElementalWarrior-wine;
+          mkdir -p winewow64-build/;
+          cd winewow64-build/;
+          ../ElementalWarrior-wine/configure --prefix=/home/${USER}/Installation/ElementalWarrior-8.14 --enable-archs=i386,x86_64;
+          make -j "$$(grep -c ^processor /proc/cpuinfo)";
+          make install;
+          ln -sf wine ~/Installation/ElementalWarrior-8.14/bin/wine64;
+        '
+
+  install: &install
+    <<: *common
+
+    network_mode: bridge
+
+    x-app-features:
+      - x11
+
+    environment:
+      <<: *common-env
+      WINE_PATH: "/home/${USER}/Installation/ElementalWarrior-8.14/bin"
+      WINE_LD_LIBRARY_PATH: "/home/${USER}/Installations/ElementalWarrior-8.14:$LD_LIBRARY_PATH"
+      WINEDLLOVERRIDES: "winemenubuilder.exe=d"
+      WINESERVER: "/home/${USER}/Installation/ElementalWarrior-8.14/bin/wineserver"
+      WINELOADER: "/home/${USER}/Installation/ElementalWarrior-8.14/bin/wine"
+      WINEDLLPATH: "/home/${USER}/Installation/ElementalWarrior-8.14/lib/wine"
+      WINEPREFIX: "/home/${USER}/.wineAffinity"
+
+    command:
+      - VERSIONS="$$@"
+      - if [ -z "$$VERSIONS" ]; then
+          VERSIONS="$$(ls Downloads/affinity-*-msi-latest.exe)";
+          if [ -z "$$VERSIONS" ]; then
+            echo "No downloads to install; re-run the download step.";
+            exit 1;
+          fi;
+        fi
+      - echo "INSTALL $$VERSIONS";
+      - rm -rf ~/.wineAffinity
+      - mkdir -p ~/.wineAffinity
+      - export PATH="$$WINE_PATH:$$PATH"
+      - echo "WINE_PATH IS=$$WINE_PATH"
+      - echo "PATH IS=$$PATH"
+      - ls /home/rar/Installations/ElementalWarrior-8.14/bin
+      - export LD_LIBRARY_PATH="$$WINE_LD_LIBRARY_PATH:$$LD_LIBRARY_PATH"
+      - wineboot --init
+      - winetricks --unattended dotnet48 corefonts
+      - wine winecfg -v win11
+      - mkdir -p ~/.wineAffinity/drive_c/windows/system32
+      - cp -r Downloads/WinMetadata ~/.wineAffinity/drive_c/windows/system32/WinMetadata
+      - for VERSION in $$VERSIONS; do
+          rum ElementalWarrior-8.14 ~/.wineAffinity wine "Downloads/$$VERSION"
+        done
+      - if [ -e ".wineAffinity/drive_c/Program Files/Affinity/Designer 2/Designer.exe" ]; then
+          wine winemenubuilder ".wineAffinity/drive_c/Program Files/Affinity/Designer 2/Designer.exe";
+        fi
+      - if [ -e ".wineAffinity/drive_c/Program Files/Affinity/Designer 2/Photo.exe" ]; then
+          wine winemenubuilder ".wineAffinity/drive_c/Program Files/Affinity/Photo 2/Photo.exe";
+        fi
+      - if [ -e ".wineAffinity/drive_c/Program Files/Affinity/Publisher 2/Publisher.exe" ]; then
+          wine winemenubuilder ".wineAffinity/drive_c/Program Files/Affinity/Publisher 2/Publisher.exe";
+        fi
+
+  ## UPDATE ##
+
+  update-check: &update-check
+    <<: *common
+
+    command:
+      - echo "UPDATE CHECK"
+      - echo "Manually downloaded software: cannot do update-check, you have to check installed versions manually with the providers website."
+      - exit 0
+
+  update: &update
+    <<: *install
+
+
+  ## EXECUTE ###
+
+  designer:
+    <<: *common
+
+    network_mode: bridge
+
+    x-app-features:
+      - x11
+
+    x-app-container_name: cdc_affinity
+
+    command:
+      - echo "AFFINITY DESIGNER"
+      - export PATH="$$PATH:/opt/rum"
+      - rum ElementalWarrior-8.14 ~/.wineAffinity wine ~/.wineAffinity/"drive_c/Program Files/Affinity/Designer 2/Designer.exe"
+
+    x-launcher:
+      desktop:
+        file: |
+          [Desktop Entry]
+          Name=Affinity Designer (container)
+          StartupWMClass=AffinityDesigner
+          PrefersNonDefaultGPU=true
+          GenericName=Vector graphics editor
+          Exec=designer %f
+          Terminal=false
+          Type=Application
+          Icon=affinity
+          Categories=Graphics;
+
+  publisher:
+    <<: *common
+
+    network_mode: bridge
+
+    x-app-features:
+      - x11
+
+    x-app-container_name: cdc_affinity
+
+    command:
+      - echo "AFFINITY PUBLISHER"
+      - export PATH="$$PATH:/opt/rum"
+      - rum ElementalWarrior-8.14 $$HOME/.wineAffinity wine ~/.wineAffinity/"drive_c/Program Files/Affinity/Publisher 2/Publisher.exe"
+
+    x-launcher:
+      desktop:
+        file: |
+          [Desktop Entry]
+          Name=Affinity Publisher (container)
+          StartupWMClass=AffinityPublisher
+          PrefersNonDefaultGPU=true
+          GenericName=Vector graphics editor
+          Exec=publisher %f
+          Terminal=false
+          Type=Application
+          Icon=affinity
+          Categories=Graphics;
+
+  photo:
+    <<: *common
+
+    x-app-features:
+      - x11
+
+    network_mode: bridge
+
+    x-app-container_name: cdc_affinity
+
+    command:
+      - echo "AFFINITY PHOTO"
+      - export PATH="$$PATH:/opt/rum"
+      - rum ElementalWarrior-8.14 ~/.wineAffinity wine ~/.wineAffinity/"drive_c/Program Files/Affinity/Photo 2/Photo.exe"
+
+    x-launcher:
+      desktop:
+        file: |
+          [Desktop Entry]
+          Name=Affinity Photo (container)
+          StartupWMClass=AffinityPhoto
+          PrefersNonDefaultGPU=true
+          GenericName=Vector graphics editor
+          Exec=photo %f
+          Terminal=false
+          Type=Application
+          Icon=affinity
+          Categories=Graphics;
+
+
+  ## INTERACTIVE ##
+
+  interactive:
+    <<: *common
+
+    command:
+      - echo "INTERACTIVE"
+      - bash "$$@"

@@ -42,22 +42,15 @@ services:
 
   common: &common
 
-    image: "desktop-container-default"
+    image: "cdc-u24"
 
     working_dir: /home/$USER
     user: "${USER}"
 
     environment: &common-env
       LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
-      XDG_CURRENT_DESKTOP: "GNOME"
-      BROWSER: "falkon"
-      TERM: "xterm"
-      XTERM_LOCALE: "en_US.UTF-8"
-      XTERM_SHELL: "/usr/bin/bash"
-      DISPLAY: "${DISPLAY}"
-      XAUTHORITY: "${XAUTHORITY}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"      
 
     cap_drop:
       - ALL
@@ -76,24 +69,23 @@ services:
 
     volumes: &common-volumes
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
-      - "${XAUTHORITY}:${XAUTHORITY}:rw"
-      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
 
     devices:
       - "/dev/dri:/dev/dri"
-      - "/dev/snd:/dev/snd"
 
     security_opt:
-      - "label=disable"
+      - no-new-privileges
 
     userns_mode: "keep-id"
 
+    network_mode: none 
 
   ## INSTALL ##
 
   download: &download
     <<: *common
+
+    network_mode: bridge
 
     # Note: the deb archive is needed just to get the icon, which does not seem to be included in the standalone install (?)
     # Zoom doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
@@ -121,12 +113,16 @@ services:
         tar -xf ~/Downloads/"$$VERSION" &&
         mkdir -p ~/.local/share/applications &&
         echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/${USER}/zoom/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
+        mkdir -p ~/.local/share/icons/hicolor/256x256/apps/ &&
+        cp Zoom.png ~/.local/share/icons/hicolor/256x256/apps/Zoom.png &&
         update-desktop-database ~/.local/share/applications/
 
   ## UPDATE ##
 
   update-check: &update-check
     <<: *common
+
+    network_mode: bridge
 
     command:
       - echo "UPDATE CHECK"
@@ -158,6 +154,13 @@ services:
 
     container_name: cdc_zoom_zoom
 
+    network_mode: bridge
+
+    x-app-features:
+      - video
+      - sound
+      - x11
+
     command:
       - echo "ZOOM"
       - cd zoom/zoom
@@ -188,8 +191,7 @@ services:
           X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall
 
         icons:
-          - source: zoom/Zoom.png
-            size: 256
+          - source: Zoom.png
             dest: zoom.png
 
 

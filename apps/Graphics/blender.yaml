@@ -17,18 +17,15 @@ services:
 
   common: &common
 
-    image: "desktop-container-default"
+    image: "cdc-u24"
 
     working_dir: /home/${USER}
     user: "${USER}"
 
     environment: &common-env
       LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
-      XDG_CURRENT_DESKTOP: "GNOME"
-      BROWSER: "falkon"
-      WAYLAND_DISPLAY: "${WAYLAND_DISPLAY}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
 
     cap_drop:
       - ALL
@@ -45,23 +42,23 @@ services:
 
     volumes: &common-volumes
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
-      - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
 
     devices:
       - "/dev/dri:/dev/dri"
-      - "/dev/snd:/dev/snd"
 
     security_opt:
       - "label=no-new-privileges"
 
     userns_mode: "keep-id"
 
+    network_mode: none
 
   ## INSTALL ##
 
   download: &download
     <<: *common
+
+    network_mode: bridge
 
     command:
       - echo "DOWNLOAD"
@@ -95,6 +92,8 @@ services:
   update-check: &update-check
     <<: *common
 
+    network_mode: bridge
+
     command:
       - echo "UPDATE CHECK"
       - THANKSURL="$$(curl -L -N 'https://www.blender.org/download/' | cat | sed -n '\|^.*"\(https://www.blender.org/download/release/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz[^\"]*\)".*$$|{s||\1|p;q}')"
@@ -123,6 +122,12 @@ services:
 
     container_name: cdc_blender_blender
 
+    network_mode: bridge
+
+    x-app-features:
+      - sound
+      - wayland-fallback-x11
+
     command:
       - echo "BLENDER"
       - cd install/blender
@@ -147,8 +152,7 @@ services:
           Keywords=3d;cg;modeling;animation;painting;sculpting;texturing;video editing;video tracking;rendering;render engine;cycles;python;
 
         icons:
-          - source: install/blender/blender.svg
-            size: scalable
+          - source: blender.svg
             dest: blender.svg
 
   ## INTERACTIVE ##

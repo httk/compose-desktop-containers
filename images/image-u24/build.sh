@@ -2,8 +2,10 @@
 
 set -e
 
-if [ -z "$XDG_RUNTIME_DIR" -o -z "$USER" -o -z "$UID" -o -z "$LANG" ]; then
-    echo "The following env variables must be set: XDG_RUNTIME_DIR, USER, UID, LANG"
+SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
+
+if [ -z "$USER" -o -z "$UID" -o -z "$LANG" ]; then
+    echo "The following env variables must be set: USER, UID, LANG"
     exit 1
 fi
 
@@ -17,50 +19,66 @@ PKGS_NODEPS_FILES=""
 COMMANDS_FILES=""
 PRECOMMANDS_FILES=""
 
-for SUBDIR in ./image ../../*/image; do
-    IMGDIR="${SUBDIR%/home}"
-    PKGS_FILES="$PKGS_FILES $(ls "$IMGDIR"/*-pkgs* -I "*~" 2>/dev/null || true)"
-    PKGS_NODEPS_FILES="$PKGS_NODEPS_FILES $(ls "$IMGDIR"/*-nodeps-pkgs* -I "*~" 2>/dev/null || true)"
-    COMMANDS_FILES="$COMMANDS_FILES $(ls "$IMGDIR"/*-commands* 2>/dev/null -I "*~" || true)"
-    PRECOMMANDS_FILES="$PRECOMMANDS_FILES $(ls "$IMGDIR"/*-precommands* -I "*~" 2>/dev/null || true)"
-done
-
-PKGS_FILES="$(echo "$PKGS_FILES" | sort -s -t- -k1,1n -k2)"
-PKGS_NODEPS_FILES="$(echo "$PKGS_NODEPS_FILES" | sort -s -t- -k1,1n -k2)"
-COMMANDS_FILES="$(echo "$COMMANDS_FILES" | sort -s -t- -k1,1n -k2)"
-PRECOMMANDS_FILES="$(echo "$PRECOMMANDS_FILES" | sort -s -t- -k1,1n -k2)"
-
-PKGS=""
-PKGS_NODEPS=""
-COMMANDS=""
-PRECOMMANDS=""
-
-if [ -n "${PKGS_FILES// }" ]; then
-    PKGS="RUN apt-get -y install $(awk 1 $PKGS_FILES | sort -u | tr '\n' ' ')"
+CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
+if [ ! -e "$CDC_CONFIG_DIR/installed" ]; then
+    mkdir -p "$CDC_CONFIG_DIR/image-u24/installed"
 fi
-if [ -n "${PKGS_NODEPS_FILES// }" ]; then
-    PKGS_NODEPS="RUN apt-get --no-install-recommends -y install $(awk 1 $PKGS_NODEPS_FILES | sort -u | tr '\n' ' ')"
+ln -sf "$SCRIPTPATH/opt" "$CDC_CONFIG_DIR/image-u24/opt"
+
+PKGS=()
+PKGS_NODEPS=()
+COMMANDS=()
+PRECOMMANDS=()
+
+if [ -n "$(ls "$CDC_CONFIG_DIR/image-u24/installed")" ]; then
+    for APP_DIR in "$CDC_CONFIG_DIR"/image-u24/installed/*; do
+	echo "Checking image dependencies in $APP_DIR"
+	PKGS=( $(yq -r '."x-application".images.u24.pkgs[]? // empty' "$APP_DIR/compose.yaml") )
+	echo "Picked up pkgs:" "${PKGS[@]}"
+	PKGS_ONLY=( $(yq -r '."x-application".images.u24."pkgs-only[]?" // empty' "$APP_DIR/compose.yaml") )
+	echo "Picked up pkgs to be installed without recommendeds:" "${PKGS_ONLY[@]}"
+	PRECOMMANDS=( $(yq -r '."x-application".images.u24.precommands[]? // empty' "$APP_DIR/compose.yaml") )
+	echo "Picked up pre-commands:" "${PRECOMMANDS[@]}"
+	COMMANDS=( $(yq -r '."x-application".images.u24.commands[]? // empty' "$APP_DIR/compose.yaml") )
+	echo "Picked up commands:" "${COMMANDS[@]}"
+    done
 fi
-if [ -n "${COMMANDS_FILES// }" ]; then
-    COMMANDS="$(awk 1 $COMMANDS_FILES)"
+
+IFS=$'\n'
+PKGS+=( $(ls image/*-pkgs* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+PKGS_ONLY+=( $(ls image/*-pkgs-only* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+COMMANDS+=( $(ls image/*-commands* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+PRECOMMANDS+=( $(ls image/*-precommands* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+IFS=' '
+
+if [ -n "${PKGS}" ]; then
+    PKGS_LINES="RUN apt-get -y install $(printf "%s\n" "${PKGS[@]}" | sort -u | tr '\n' ' ')"
 fi
-if [ -n "${PRECOMMANDS_FILES// }" ]; then
-    PRECOMMANDS="$(awk 1 $PRECOMMANDS_FILES)"
+if [ -n "${PKGS_ONLY}" ]; then
+    PKGS_ONLY_LINES="RUN apt-get --no-install-recommends -y install $(printf "%s\n" "${PKGS_ONLY[@]}" | sort -u | tr '\n' ' ')"
+fi
+if [ -n "${COMMANDS}" ]; then
+    COMMANDS_LINES="$(printf "%s\n" "${COMMANDS[@]}")"
+fi
+if [ -n "${PRECOMMANDS}" ]; then
+    PRECOMMANDS_LINES="$(printf "%s\n" "${PRECOMMANDS[@]}")"
 fi
 
 cp /etc/timezone files/timezone
 
 cat > ./Containerfile <<EOF
 FROM $BASE
+ENV DEBIAN_FRONTEND=noninteractive
 COPY files/timezone /etc/timezone
 EOF
 
 cat >> ./Containerfile <<EOF
-$PRECOMMANDS
-RUN apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates
-$PKGS_NODEPS
-$PKGS
-$COMMANDS
+$PRECOMMANDS_LINES
+RUN apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates locales
+$PKGS_ONLY_LINES
+$PKGS_LINES
+RUN apt-get clean autoclean -y && apt-get autoremove -y && rm -rf /var/tmp/* && rm -rf /tmp/*
+$COMMANDS_LINES
 EOF
 
 LOCALTIME=$(readlink /etc/localtime)
@@ -76,10 +94,11 @@ else
 fi
 
 cat >> ./Containerfile <<EOF
+COPY ./tools/en_SE.locale /tmp/en_SE.locale
 RUN test ! -e /usr/share/i18n/locales/en_SE && cp /tmp/en_SE.locale /usr/share/i18n/locales/en_SE && localedef -i en_SE -f UTF-8 en_SE.UTF-8 && echo "# en_SE.UTF-8 UTF-8" >> "/etc/locale.gen" && echo "en_SE.UTF-8 UTF-8" >> "/usr/share/i18n/SUPPORTED"
 RUN locale-gen ${LOCALES} && update-locale "LANG=$LANG"
 ENV LANG $LANG
-RUN groupadd -r -g 5000 build && useradd -m -u 5000 -g 5000 -c "Build user" "build" && ln -s "/tmp/$USER/run" "$XDG_RUNTIME_DIR"
+RUN groupadd -r -g 5000 build && useradd -m -u 5000 -g 5000 -c "Build user" "build"
 EOF
 
 FULLNAME="$(getent passwd rar | awk -F':' '{print $5}')"
@@ -99,8 +118,11 @@ EOF
 
 fi
 
-podman build -t desktop-container-u24 --label=wrap .
-podman tag desktop-container-u24 desktop-container-default
+cat >> Containerfile <<EOF
+RUN mkdir -p /run/user && ln -s "/tmp/$USER/run" "/run/user/${UID}"
+EOF
+
+podman build -t cdc-u24 --label=wrap .
 podman image prune -f --filter label=wrap
 
-echo "desktop-container-default" > image.info
+podman run --rm -w "/home/$USER" --user="$USER" --shm-size=512M --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."

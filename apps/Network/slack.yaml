@@ -15,16 +15,9 @@ x-application:
     #
     #services:
     #  slack:
-    #    volumes:
-    #      - "${CDC_DBUS_PATH}:/tmp/${USER}/run/bus:rw"
-    #      - "${CDC_DBUS_SYSTEM_BUS_PATH}:/run/dbus/system_bus_socket:rw"
-    #    environment:
-    #      DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/${USER}/run/bus"
-    #      DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/run/dbus/system_bus_socket"
-    #    x-launcher:
-    #      dbus-proxy: --filter
-    #      dbus-system-proxy: --filter
-    #
+    #    x-app-features:
+    #      - dbus-proxy: --filter
+    #      - dbus-system-proxy: --filter
 
   env-default: |
     # No configurable options
@@ -36,25 +29,19 @@ services:
 
   common: &common
 
-    image: "desktop-container-default"
+    image: "cdc-u24"
 
     working_dir: /home/$USER
     user: "${USER}"
 
     environment: &common-env
       LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
-      XDG_CURRENT_DESKTOP: "GNOME"
-      BROWSER: "falkon"
-      TERM: "xterm"
-      XTERM_LOCALE: "en_US.UTF-8"
-      XTERM_SHELL: "/usr/bin/bash"
-      DISPLAY: "${DISPLAY}"
-      XAUTHORITY: "${XAUTHORITY}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
 
     cap_drop:
       - ALL
+      
     cap_add:
       - SYS_CHROOT
 
@@ -70,24 +57,23 @@ services:
 
     volumes: &common-volumes
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
-      - "${XAUTHORITY}:${XAUTHORITY}:rw"
-      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
 
-    devices:
-      - "/dev/dri:/dev/dri"
-      - "/dev/snd:/dev/snd"
+    devices: &common-devices
+      - /dev/dri:/dev/dri
 
     security_opt:
-      - "label=disable"
+      - no-new-privileges
 
     userns_mode: "keep-id"
 
+    network_mode: none
 
   ## INSTALL ##
 
   download: &download
     <<: *common
+
+    network_mode: bridge
 
     command:
       - echo "INSTALL PREPARE"
@@ -122,6 +108,8 @@ services:
   update-check: &update-check
     <<: *common
 
+    network_mode: bridge
+
     command:
       - echo "UPDATE CHECK"
       - LATESTURL="$$(curl -L 'https://slack.com/downloads/instructions/linux?ddl=1&build=deb' | sed -n 's|^.*src="\(https://downloads.slack-edge.com/desktop-releases/linux/x64/[^/]*/[^/]*-amd64.deb\).*$$|\1|p')"
@@ -147,6 +135,8 @@ services:
   slack:
     <<: *common
 
+    network_mode: bridge
+
     container_name: cdc_slack_slack
 
     command:
@@ -155,13 +145,12 @@ services:
       - pipewire-pulse &
       - exec usr/bin/slack "$$@"
 
+    x-app-features:
+      - video
+      - sound
+      - x11
+
     x-launcher:
-
-      # slack in x11 mode does not need dbus?
-      #dbus-proxy: ""
-
-      devices:
-        - video
 
       desktop:
 
@@ -179,8 +168,7 @@ services:
           MimeType=x-scheme-handler/slack;
 
         icons:
-          - source: .local/share/icons/hicolor/256x256/apps/slack.png
-            size: 256
+          - source: slack.png
             dest: slack.png
 
 
@@ -188,6 +176,8 @@ services:
 
   interactive:
     <<: *common
+
+    network_mode: bridge
 
     command:
       - echo "INTERACTIVE"

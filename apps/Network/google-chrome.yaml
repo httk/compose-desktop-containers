@@ -20,7 +20,7 @@ services:
 
   common: &common
 
-    image: "desktop-container-default"
+    image: "cdc-u24"
 
     working_dir: /home/$USER
     user: "${USER}"
@@ -29,9 +29,7 @@ services:
       LANG: "${LANG}"
       XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
       XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
-      XDG_CURRENT_DESKTOP: "GNOME"
-      BROWSER: "falkon"
-      WAYLAND_DISPLAY: "${WAYLAND_DISPLAY}"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
 
     cap_drop:
       - ALL
@@ -51,23 +49,24 @@ services:
 
     volumes: &common-volumes
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
-      - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
 
     devices:
-      - "/dev/dri:/dev/dri"
-      - "/dev/snd:/dev/snd"
+      - /dev/dri:/dev/dri
 
     security_opt:
       - "label=no-new-privileges"
 
     userns_mode: "keep-id"
 
+    network_mode: none
+
 
   ## INSTALL ##
 
   download: &download
     <<: *common
+
+    network_mode: bridge
 
     command:
       - echo "DOWNLOAD"
@@ -109,10 +108,19 @@ services:
 
     container_name: cdc_google_chrome_google_chrome
 
+    network_mode: bridge
+
+    x-features:
+      - video
+      - sound
+      - dri
+      - wayland-fallback-x11
+      - ozone
+      
     command:
       - echo "GOOGLE_CHROME"
       - pipewire-pulse &
-      - exec google-chrome --ozone-platform=wayland "$$@"
+      - exec google-chrome $${OZONE_FLAG} "$$@"
 
     x-launcher:
       desktop:
@@ -139,26 +147,7 @@ services:
           Exec=/usr/bin/google-chrome --incognito
 
         icons:
-          - source: .local/share/icons/hicolor/16x16/apps/google-chrome.png
-            size: 16
-            dest: google-chrome.png
-          - source: .local/share/icons/hicolor/24x24/apps/google-chrome.png
-            size: 24
-            dest: google-chrome.png
-          - source: .local/share/icons/hicolor/32x32/apps/google-chrome.png
-            size: 32
-            dest: google-chrome.png
-          - source: .local/share/icons/hicolor/48x48/apps/google-chrome.png
-            size: 48
-            dest: google-chrome.png
-          - source: .local/share/icons/hicolor/64x64/apps/google-chrome.png
-            size: 64
-            dest: google-chrome.png
-          - source: .local/share/icons/hicolor/128x128/apps/google-chrome.png
-            size: 128
-            dest: google-chrome.png
-          - source: .local/share/icons/hicolor/256x256/apps/google-chrome.png
-            size: 256
+          - source: google-chrome.png
             dest: google-chrome.png
 
   ## INTERACTIVE ##

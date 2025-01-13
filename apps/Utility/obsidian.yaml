@@ -10,9 +10,9 @@ x-application:
 
     # This container has no configurable options
 
-  image:
-    ubuntu-22.04:
-      packages:
+  images:
+    u24:
+      pkgs:
         - texlive-latex-base
         - texlive-latex-extra
 
@@ -22,21 +22,15 @@ services:
 
   common: &common
 
-    image: "desktop-container-default"
+    image: "cdc-u24"
 
     working_dir: /home/$USER
     user: "${USER}"
 
     environment: &common-env
       LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
-      XDG_CURRENT_DESKTOP: "GNOME"
-      BROWSER: "falkon"
-      DISPLAY: "${DISPLAY}"
-      XAUTHORITY: "${XAUTHORITY}"
-
-      #DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/${USER}/run/bus"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
 
     cap_drop:
       - ALL
@@ -55,26 +49,24 @@ services:
 
     volumes: &common-volumes
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
-      - "${XAUTHORITY}:${XAUTHORITY}:rw"
-      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
-      - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
-
-    # - "${CDC_DBUS_PATH}:/tmp/${USER}/run/bus:rw"
 
     devices:
       - "/dev/dri:/dev/dri"
 
     security_opt:
-      - "label=no-new-privileges"
+      - no-new-privileges
 
     userns_mode: "keep-id"
+
+    network_mode: none
 
 
   ## INSTALL ##
 
   download: &download
     <<: *common
+
+    network_mode: bridge
 
     environment:
       <<: *common-env
@@ -112,6 +104,8 @@ services:
   update-check: &update-check
     <<: *common
 
+    network_mode: bridge
+
     command:
       - echo "UPDATE CHECK"
       - mkdir -p Downloads
@@ -135,10 +129,18 @@ services:
 
     container_name: cdc_obsidian_obsidian
 
+    network_mode: bridge
+
+    x-app-features:
+      - wayland-fallback-x11
+
     command:
       - echo "OBSIDIAN";
-      - xdg-settings set default-web-browser org.kde.falkon.desktop;
-      - LD_LIBRARY_PATH=~/Installation/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian "$$@"
+      - if [ -n "$WAYLAND_DISPLAY" ]; then
+           LD_LIBRARY_PATH=~/Installation/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian --ozone-platform=wayland --ozone-platform-hint=auto --enable-features=UseOzonePlatform,WaylandWindowDecorations "$$@"
+	else
+           LD_LIBRARY_PATH=~/Installation/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian "$$@"
+	fi
 
     x-launcher:
 
@@ -156,8 +158,7 @@ services:
           Categories=Utility;
 
         icons:
-          - source: Installation/obsidian/usr/share/icons/hicolor/256x256/apps/obsidian.png
-            size: 256
+          - source: obsidian.png
             dest: obsidian.png
 
   ## INTERACTIVE ##
@@ -165,7 +166,8 @@ services:
   interactive:
     <<: *common
 
-    image: "desktop-container-default"
+    x-app-features:
+      - wayland-fallback-x11
 
     command:
       - echo "INTERACTIVE"

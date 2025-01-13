@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-set -e 
+set -e
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
@@ -16,68 +16,18 @@ fi
 APP="$(basename -- "$(pwd -P)")"
 DEST_ABSPATH="$(pwd -P)"
 
-for LAUNCHER in $(podman-compose -f compose.yaml -f override.yaml config | yq -r '.services | keys[]'); do
-    if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\"")" != "null" ]; then
-	ln -sf "$SCRIPTPATH/cdc-launch" "$LAUNCHER"
-	if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq ".services.\"$LAUNCHER\".\"x-launcher\".desktop")" != "null" ]; then
-	    mkdir -p ~/.local/share/applications
-	    podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\".desktop.file" > ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
-	    sed -i "s|^Exec=$LAUNCHER|Exec=\"${DEST_ABSPATH}/$LAUNCHER\"|" ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
-	    WMCLASS_FILE="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\".desktop.\"wmclass-file\"")"
-	    if [ -n "$WMCLASS_FILE" -a "$WMCLASS_FILE" != "null" ]; then
-		WMCLASS=$(cat "home/$WMCLASS_FILE")
-		sed -i "s|^StartupWMClass=.*\$|StartupWMClass=$WMCLASS|" ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
-	    fi
-	    desktop-file-validate ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
-	    echo "Wrote: ~/.local/share/applications/${LAUNCHER}_cdc.desktop"
+PODMAN_CONFIG="$(podman-compose -f compose.yaml -f override.yaml config)"
 
-	    ICONS_NBR=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\".desktop.icons | length")
-	    for (( ICON_IDX=0; ICON_IDX<ICONS_NBR; ICON_IDX++ )); do
-		# Sanetize icon paths somewhat
-		ICON_SRC=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\".desktop.icons[$ICON_IDX].source")
-		ICON_SRC=${ICON_SRC//[^[:ascii:]]}
-		ICON_SRC=${ICON_SRC//../}
-		ICON_DEST=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\".desktop.icons[$ICON_IDX].dest")
-		ICON_DEST=${ICON_DEST//[^[:ascii:]]}
-		ICON_DEST=${ICON_DEST//../}
-		ICON_SIZE=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".services.\"$LAUNCHER\".\"x-launcher\".desktop.icons[$ICON_IDX].size")
-		if [ "$ICON_SIZE" = "null" -o -z "$ICON_SIZE" ]; then
-		    DEST_DIRNAME=$(dirname "$ICON_DEST")
-		    mkdir -p ~/.local/share/"$APP/$DEST_DIRNAME"
-		    cp "home/$ICON_SRC" ~/.local/share/"$APP/$ICON_DEST"
-		    echo "Wrote: ~/.local/share/$APP/$ICON_DEST"
-		    continue
-		elif [ "$ICON_SIZE" = "scalable" ]; then
-		    ICON_SIZE_DIR="scalable"
-		elif [ "$ICON_SIZE" = "512" -o "$ICON_SIZE" = "256" -o "$ICON_SIZE" = "192" -o "$ICON_SIZE" = "128" -o "$ICON_SIZE" = "96" -o "$ICON_SIZE" = "72" -o "$ICON_SIZE" = "64" -o "$ICON_SIZE" = "48" -o "$ICON_SIZE" = "36" -o "$ICON_SIZE" = "32" -o "$ICON_SIZE" = "24" -o "$ICON_SIZE" = "22" -o "$ICON_SIZE" = "16" -o "$ICON_SIZE" = "8" ]; then
-		    ICON_SIZE_DIR="${ICON_SIZE}x${ICON_SIZE}"
-		else
-		    echo "Warning: invalid icon size for $ICON_SRC: '$ICON_SIZE'"
-		    continue
-		fi
-		if [ -e "home/$ICON_SRC" ]; then
-		    mkdir -p ~/.local/share/icons/hicolor/"$ICON_SIZE_DIR"/apps
-		    cp "home/$ICON_SRC" ~/.local/share/icons/hicolor/"$ICON_SIZE_DIR"/apps/"$ICON_DEST"
-		    echo "Wrote: ~/.local/share/icons/hicolor/$ICON_SIZE_DIR/apps/$ICON_DEST"
-		else
-		    echo "Warning: icon 'home/$ICON_SRC' does not exist."
-		fi
-	    done
-	   
-	    update-desktop-database ~/.local/share/applications/
-	    gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
-	fi
-    fi
-done
+function POST_PROCESS_LAUNCHER() {
+    LAUNCHER=$1
+    YQPATH=$2
 
-if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq -r '."x-application"."global-launcher"')" != "null" ]; then
-    LAUNCHER="$(podman-compose -f compose.yaml -f override.yaml config | yq -r '."x-application"."global-launcher".name')"
-    ln -sf "$SCRIPTPATH/cdc-launch-global" "$LAUNCHER"
-    if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq '."x-application"."global-launcher".desktop')" != "null" ]; then
+    ln -sf "$SCRIPTPATH/cdc-launch" "$LAUNCHER"
+    if [ "$(echo "$PODMAN_CONFIG" | yq "${YQPATH}.desktop")" != "null" ]; then
 	mkdir -p ~/.local/share/applications
-	podman-compose -f compose.yaml -f override.yaml config | yq -r '."x-application"."global-launcher".desktop.file' > ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
+	echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.file" > ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
 	sed -i "s|^Exec=$LAUNCHER|Exec=\"${DEST_ABSPATH}/$LAUNCHER\"|" ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
-	WMCLASS_FILE="$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".\"x-application\".\"global-launcher\".desktop.\"wmclass-file\"")"
+	WMCLASS_FILE="$(echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.\"wmclass-file\"")"
 	if [ -n "$WMCLASS_FILE" -a "$WMCLASS_FILE" != "null" ]; then
 	    WMCLASS=$(cat "home/$WMCLASS_FILE")
 	    sed -i "s|^StartupWMClass=.*\$|StartupWMClass=$WMCLASS|" ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
@@ -85,40 +35,48 @@ if [ "$(podman-compose -f compose.yaml -f override.yaml config | yq -r '."x-appl
 	desktop-file-validate ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
 	echo "Wrote: ~/.local/share/applications/${LAUNCHER}_cdc.desktop"
 
-	ICONS_NBR=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".\"x-application\".\"global-launcher\".desktop.icons | length")
+	ICONS_NBR=$(echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.icons | length")
 	for (( ICON_IDX=0; ICON_IDX<ICONS_NBR; ICON_IDX++ )); do
 	    # Sanetize icon paths somewhat
-	    ICON_SRC=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".\"x-application\".\"global-launcher\".desktop.icons[$ICON_IDX].source")
+	    ICON_SRC=$(echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.icons[$ICON_IDX].source")
 	    ICON_SRC=${ICON_SRC//[^[:ascii:]]}
 	    ICON_SRC=${ICON_SRC//../}
-	    ICON_DEST=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".\"x-application\".\"global-launcher\".desktop.icons[$ICON_IDX].dest")
+	    ICON_DEST=$(echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.icons[$ICON_IDX].dest")
 	    ICON_DEST=${ICON_DEST//[^[:ascii:]]}
 	    ICON_DEST=${ICON_DEST//../}
-	    ICON_SIZE=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".\"x-application\".\"global-launcher\".desktop.icons[$ICON_IDX].size")
-	    if [ "$ICON_SIZE" = "null" -o -z "$ICON_SIZE" ]; then
-		DEST_DIRNAME=$(dirname "$ICON_DEST")
-		mkdir -p ~/.local/share/"$APP/$DEST_DIRNAME"
-		cp "home/$ICON_SRC" ~/.local/share/"$APP/$ICON_DEST"
-		echo "Wrote: ~/.local/share/$APP/$ICON_DEST"
-		continue
-	    elif [ "$ICON_SIZE" = "scalable" ]; then
-		ICON_SIZE_DIR="scalable"
-	    elif [ "$ICON_SIZE" = "512" -o "$ICON_SIZE" = "256" -o "$ICON_SIZE" = "192" -o "$ICON_SIZE" = "128" -o "$ICON_SIZE" = "96" -o "$ICON_SIZE" = "72" -o "$ICON_SIZE" = "64" -o "$ICON_SIZE" = "48" -o "$ICON_SIZE" = "36" -o "$ICON_SIZE" = "32" -o "$ICON_SIZE" = "24" -o "$ICON_SIZE" = "22" -o "$ICON_SIZE" = "16" -o "$ICON_SIZE" = "8" ]; then
-		ICON_SIZE_DIR="${ICON_SIZE}x${ICON_SIZE}"
+	    ICON_PLACE=$(echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.icons[$ICON_IDX].dest")
+	    if [ "${ICON_DEST}" == "${ICON_DEST#$APP/}" ]; then
+		for ICON_SIZE in "scalable" "512x512" "256x256" "192x192" "128x128" "96x96" "72x72" "64x64" "48x48" "36x36" "32x32" "24x24" "22x22" "16x16" "8x8"; do
+		    ICON_SRC_PATH="home/.local/share/icons/hicolor/$ICON_SIZE/apps/${ICON_SRC}"
+		    ICON_DST_PATH=~/.local/share/icons/hicolor/"${ICON_SIZE}/apps"
+		    if [ -e "$ICON_SRC_PATH" ]; then
+			echo "Writing: $ICON_DST_PATH"
+			mkdir -p "$ICON_DST_PATH"
+			cp "$ICON_SRC_PATH" "$ICON_DST_PATH"
+		    fi
+		done
 	    else
-		echo "Warning: invalid icon size for $ICON_SRC: '${ICON_SIZE}'"
-		continue
-	    fi
-	    if [ -e "home/$ICON_SRC" ]; then
-		mkdir -p ~/.local/share/icons/hicolor/"$ICON_SIZE_DIR"/apps
-		cp "home/$ICON_SRC" ~/.local/share/icons/hicolor/"$ICON_SIZE_DIR"/apps/"$ICON_DEST"
-		echo "Wrote: ~/.local/share/icons/hicolor/$ICON_SIZE_DIR/apps/$ICON_DEST"
-	    else
-		echo "Warning: icon 'home/$ICON_SRC' does not exist."
+		ICON_DEST_PATH="${ICON_DEST#$APP/}"
+		ICON_DEST_DIR=$(dirname "$ICON_DEST_PATH")
+		ICON_SRC_PATH="home/${ICON_SRC}"
+		mkdir -p ~/.local/share/"$APP/${ICON_DEST_DIR}"
+		echo "Writing: ~/.local/share/${APP}/${ICON_DEST_PATH}"
+		cp "home/${ICON_SRC_PATH}" ~/.local/share/"${APP}/${ICON_DEST_PATH}"
 	    fi
 	done
-	
-	update-desktop-database ~/.local/share/applications/
-	gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
     fi
+}
+
+for LAUNCHER in $(echo "$PODMAN_CONFIG" | yq -r '.services | keys[]'); do
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER\".\"x-launcher\"")" != "null" ]; then
+	POST_PROCESS_LAUNCHER "$LAUNCHER" ".services.\"$LAUNCHER\".\"x-launcher\""
+    fi
+done
+
+if [ "$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."global-launcher"')" != "null" ]; then
+    LAUNCHER="$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."global-launcher".name')"
+    POST_PROCESS_LAUNCHER "$LAUNCHER" '."x-application"."global-launcher"'
 fi
+
+update-desktop-database ~/.local/share/applications/
+gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor

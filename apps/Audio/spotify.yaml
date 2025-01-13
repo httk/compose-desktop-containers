@@ -33,20 +33,15 @@ services:
 
   common: &common
 
-    image: "desktop-container-default"
+    image: "cdc-u24"
 
     working_dir: /home/$USER
     user: "${USER}"
 
     environment: &common-env
       LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
       XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
-      BROWSER: "falkon"
-      DISPLAY: "${DISPLAY}"
-      XAUTHORITY: "${XAUTHORITY}"
-      DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/${USER}/run/bus"
 
     cap_drop:
       - ALL
@@ -65,25 +60,23 @@ services:
 
     volumes: &common-volumes
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
-      - "${XAUTHORITY}:${XAUTHORITY}:rw"
-      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
-      - "${CDC_DBUS_PATH}:/tmp/${USER}/run/bus:rw"
 
     devices:
       - "/dev/dri:/dev/dri"
-      - "/dev/snd:/dev/snd"
 
     security_opt:
-      - "label=disable"
+      - no-new-privileges
 
     userns_mode: "keep-id"
 
+    network_mode: none
 
   ## INSTALL ##
 
   download: &download
     <<: *common
+
+    network_mode: bridge
 
     command:
       - echo "DOWNLOAD"
@@ -130,6 +123,8 @@ services:
   update-check: &update-check
     <<: *common
 
+    network_mode: bridge
+
     command:
       - echo "UPDATE CHECK"
       - LATESTURL="http://repository.spotify.com/pool/non-free/s/spotify-client/$(curl -L 'http://repository.spotify.com/pool/non-free/s/spotify-client/' | sed -n 's|^.*"\(spotify-client_.\+_amd64\.deb\)".*$|\1|p')"
@@ -155,7 +150,14 @@ services:
   spotify:
     <<: *common
 
+    network_mode: bridge
+
     container_name: cdc_spotify_spotify
+
+    x-app-features:
+      - sound
+      - x11
+      - dbus-proxy: --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher
 
     command:
       - echo "SPOTIFY"
@@ -232,6 +234,11 @@ services:
 
   interactive:
     <<: *common
+
+    x-app-features:
+      - sound
+      - x11
+      - dbus-proxy: --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher
 
     command:
       - echo "INTERACTIVE"

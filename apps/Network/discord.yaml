@@ -23,19 +23,15 @@ services:
 
   common: &common
 
-    image: "desktop-container-default"
+    image: "cdc-u24"
 
     working_dir: /home/$USER
     user: "${USER}"
 
     environment: &common-env
       LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
-      XDG_CURRENT_DESKTOP: "GNOME"
-      BROWSER: "falkon"
-      DISPLAY: "${DISPLAY}"
-      XAUTHORITY: "${XAUTHORITY}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
 
     cap_drop:
       - ALL
@@ -54,25 +50,23 @@ services:
 
     volumes: &common-volumes
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
-      - "${XAUTHORITY}:${XAUTHORITY}:rw"
-      - "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw"
-      - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
 
     devices:
       - "/dev/dri:/dev/dri"
-      - "/dev/snd:/dev/snd"
 
     security_opt:
       - no-new-privileges
 
     userns_mode: "keep-id"
 
+    network_mode: none
 
   ## INSTALL ##
 
   download: &download
     <<: *common
+
+    network_mode: bridge
 
     environment:
       <<: *common-env
@@ -104,6 +98,8 @@ services:
   update-check: &update-check
     <<: *common
 
+    network_mode: bridge
+
     command:
       - echo "UPDATE CHECK"
       - mkdir -p Downloads
@@ -133,6 +129,13 @@ services:
     <<: *common
 
     container_name: cdc_discord_discord
+
+    network_mode: bridge
+
+    x-app-features:
+      - video
+      - sound
+      - x11
 
     command:
       - echo "DISCORD"

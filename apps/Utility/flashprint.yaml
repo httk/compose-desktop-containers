@@ -5,6 +5,9 @@ x-application:
   readme: |
     Flashprint: slicing software by Flashforge
 
+    Flashprint does not presently seem to work under wayland (at least not with addition configuration); the 3D window doesn't render.
+    (but can be started under wayland by setting: QT_QPA_PLATFORM: wayland )
+
   override-default: |
     version: "3.8"
 
@@ -17,22 +20,15 @@ services:
 
   common: &common
 
-    image: "desktop-container-default"
+    image: "cdc-u24"
 
     working_dir: /home/${USER}
     user: "${USER}"
 
     environment: &common-env
       LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
       XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
-      ### Flashprint does not presently seem to work under wayland (at least not with addition configuration); the 3D window doesn't render
-      #WAYLAND_DISPLAY: "${WAYLAND_DISPLAY}"
-      #QT_QPA_PLATFORM: wayland
-      ### Do X11 instead:
-      DISPLAY: "${DISPLAY}"
-      XAUTHORITY: "${XAUTHORITY}"
 
     cap_drop:
       - ALL
@@ -49,26 +45,23 @@ services:
 
     volumes: &common-volumes
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-      ### Flashprint does not presently seem to work under wayland (at least not with addition configuration); the 3D window doesn't render
-      #- "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
-      ### Do X11 instead:
-      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
-      - "${XAUTHORITY}:${XAUTHORITY}:rw"
-
 
     devices:
       - "/dev/dri:/dev/dri"
 
     security_opt:
-      - "label=no-new-privileges"
+      - no-new-privileges
 
     userns_mode: "keep-id"
 
+    network_node: none
 
   ## INSTALL ##
 
   download: &download
     <<: *common
+
+    network_node: bridge
 
     command:
       - echo "DOWNLOAD"
@@ -101,6 +94,8 @@ services:
   update-check: &update-check
     <<: *common
 
+    network_node: bridge
+
     command:
       - echo "UPDATE CHECK"
       - LATESTURL="$$(curl -L -N 'https://flashforge.com/blogs/download-software/software' | sed -n '\|^.*"\(https:[^/]\+/FlashPrint_[0-9.]\+/flashprint5_[0-9.]\+-amd64.deb\)".*$$|{s||\1|p;q}')"
@@ -128,6 +123,11 @@ services:
 
     container_name: cdc_flashprint_flashprint
 
+    network_node: bridge
+
+    x-app-features:
+      - x11
+
     command:
       - echo "FLASHPRINT"
       - cd install/flashprint
@@ -148,8 +148,7 @@ services:
           Categories=Utility;
 
         icons:
-          - source: install/flashprint/usr/share/icons/hicolor/64x64/apps/flashforge5.png
-            size: 64
+          - source: flashforge5.png
             dest: flashforge5.png
 
   ## INTERACTIVE ##
