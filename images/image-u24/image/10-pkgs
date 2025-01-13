@@ -67,6 +67,7 @@ gir1.2-appindicator3-0.1
 libglu1-mesa
 libqt5opengl5
 wine64
+wine32:i386
 wine64-tools
 winetricks
 proton-caller

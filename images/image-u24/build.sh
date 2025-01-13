@@ -74,7 +74,7 @@ EOF
 
 cat >> ./Containerfile <<EOF
 $PRECOMMANDS_LINES
-RUN apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates locales
+RUN dpkg --add-architecture i386 && apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates locales
 $PKGS_ONLY_LINES
 $PKGS_LINES
 RUN apt-get clean autoclean -y && apt-get autoremove -y && rm -rf /var/tmp/* && rm -rf /tmp/*

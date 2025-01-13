@@ -162,37 +162,35 @@ services:
     command:
       - VERSIONS="$$@"
       - if [ -z "$$VERSIONS" ]; then
-          VERSIONS="$$(ls Downloads/affinity-*-msi-latest.exe)";
+          VERSIONS="$$(cd Downloads; ls affinity-*-msi-latest.exe)";
           if [ -z "$$VERSIONS" ]; then
             echo "No downloads to install; re-run the download step.";
             exit 1;
           fi;
         fi
       - echo "INSTALL $$VERSIONS";
-      - rm -rf ~/.wineAffinity
+#      - rm -rf ~/.wineAffinity
       - mkdir -p ~/.wineAffinity
       - export PATH="$$WINE_PATH:$$PATH"
-      - echo "WINE_PATH IS=$$WINE_PATH"
-      - echo "PATH IS=$$PATH"
-      - ls /home/rar/Installations/ElementalWarrior-8.14/bin
       - export LD_LIBRARY_PATH="$$WINE_LD_LIBRARY_PATH:$$LD_LIBRARY_PATH"
-      - wineboot --init
-      - winetricks --unattended dotnet48 corefonts
-      - wine winecfg -v win11
+#      - /home/${USER}/Installation/ElementalWarrior-8.14/bin/wineboot --init
+#      - /home/${USER}/Installation/ElementalWarrior-8.14/bin/winetricks --unattended dotnet48 corefonts
+#      - /home/${USER}/Installation/ElementalWarrior-8.14/bin/wine winecfg -v win11
       - mkdir -p ~/.wineAffinity/drive_c/windows/system32
       - cp -r Downloads/WinMetadata ~/.wineAffinity/drive_c/windows/system32/WinMetadata
       - for VERSION in $$VERSIONS; do
-          rum ElementalWarrior-8.14 ~/.wineAffinity wine "Downloads/$$VERSION"
+          ls "Downloads/$$VERSION";
+          /usr/bin/wine "Downloads/$$VERSION";
         done
-      - if [ -e ".wineAffinity/drive_c/Program Files/Affinity/Designer 2/Designer.exe" ]; then
-          wine winemenubuilder ".wineAffinity/drive_c/Program Files/Affinity/Designer 2/Designer.exe";
-        fi
-      - if [ -e ".wineAffinity/drive_c/Program Files/Affinity/Designer 2/Photo.exe" ]; then
-          wine winemenubuilder ".wineAffinity/drive_c/Program Files/Affinity/Photo 2/Photo.exe";
-        fi
-      - if [ -e ".wineAffinity/drive_c/Program Files/Affinity/Publisher 2/Publisher.exe" ]; then
-          wine winemenubuilder ".wineAffinity/drive_c/Program Files/Affinity/Publisher 2/Publisher.exe";
-        fi
+#      - if [ -e ".wineAffinity/drive_c/Program Files/Affinity/Designer 2/Designer.exe" ]; then
+#          /home/${USER}/Installation/ElementalWarrior-8.14/bin/wine winemenubuilder ".wineAffinity/drive_c/Program Files/Affinity/Designer 2/Designer.exe";
+#        fi
+#      - if [ -e ".wineAffinity/drive_c/Program Files/Affinity/Designer 2/Photo.exe" ]; then
+#          /home/${USER}/Installation/ElementalWarrior-8.14/bin/wine winemenubuilder ".wineAffinity/drive_c/Program Files/Affinity/Photo 2/Photo.exe";
+#        fi
+#      - if [ -e ".wineAffinity/drive_c/Program Files/Affinity/Publisher 2/Publisher.exe" ]; then
+#          /home/${USER}/Installation/ElementalWarrior-8.14/bin/wine winemenubuilder ".wineAffinity/drive_c/Program Files/Affinity/Publisher 2/Publisher.exe";
+#        fi
 
   ## UPDATE ##
 
