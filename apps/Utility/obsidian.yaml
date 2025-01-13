@@ -138,9 +138,9 @@ services:
       - echo "OBSIDIAN";
       - if [ -n "$WAYLAND_DISPLAY" ]; then
            LD_LIBRARY_PATH=~/Installation/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian --ozone-platform=wayland --ozone-platform-hint=auto --enable-features=UseOzonePlatform,WaylandWindowDecorations "$$@"
-	else
+        else
            LD_LIBRARY_PATH=~/Installation/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian "$$@"
-	fi
+        fi
 
     x-launcher:
 
