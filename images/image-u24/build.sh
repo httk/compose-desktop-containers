@@ -65,6 +65,7 @@ if [ -n "${PRECOMMANDS}" ]; then
     PRECOMMANDS_LINES="$(printf "%s\n" "${PRECOMMANDS[@]}")"
 fi
 
+mkdir -p files
 cp /etc/timezone files/timezone
 
 cat > ./Containerfile <<EOF

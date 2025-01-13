@@ -1,0 +1,147 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    httk development environment
+
+  override-default: |
+    version: "3.8"
+
+  env-default: |
+    # This container has no configurable options
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "desktop-container-default"
+
+    working_dir: /home/$USER
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
+      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
+      XDG_CURRENT_DESKTOP: "GNOME"
+      BROWSER: "falkon"
+      WAYLAND_DISPLAY: "${WAYLAND_DISPLAY}"
+      DISPLAY: "${DISPLAY}"
+      XAUTHORITY: "${XAUTHORITY}"
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+      - "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro"
+      - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+      - "${XAUTHORITY}:${XAUTHORITY}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - "label=no-new-privileges"
+
+    userns_mode: "keep-id"
+
+
+  ## INSTALL ##
+
+  download: &download
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD";
+      - mkdir -p ~/.local/share/icons/hicolor/scalable
+      - curl -L -o ~/.local/share/icons/hicolor/scalable/httk.svg https://httk.org/img/httk-logo-curves.svg
+
+  install: &install
+    <<: *common
+
+    # This install just makes the icons available to the outer parts of the installer
+    command:
+      - echo "INSTALL";
+      - if [ ! -e httk ]; then
+          git clone 'https://github.com/httk/httk.git';
+        fi
+      - rm -rf python-venv
+      - if [ ! -e python-venv ]; then
+          python3 -m venv python-venv;
+        fi
+      - python-venv/bin/pip3 install -r httk/py37requirements.txt numpy==1.26.4
+
+  ## UPDATE ##
+
+  update-check: &update-check
+    <<: *common
+
+    command:
+      - echo "UPDATE CHECK"
+      - echo "No new version"
+      - exit 0
+
+  update: &update
+    <<: *install
+
+
+  ## EXECUTE ###
+
+  httk-devel:
+    <<: *common
+
+    container_name: cdc_google_chrome_google_chrome
+
+    command:
+      - echo "httk-devel"
+      - cd httk
+      - exec x-terminal-emulator "$$@"
+
+    x-launcher:
+      interactive: true
+
+      desktop:
+        file: |
+          [Desktop Entry]
+          Name=httk-develop (container)
+          Comment=httk development
+          Exec=httk-devel %U
+          StartupNotify=true
+          StartupWMClass=httk
+          Terminal=true
+          Icon=httk
+          Type=Application
+          Categories=Network;WebBrowser;
+          MimeType=application/pdf;application/rdf+xml;application/rss+xml;application/xhtml+xml;application/xhtml_xml;application/xml;image/gif;image/jpeg;image/png;image/webp;text/html;text/xml;x-scheme-handler/http;x-scheme-handler/https;
+          Actions=new-window;new-private-window;
+
+        icons:
+          - source: .local/share/icons/hicolor/scalable/httk.svg
+            size: scalable
+            dest: httk.svg
+
+  ## INTERACTIVE ##
+
+  interactive:
+    <<: *common
+
+    x-launcher:
+      interactive: true
+
+    command:
+      - echo "INTERACTIVE"
+      - bash "$$@"
