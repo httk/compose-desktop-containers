@@ -301,11 +301,11 @@ fi
 
 # Handle changes between versions of podman in how to not create a pod
 # (we need "--userns", which cannot be used in pods)
-VERSION=$(podman-compose --version | grep "^podman-compose")
-if sort -CV <<< "$VERSION"$'\n'"1.2.0"; then
-    NOPOD=""
-else
+VERSION=$(podman-compose --version | awk '/podman-compose/{print $NF}')
+if sort -CV <<< "1.2.0"$'\n'"$VERSION"; then
     NOPOD="--in-pod false"
+else
+    NOPOD=""
 fi
 
 #COMPOSE_PODMAN_ARGS=()
