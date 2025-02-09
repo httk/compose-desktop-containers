@@ -2,14 +2,20 @@
 
 set -e
 
+if [ ! -e ./image.info ]; then
+    echo "You first need to run setup.sh to create an image."
+    exit 1
+fi
+
+WRAP_NAME="wrap-$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && basename "$(pwd -P)" )-img"
 IMAGE_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd -P)
 IMAGE_NAME="$(cat image.info)"
 NAME=${IMAGE_NAME%-img}
 NAME=${NAME#wrap-}
 
-echo "Modifying wrap image from $(cat image.info) -> wrap-u24-img"
+echo "Modifying wrap image from $(cat image.info) -> ${WRAP_NAME}"
 
-podman rm -fi wrap-upgrade-tmp
+podman rm -fi wrap-upgrade-tmp 
 
 if [ -n "$1" ]; then
   podman run \
@@ -29,9 +35,8 @@ if [ -n "$1" ]; then
        --systemd=false \
        --security-opt=no-new-privileges \
        --userns=keep-id \
-       --volume="${IMAGE_DIR}/files:/files:ro" \
        -e LANG \
-       "$IMAGE_NAME" bash -c 'eval $@' bash "$@"
+       "$IMAGE_NAME" "$@"
 else
   podman run \
        -it \
@@ -52,10 +57,11 @@ else
        --security-opt=no-new-privileges \
        --userns=keep-id \
        -e LANG \
-       --volume="${IMAGE_DIR}/files:/files:ro" \
-       "$IMAGE_NAME" /bin/bash
+       "$IMAGE_NAME" bash -c "apt update && apt dist-upgrade -y"
 fi
-
-podman commit wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=$USER" cdc-u24
+  
+podman commit wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=$USER" "$WRAP_NAME"
 podman rm -fi wrap-upgrade-tmp
 podman image prune -f
+
+echo "$WRAP_NAME" > image.info

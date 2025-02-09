@@ -20,9 +20,6 @@ COMMANDS_FILES=""
 PRECOMMANDS_FILES=""
 
 CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
-if [ ! -e "$CDC_CONFIG_DIR/installed" ]; then
-    mkdir "$CDC_CONFIG_DIR/image-u24"
-fi
 mkdir -p "$CDC_CONFIG_DIR/image-u24/installed"
 ln -sf "$SCRIPTPATH/opt" "$CDC_CONFIG_DIR/image-u24/opt"
 
