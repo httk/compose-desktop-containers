@@ -110,6 +110,8 @@ services:
 
     container_name: cdc_affinity_build
 
+    network_mode: bridge
+
     user: root
 
     cap_add:    
