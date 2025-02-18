@@ -1,0 +1,119 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    python-develop: bare-bones console with access to host network
+    for Python development.
+
+  override-default: |
+    version: "3.8"
+
+    # Comment out as desired below to give slack access to dbus session and/or system bus
+    #
+    #services:
+    #  slack:
+    #    x-app-features:
+    #      - dbus-proxy: --filter
+    #      - dbus-system-proxy: --filter
+
+  env-default: |
+    # No configurable options
+
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    working_dir: /home/$USER
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+
+    cap_drop:
+      - ALL
+      
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+
+    devices: &common-devices
+      - /dev/dri:/dev/dri
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+    network_mode: none
+
+  ## INSTALL ##
+
+  download: &download
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD"
+      - echo "Nothing to do"
+
+  download: &install
+    <<: *common
+
+    command:
+      - echo "INSTALL"
+      - echo "Nothing to do"
+
+
+  ## UPDATE ##
+
+  update-check: &update-check
+    <<: *common
+
+    command:
+      - echo "UPDATE CHECK"
+      - echo "Nothing to do"
+      
+  update: &update
+    <<: *install
+
+
+  ## EXECUTE ###
+
+  python-develop:
+    <<: *common
+
+    network_mode: host
+
+    command:
+      - echo "python-develop"
+      - bash
+
+    x-launcher:
+      command_line: true
+
+  ## INTERACTIVE ##
+
+  interactive:
+    <<: *common
+
+    network_mode: host
+
+    command:
+      - echo "INTERACTIVE"
+      - bash

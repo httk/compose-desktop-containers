@@ -1,0 +1,156 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    python-develop: bare-bones console with access to host network
+    for Python development.
+
+  override-default: |
+    version: "3.8"
+
+    # Comment out as desired below to give slack access to dbus session and/or system bus
+    #
+    #services:
+    #  slack:
+    #    x-app-features:
+    #      - dbus-proxy: --filter
+    #      - dbus-system-proxy: --filter
+
+  env-default: |
+    # No configurable options
+
+  images:
+    u24:
+      pkgs:
+        - cmake
+
+
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    working_dir: /home/${USER}
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: false
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+    network_mode: none
+
+  ## INSTALL ##
+
+  download: &download
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD"
+      - mkdir -p Downloads
+      - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.name')"
+      - LATESTURL="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep ollama-linux-amd64.tgz)"
+      - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
+      - curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL"
+      - ln -sf "$$LATESTFILENAME" Downloads/ollama-linux-amd64-latest.tgz
+
+  install: &install
+    <<: *common
+
+    command:
+      - VERSION="$${1:-ollama-linux-amd64-latest.tgz}";
+      - echo "INSTALL $$VERSION"; 
+      - rm -rf ~/Installation &&
+        mkdir ~/Installation &&
+        cd ~/Installation &&
+        tar -zxf ~/Downloads/"$$VERSION"
+
+  ## UPDATE ##
+
+  update-check: &update-check
+    <<: *common
+
+    command:
+      - echo "UPDATE CHECK"
+      - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output)"
+      - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
+      - mkdir -p Downloads
+      - if [ -e "Downloads/$$LATESTFILENAME" ]; then
+          echo "No new version";
+          exit 0;
+        fi
+      - echo "File missing, or server-side file newer"
+      - exit 1
+
+  update: &update
+    <<: *install
+
+
+  ## EXECUTE ###
+
+  ollama-serve:
+    <<: *common
+
+    network_mode: bridge
+    x-app-container_name: cdc_ollama_ollama
+
+    command:
+      - echo "ollama-serve"
+      - ~/Installation/bin/ollama serve
+
+    x-launcher:
+      command_line: true
+
+  ollama:
+    <<: *common
+
+    network_mode: bridge
+    x-app-container_name: cdc_ollama_ollama
+    
+    command:
+      - echo "ollama"
+      - ~/Installation/bin/ollama "$@"
+
+    x-launcher:
+      command_line: true
+
+
+  ## INTERACTIVE ##
+
+  interactive:
+    <<: *common
+
+    network_mode: host
+
+    command:
+      - echo "INTERACTIVE"
+      - bash
