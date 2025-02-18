@@ -4,7 +4,7 @@ set -e
 
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 DEST_ABSPATH="$(cd -- "$DEST"; pwd -P)"
-PODMAN_CONFIG=$(podman-compose -f compose.yaml -f override.yaml config 2>/dev/null)
+PODMAN_CONFIG=$(podman-compose -f compose.yaml config 2>/dev/null)
 
 if ! yq -r '."x-application"' compose.yaml > /dev/null 2>&1 || [ "$(yq -r '."x-application"' compose.yaml 2>/dev/null)" == "null" ]; then
 
