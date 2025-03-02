@@ -56,6 +56,8 @@ services:
       - ALL
     cap_add:
       - SYS_CHROOT
+      - CAP_SETUID
+      - CAP_SETGID
 
     security_opt:
       - no-new-privileges
@@ -149,7 +151,7 @@ services:
 
   ## EXECUTE ###
 
-  zoom:
+  zoom: &zoom
     <<: *common
 
     container_name: cdc_zoom_zoom
@@ -198,7 +200,9 @@ services:
   ## INTERACTIVE ##
 
   interactive:
-    <<: *common
+    <<: *zoom
+
+    container_name: cdc_zoom_interactive
 
     command:
       - echo "INTERACTIVE"

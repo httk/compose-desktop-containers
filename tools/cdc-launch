@@ -12,6 +12,7 @@ LAUNCHPATH="$(cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)"
 TOOLPATH="$(dirname -- "$(realpath -- "$0")")"
 PODMAN_RUN_ARGS=()
 PODMAN_ARGS=()
+INIT_COMMANDS=()
 NAME_ARG=""
 
 if [ -z "$(readlink "$0")" ]; then
@@ -53,10 +54,10 @@ PODMAN_CONFIG=$(podman-compose -f compose.yaml -f override.yaml config 2>/dev/nu
 
 # Workaround for podman arguments that I think really should work from the compose file, but for some reason does not?
 RUN_USER="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".user")"
-if [ -n "$RUN_USER" -a "$RUN_USER" != "null" ]; then
-    PODMAN_RUN_ARGS+=("--user" "$RUN_USER")
-fi
-RUN_USER="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".user")"
+#if [ -n "$RUN_USER" -a "$RUN_USER" != "null" ]; then
+#    PODMAN_RUN_ARGS+=("--user" "$RUN_USER")
+#fi
+#RUN_USER="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".user")"
 
 CONFIG_FILE=()
 if [ -e override.yaml ]; then
@@ -129,12 +130,12 @@ function GET_FEATURE_ARG() {
 ADJUSTMENT_ENVS=()
 ADJUSTMENT_DEVS=()
 ADJUSTMENT_VOLS=()
-echo "CHECK" $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-features\"[]? | select(type==\"object\") | keys[]?")
+#echo "CHECK" $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-features\"[]? | select(type==\"object\") | keys[]?")
 if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" != "null" ]; then
     for SERVICE in $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-features\"[]? | select(type==\"string\")") $(echo "$PODMAN_CONFIG" | yq -r ".services.\"${ACTION}\".\"x-app-features\"[] | select(type==\"object\") | keys[]?"); do
 
 	echo "Enabling service: $SERVICE"
-	
+
 	if [ "$SERVICE" = "wayland-fallback-x11" ]; then
 	    if [ -n "$WAYLAND_DISPLAY" ]; then
 		SERVICE="wayland"
@@ -144,11 +145,20 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" 
 	fi
 
 	if [ "$SERVICE" = "video" ]; then
-	    for DEV in /dev/video*; do
-		if [ -c "$DEV" ]; then
-		    ADJUSTMENT_DEVS+=( "$DEV:$DEV" )
-		fi
-	    done
+	    if [ -e /dev/video ]; then
+		ADJUSTMENT_VOLS+=( "/dev/video:/dev/video" )
+		#ADJUSTMENT_DEVS+=( "/dev/cameras/video0:/dev/video0" )
+		#ADJUSTMENT_DEVS+=( "/dev/cameras/video1:/dev/video1" )
+	    else
+		echo "WARNING: system appear to be missing a udev setup for /dev/cameras that allows easy sharing of cameras with containers."
+		echo "A workaround will be applied which cannot handle hot-plugging of cameras."
+		for DEV in /dev/video*; do
+		    if [ -c "$DEV" ]; then
+	    		ADJUSTMENT_DEVS+=( "$DEV:/dev/camera/${/dev/DEV}" )
+	    	    fi
+		done
+	    fi
+	    INIT_COMMANDS=( "echo -n {0..9} | xargs -d ' '  -i ln -s /dev/video/video{} /dev/video{}" )
 
 	elif [ "$SERVICE" = "wayland" ]; then
 	    ADJUSTMENT_ENVS+=( "WAYLAND_DISPLAY: ${WAYLAND_DISPLAY}" )
@@ -178,7 +188,7 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" 
 	    CDC_DBUS_PATH="$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION"
             ADJUSTMENT_VOLS+=( "${CDC_DBUS_PATH}:/run/user/${UID}/bus:rw" )
 	    ADJUSTMENT_ENVS+=( "DBUS_SESSION_BUS_ADDRESS: \"unix:path=/run/user/${UID}/bus\"" )
-	    
+
 	elif [ "$SERVICE" == "dbus-system-proxy" ]; then
 	    ARGUMENTS=( $(GET_FEATURE_ARG dbus-system-proxy) )
 	    echo "Launching: xdg-dbus-proxy $DBUS_SYSTEM_BUS_ADDRESS $XDG_RUNTIME_DIR/bus-system-proxy-$APP-$ACTION $DBUS_SYSTEM_PROXY_ARGS"
@@ -339,10 +349,28 @@ fi
 #    done
 #fi
 
-echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" "${PODMAN_RUN_ARGS[@]}" "${ACTION}" bash -c "${LAUNCH_COMMAND}" bash "$@"
-${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${LAUNCH_COMMAND}" bash "$@"
+INIT_COMMAND=""
+if [ "${#INIT_COMMANDS[@]}" != "0" ]; then
+    INIT_COMMAND="$(printf '%s;\n' "${INIT_COMMANDS[@]}")"
+fi
 
-#
-#    echo ${PRELAUNCHER} podman "${PODMAN_ARGS[@]}" "${RUN_MODE}" "${PODMAN_RUN_ARGS[@]}" bash -c "${LAUNCH_COMMAND}" bash "$@"
-#    ${PRELAUNCHER} podman "${PODMAN_ARGS[@]}" "${RUN_MODE}" "${PODMAN_RUN_ARGS[@]}" bash -c "${LAUNCH_COMMAND}" bash "$@"
-#
+if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-init\"")" != "null" ]; then
+    INIT_COMMAND="${INIT_COMMAND}$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-init\" | .[]")"$'\n'
+fi
+
+#${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" config
+
+# Applications that have a root-running init command, either manually configured, or because of selected features, need to start as root and then drop priviledges,
+# this requires additional capabilities: CAP_SETUID and CAP_SETGID, so we only launch that way if necessay.
+
+if [ -z "$INIT_COMMAND" ]; then
+
+    echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user "${RUN_USER}" ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" "<launch command...>"
+    ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user "${RUN_USER}" ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${LAUNCH_COMMAND}" bash "$@"
+
+else
+
+    echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" "<init and launch command...>"
+    ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${INIT_COMMAND} gosu \"$RUN_USER\" bash -c \"${LAUNCH_COMMAND}\" bash \"\$@\"" bash "$@"
+
+fi
