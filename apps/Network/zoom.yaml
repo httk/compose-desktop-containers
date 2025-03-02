@@ -51,6 +51,8 @@ services:
       LANG: "${LANG}"
       XDG_RUNTIME_DIR: "/tmp/${USER}/run"
       XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
+      XDG_SESSION_TYPE: "${XDG_SESSION_TYPE}"
 
     cap_drop:
       - ALL
@@ -70,6 +72,7 @@ services:
     shm_size: "512m"
 
     volumes: &common-volumes
+      - "${HOME}/Documents/containers/zoom:${HOME}/Documents/containers/zoom"
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
 
     devices:
@@ -103,20 +106,19 @@ services:
     command:
       - VERSION="$${1:-zoom_x86_64.tar.xz}";
       - echo "INSTALL $$VERSION";
-      - rm -rf ~/zoom &&
-        mkdir ~/zoom &&
-        cd ~/zoom &&
+      - mkdir -p ~/.local/share/icons/hicolor/256x256/apps/ &&
+        rm -rf ~/Installation &&
+        mkdir ~/Installation &&
+        cd ~/Installation &&
         mkdir tmp &&
         cd tmp &&
         ar x ~/Downloads/zoom_amd64.deb &&
         tar -xf data.tar.xz &&
-        cp ./usr/share/pixmaps/Zoom.png ../. &&
+        cp ./usr/share/pixmaps/Zoom.png ~/.local/share/icons/hicolor/256x256/apps/Zoom.png &&
         cd .. && rm -rf tmp &&
         tar -xf ~/Downloads/"$$VERSION" &&
         mkdir -p ~/.local/share/applications &&
-        echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/${USER}/zoom/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
-        mkdir -p ~/.local/share/icons/hicolor/256x256/apps/ &&
-        cp Zoom.png ~/.local/share/icons/hicolor/256x256/apps/Zoom.png &&
+        echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/${USER}/Installation/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
         update-desktop-database ~/.local/share/applications/
 
   ## UPDATE ##
@@ -164,10 +166,9 @@ services:
       - x11
 
     command:
-      - echo "ZOOM"
-      - cd zoom/zoom
+      - echo "ZOOM:" $${HOME}
       - pipewire-pulse &
-      - LD_LIBRARY_PATH=/home/rar/zoom/zoom:/home/rar/zoom/zoom/Qt/lib exec ./zoom "$$@"
+      - LD_LIBRARY_PATH=$${HOME}/Installation/zoom:$${HOME}/Installation/zoom/Qt/lib exec $${HOME}/Installation/zoom/zoom "$$@"
 
     x-launcher:
 

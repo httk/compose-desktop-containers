@@ -363,7 +363,7 @@ fi
 # Applications that have a root-running init command, either manually configured, or because of selected features, need to start as root and then drop priviledges,
 # this requires additional capabilities: CAP_SETUID and CAP_SETGID, so we only launch that way if necessay.
 
-if [ -z "$INIT_COMMAND" ]; then
+if [ -z "$INIT_COMMAND" -o "${RUN_MODE}" != "run" ]; then
 
     echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user "${RUN_USER}" ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" "<launch command...>"
     ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user "${RUN_USER}" ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${LAUNCH_COMMAND}" bash "$@"
@@ -371,6 +371,6 @@ if [ -z "$INIT_COMMAND" ]; then
 else
 
     echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" "<init and launch command...>"
-    ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${INIT_COMMAND} gosu \"$RUN_USER\" bash -c \"${LAUNCH_COMMAND}\" bash \"\$@\"" bash "$@"
+    ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${INIT_COMMAND} export HOME='/home/$RUN_USER'; gosu \"$RUN_USER\" bash -c \"${LAUNCH_COMMAND}\" bash \"\$@\"" bash "$@"
 
 fi
