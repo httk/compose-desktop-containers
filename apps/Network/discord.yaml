@@ -37,6 +37,8 @@ services:
       - ALL
     cap_add:
       - SYS_CHROOT
+      - CAP_SETUID
+      - CAP_SETGID
 
     security_opt:
       - no-new-privileges
