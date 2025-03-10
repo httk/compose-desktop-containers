@@ -19,10 +19,11 @@ DEST_ABSPATH="$(pwd -P)"
 PODMAN_CONFIG="$(podman-compose -f compose.yaml -f override.yaml config)"
 
 function POST_PROCESS_LAUNCHER() {
-    LAUNCHER=$1
-    YQPATH=$2
+    CDCLAUNCHER=$1
+    LAUNCHER=$2
+    YQPATH=$3
 
-    ln -sf "$SCRIPTPATH/cdc-launch" "$LAUNCHER"
+    ln -sf "$CDCLAUNCHER" "$LAUNCHER"
     if [ "$(echo "$PODMAN_CONFIG" | yq "${YQPATH}.desktop")" != "null" ]; then
 	mkdir -p ~/.local/share/applications
 	echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.file" > ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
@@ -69,13 +70,13 @@ function POST_PROCESS_LAUNCHER() {
 
 for LAUNCHER in $(echo "$PODMAN_CONFIG" | yq -r '.services | keys[]'); do
     if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER\".\"x-launcher\"")" != "null" ]; then
-	POST_PROCESS_LAUNCHER "$LAUNCHER" ".services.\"$LAUNCHER\".\"x-launcher\""
+	POST_PROCESS_LAUNCHER "$SCRIPTPATH/cdc-launch" "$LAUNCHER" ".services.\"$LAUNCHER\".\"x-launcher\""
     fi
 done
 
 if [ "$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."global-launcher"')" != "null" ]; then
     LAUNCHER="$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."global-launcher".name')"
-    POST_PROCESS_LAUNCHER "$LAUNCHER" '."x-application"."global-launcher"'
+    POST_PROCESS_LAUNCHER "$SCRIPTPATH/cdc-launch-global" "$LAUNCHER" '."x-application"."global-launcher"'
 fi
 
 update-desktop-database ~/.local/share/applications/
