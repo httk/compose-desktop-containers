@@ -130,6 +130,7 @@ function GET_FEATURE_ARG() {
 ADJUSTMENT_ENVS=()
 ADJUSTMENT_DEVS=()
 ADJUSTMENT_VOLS=()
+ADJUSTMENT_CAPS=()
 #echo "CHECK" $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-features\"[]? | select(type==\"object\") | keys[]?")
 if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" != "null" ]; then
     for SERVICE in $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-features\"[]? | select(type==\"string\")") $(echo "$PODMAN_CONFIG" | yq -r ".services.\"${ACTION}\".\"x-app-features\"[] | select(type==\"object\") | keys[]?"); do
@@ -154,11 +155,12 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" 
 		echo "A workaround will be applied which cannot handle hot-plugging of cameras."
 		for DEV in /dev/video*; do
 		    if [ -c "$DEV" ]; then
-	    		ADJUSTMENT_DEVS+=( "$DEV:/dev/camera/${/dev/DEV}" )
+	    		ADJUSTMENT_DEVS+=( "$DEV:/dev/video/${DEV#/dev/}" )
 	    	    fi
 		done
 	    fi
-	    INIT_COMMANDS=( "echo -n {0..9} | xargs -d ' '  -i ln -s /dev/video/video{} /dev/video{}" )
+	    INIT_COMMANDS+=( "echo -n {0..9} | xargs -d ' '  -i ln -s /dev/video/video{} /dev/video{}" )
+            ADJUSTMENT_CAPS+=( "CAP_SETUID" "CAP_SETGID" )
 
 	elif [ "$SERVICE" = "wayland" ]; then
 	    ADJUSTMENT_ENVS+=( "WAYLAND_DISPLAY: ${WAYLAND_DISPLAY}" )
@@ -231,6 +233,15 @@ if [ -n "$ADJUSTMENT_ENVS" ]; then
 EOF
   for ENV in "${ADJUSTMENT_ENVS[@]}"; do
     echo "      $ENV" >> "$ADJUSTMENT_FILE"
+  done
+fi
+
+if [ -n "$ADJUSTMENT_CAPS" ]; then
+  cat <<EOF >> "$ADJUSTMENT_FILE"
+    cap_add:
+EOF
+  for CAP in "${ADJUSTMENT_CAPS[@]}"; do
+    echo "      - \"$CAP\"" >> "$ADJUSTMENT_FILE"
   done
 fi
 
@@ -371,6 +382,12 @@ if [ -z "$INIT_COMMAND" -o "${RUN_MODE}" != "run" ]; then
 else
 
     echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" "<init and launch command...>"
-    ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${INIT_COMMAND} export HOME='/home/$RUN_USER'; gosu \"$RUN_USER\" bash -c \"${LAUNCH_COMMAND}\" bash \"\$@\"" bash "$@"
+    # Note:
+    # The launch part of this command isn't trivial to parse:
+    # 1. The outermost execution takes the form: bash -c <command to run> bash <arguments>.
+    # 2. <command to run> first exectures the root part: ${INIT_COMMAND}, and drops priviliges using gosu by running: HOME=<homedir> gosu ${RUN_USER} "$@"
+    # 3. The commands executed by gosu "$@" are the complete list of arguments sent into the bash session, which is <arguments> in (1).
+    # 4. <arguments> has been given the form: bash -c "${LAUNCH_COMMAND}" bash "$@", which thus executes another bash session with "${LAUNCH_COMMAND}" where the arguments are the outermost "$@"
+    ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${INIT_COMMAND} HOME='/home/$RUN_USER' exec gosu \"${RUN_USER}\" \"\$@\"" bash bash -c "${LAUNCH_COMMAND}" bash "$@"
 
 fi
