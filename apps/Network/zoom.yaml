@@ -17,24 +17,14 @@ x-application:
   override-default: |
     version: "3.8"
 
-    # Comment out as desired below to give zoom access to dbus session and/or system bus
-    #
-    #services:
-    #  zoom:
-    #    volumes:
-    #      - "${CDC_DBUS_PATH}:/tmp/${USER}/run/bus:rw"
-    #      - "${CDC_DBUS_SYSTEM_BUS_PATH}:/run/dbus/system_bus_socket:rw"
-    #    environment:
-    #      DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/${USER}/run/bus"
-    #      DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/run/dbus/system_bus_socket"
-    #    x-launcher:
-    #      dbus-proxy: --filter
-    #      dbus-system-proxy: --filter
-    #
+    services:
+      zoom:
+         volumes:
+           - "${HOME}/Documents/containers/meetings:/home/${USER}/Documents/containers/meetings"
+         working_dir: "/home/${USER}/Documents/containers/meetings"
 
   env-default: |
     # No configurable options
-
 
 services:
 
@@ -72,7 +62,6 @@ services:
     shm_size: "512m"
 
     volumes: &common-volumes
-      - "${HOME}/Documents/containers/zoom:${HOME}/Documents/containers/zoom"
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
 
     devices:
@@ -107,9 +96,9 @@ services:
       - VERSION="$${1:-zoom_x86_64.tar.xz}";
       - echo "INSTALL $$VERSION";
       - mkdir -p ~/.local/share/icons/hicolor/256x256/apps/ &&
-        rm -rf ~/Installation &&
-        mkdir ~/Installation &&
-        cd ~/Installation &&
+        rm -rf ~/.local/share/zoom &&
+        mkdir ~/.local/share/zoom &&
+        cd ~/.local/share/zoom &&
         mkdir tmp &&
         cd tmp &&
         ar x ~/Downloads/zoom_amd64.deb &&
@@ -118,7 +107,7 @@ services:
         cd .. && rm -rf tmp &&
         tar -xf ~/Downloads/"$$VERSION" &&
         mkdir -p ~/.local/share/applications &&
-        echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/${USER}/Installation/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
+        echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/${USER}/install/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
         update-desktop-database ~/.local/share/applications/
 
   ## UPDATE ##
@@ -168,7 +157,7 @@ services:
     command:
       - echo "ZOOM:" $${HOME}
       - pipewire-pulse &
-      - LD_LIBRARY_PATH=$${HOME}/Installation/zoom:$${HOME}/Installation/zoom/Qt/lib exec $${HOME}/Installation/zoom/zoom "$$@"
+      - LD_LIBRARY_PATH=~/.local/share/zoom/zoom:~/.local/share/zoom/zoom/Qt/lib exec ~/.local/share/zoom/zoom/zoom "$$@"
 
     x-launcher:
 

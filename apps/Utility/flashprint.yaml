@@ -11,6 +11,12 @@ x-application:
   override-default: |
     version: "3.8"
 
+    services:
+      blender:
+        volumes:
+          - "${HOME}/Documents/containers/3d-projects:${HOME}/Documents/containers/3d-projects"
+        working_dir: "/home/${USER}/Documents/containers/3d-projects"
+
   env-default: |
     # This container has no configurable options
 
@@ -81,9 +87,9 @@ services:
     command:
       - VERSION="$${1:-flashprint5_latest_amd64.deb}";
       - echo "INSTALL $$VERSION";
-      - rm -rf ~/install &&
-        mkdir ~/install &&
-        cd ~/install &&
+      - rm -rf ~/.local/share/flashprint &&
+        mkdir ~/.local/share/flashprint &&
+        cd ~/.local/share/flashprint &&
         dpkg-deb -x ~/Downloads/"$$VERSION" flashprint &&
         mkdir -p ~/.local/share/applications &&
         cp flashprint/usr/share/applications/FlashPrint5.desktop ~/.local/share/applications/FlashPrint5.desktop &&
@@ -130,8 +136,7 @@ services:
 
     command:
       - echo "FLASHPRINT"
-      - cd install/flashprint
-      - LD_LIBRARY_PATH=~/install/flashprint/usr/lib exec ~/install/flashprint/usr/share/FlashPrint5/FlashPrint "$$@"
+      - LD_LIBRARY_PATH=~/.local/share/flashprint/flashprint/usr/lib exec ~/.local/share/flashprint/flashprint/usr/share/FlashPrint5/FlashPrint "$$@"
 
     x-launcher:
       desktop:

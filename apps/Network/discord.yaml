@@ -14,6 +14,12 @@ x-application:
   config-default: |
     version: "3.8"
 
+    services:
+      discord:
+        volumes:
+          - "${HOME}/Documents/containers/meetings:/home/${USER}/Documents/containers/meetings"
+        working_dir: "/home/${USER}/Documents/containers/meetings"
+
   env-default: |
     # This container has no configurable options
 
@@ -86,9 +92,9 @@ services:
     command:
       - VERSION="$${1:-discord.tar.gz}";
       - echo "INSTALL $$VERSION";
-      - rm -rf ~/Installation &&
-        mkdir ~/Installation &&
-        cd ~/Installation &&
+      - rm -rf ~/.local/share/discord &&
+        mkdir ~/.local/share/discord &&
+        cd ~/.local/share/discord &&
         tar -xf ~/Downloads/"$$VERSION" &&
         mkdir -p ~/.local/share/applications &&
         cp Discord/discord.desktop ~/.local/share/applications/discord.desktop &&
@@ -141,9 +147,8 @@ services:
 
     command:
       - echo "DISCORD"
-      - cd Installation/Discord
       - pipewire-pulse &
-      - exec ./Discord "$$@"
+      - exec ~/.local/share/discord/Discord/Discord "$$@"
 
     x-launcher:
 
