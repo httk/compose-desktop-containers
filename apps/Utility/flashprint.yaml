@@ -81,6 +81,15 @@ services:
       - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" &&
         ln -sf $$LATESTFILENAME Downloads/flashprint5_latest_amd64.deb
 
+  download-clean:
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD CLEAN"
+      - rm -f "$$(readlink -f Downloads/flashprint5_latest_amd64.deb)"
+      - rm -f Downloads/flashprint5_latest_amd64.deb
+
+
   install: &install
     <<: *common
 
@@ -94,6 +103,13 @@ services:
         mkdir -p ~/.local/share/applications &&
         cp flashprint/usr/share/applications/FlashPrint5.desktop ~/.local/share/applications/FlashPrint5.desktop &&
         sed -i 's%^Exec=/usr/share/FlashPrint5$$%Exec=/home/$${USER}/install/flashprint/usr/share/FlashPrint5/%' ~/.local/share/applications/FlashPrint5.desktop
+
+  install-clean:
+    <<: *common
+
+    command:
+      - rm -rf ~/.local/share/flashprint
+
 
   ## UPDATE ##
 

@@ -11,6 +11,12 @@ x-application:
   override-default: |
     version: "3.8"
 
+    services:
+      google-chrome:
+         volumes:
+           - "${HOME}/Documents/containers/browser:/home/${USER}/Documents/containers/browser"
+         working_dir: "/home/${USER}/Documents/containers/browser"
+
   env-default: |
     # This container has no configurable options
 

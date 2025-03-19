@@ -1,0 +1,5 @@
+#!/bin/bash
+
+podman save --format oci-archive cdc-u24 -o cdc-u24.tar
+singularity build cdc-u24.sif oci-archive://cdc-u24.tar
+./cdc-u24.sif echo Hello World

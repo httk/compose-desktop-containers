@@ -89,6 +89,14 @@ services:
         fi;
       - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/spotify-client_latest_amd64.deb
 
+  download-clean:
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD CLEAN"
+      - rm -f "$$(readlink -f Downloads/spotify-client_latest_amd64.deb)"
+      - rm -f Downloads/spotify-client_latest_amd64.deb
+
   install: &install
     <<: *common
 
@@ -97,12 +105,11 @@ services:
     command:
       - VERSION="$${1:-spotify-client_latest_amd64.deb}";
       - echo "INSTALL $$VERSION";
-      - rm -rf ~/Installation
       - rm -rf ~/.local/share/spotify
-      - mkdir ~/Installation &&
-        cd ~/Installation &&
+      - mkdir -p ~/.local/share/spotify/tmp &&
+        cd ~/.local/share/spotify/tmp &&
         dpkg-deb -x ~/Downloads/"$$VERSION" spotify &&
-        mv spotify/usr/share/spotify ~/.local/share/spotify &&
+        mv spotify/usr/share/spotify/* ~/.local/share/spotify/. &&
         mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps &&
         cp ~/.local/share/spotify/spotify.desktop ~/.local/share/applications/spotify.desktop &&
         sed -i 's%/usr/bin/spotify%/home/${USER}/Installation/spotify/usr/bin/spotify%' ~/.local/share/applications/spotify.desktop &&
@@ -116,7 +123,13 @@ services:
         cp ~/.local/share/spotify/icons/spotify-linux-256.png ~/.local/share/icons/hicolor/256x256/apps/spotify.png &&
         gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor &&
         update-desktop-database ~/.local/share/applications/ &&
-        rm -rf ~/Installation
+        rm -rf ~/.local/share/spotify/tmp
+
+  install-clean:
+    <<: *common
+
+    command:
+      - rm -rf ~/.local/share/spotify
 
   ## UPDATE ##
 

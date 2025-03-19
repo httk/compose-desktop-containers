@@ -83,21 +83,35 @@ services:
       - echo curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/obsidian_latest_amd64.deb
       - curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/obsidian_latest_amd64.deb
 
+  download-clean:
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD CLEAN"
+      - rm -f "$$(readlink -f Downloads/obsidian_latest_amd64.deb)"
+      - rm -f Downloads/obsidian_latest_amd64.deb
+
+
   install: &install
     <<: *common
 
     command:
       - VERSION="$${1:-obsidian_latest_amd64.deb}";
       - echo "INSTALL $$VERSION";
-      - rm -rf ~/Installation &&
-        mkdir ~/Installation &&
-        cd ~/Installation &&
+      - rm -rf ~/.local/share/obsidian &&
+        mkdir ~/.local/share/obsidian &&
+        cd ~/.local/share/obsidian &&
         dpkg-deb -x ~/Downloads/"$$VERSION" obsidian &&
         mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps/ &&
         cp obsidian/usr/share/applications/obsidian.desktop ~/.local/share/applications/obsidian.desktop &&
         sed -i 's%^Exec=.*%Exec=/home/${USER}/obsidian/obsidian/opt/Obsidian/%' ~/.local/share/applications/obsidian.desktop ~/.local/share/applications/obsidian.desktop &&
         cp obsidian/usr/share/icons/hicolor/256x256/apps/obsidian.png ~/.local/share/icons/hicolor/256x256/apps/.
 
+  install-clean:
+    <<: *common
+
+    command:
+      - rm -rf ~/.local/share/obsidian
 
   ## UPDATE ##
 
@@ -137,9 +151,9 @@ services:
     command:
       - echo "OBSIDIAN";
       - if [ -n "$WAYLAND_DISPLAY" ]; then
-           LD_LIBRARY_PATH=~/Installation/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian --ozone-platform=wayland --ozone-platform-hint=auto --enable-features=UseOzonePlatform,WaylandWindowDecorations "$$@"
+           LD_LIBRARY_PATH=~/.local/share/obsidian/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian --ozone-platform=wayland --ozone-platform-hint=auto --enable-features=UseOzonePlatform,WaylandWindowDecorations "$$@"
         else
-           LD_LIBRARY_PATH=~/Installation/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian "$$@"
+           LD_LIBRARY_PATH=~/.local/share/obsidian/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian "$$@"
         fi
 
     x-launcher:

@@ -11,13 +11,11 @@ x-application:
   override-default: |
     version: "3.8"
 
-    # Comment out as desired below to give slack access to dbus session and/or system bus
-    #
-    #services:
-    #  slack:
-    #    x-app-features:
-    #      - dbus-proxy: --filter
-    #      - dbus-system-proxy: --filter
+    services:
+      slack:
+         volumes:
+           - "${HOME}/Documents/containers/meetings:/home/${USER}/Documents/containers/meetings"
+         working_dir: "/home/${USER}/Documents/containers/meetings"
 
   env-default: |
     # No configurable options
@@ -86,15 +84,23 @@ services:
         fi;
       - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/slack-latest-amd64.deb
 
+  download-clean:
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD CLEAN"
+      - rm -f "$$(readlink -f Downloads/slack-latest-amd64.deb)"
+      - rm -f Downloads/slack-latest-amd64.deb
+  
   install: &install
     <<: *common
 
     command:
       - VERSION="$${1:-slack-latest-amd64.deb}";
       - echo "INSTALL $$VERSION";
-      - rm -rf ~/Installation &&
-        mkdir ~/Installation &&
-        cd ~/Installation &&
+      - rm -rf ~/.local/share/slack &&
+        mkdir ~/.local/share/slack &&
+        cd ~/.local/share/slack &&
         dpkg-deb -x ~/Downloads/"$$VERSION" slack &&
         mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps &&
         cp slack/usr/share/applications/slack.desktop ~/.local/share/applications/slack.desktop &&
@@ -102,6 +108,13 @@ services:
         cp "slack/usr/share/pixmaps/slack.png" ~/.local/share/icons/hicolor/256x256/apps/slack.png &&
         gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor &&
         update-desktop-database ~/.local/share/applications/
+
+  install-clean:
+    <<: *common
+
+    command:
+      - rm -rf ~/.local/share/slack
+
 
   ## UPDATE ##
 
@@ -141,9 +154,8 @@ services:
 
     command:
       - echo "SLACK"
-      - cd Installation/slack
       - pipewire-pulse &
-      - exec usr/bin/slack "$$@"
+      - exec ~/.local/share/slack/usr/bin/slack "$$@"
 
     x-app-features:
       - video

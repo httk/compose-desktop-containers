@@ -89,6 +89,15 @@ services:
       - curl -L -o Downloads/zoom_x86_64.tar.xz "https://zoom.us/client/latest/zoom_x86_64.tar.xz"
       - curl -L -o Downloads/zoom_amd64.deb "https://zoom.us/client/latest/zoom_amd64.deb"
 
+  download-clean:
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD CLEAN"
+      - rm -f Downloads/zoom_amd64.deb
+      - rm -f Downloads/zoom_x86_64.tar.xz
+  
+
   install: &install
     <<: *common
 
@@ -109,6 +118,12 @@ services:
         mkdir -p ~/.local/share/applications &&
         echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/${USER}/install/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
         update-desktop-database ~/.local/share/applications/
+
+  install-clean:
+    <<: *common
+
+    command:
+      - rm -rf ~/.local/share/zoom
 
   ## UPDATE ##
 

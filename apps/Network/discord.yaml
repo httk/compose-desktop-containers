@@ -85,6 +85,13 @@ services:
       - mkdir -p Downloads
       - curl -L -o Downloads/discord.tar.gz "https://discordapp.com/api/download?platform=linux&format=tar.gz"
 
+  download-clean:
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD CLEAN"
+      - rm -f Downloads/discord.tar.gz
+
 
   install: &install
     <<: *common
@@ -100,6 +107,11 @@ services:
         cp Discord/discord.desktop ~/.local/share/applications/discord.desktop &&
         sed -i 's%/usr/share/discord/Discord%/home/$${USER}/discord/Discord/Discord%' ~/.local/share/applications/discord.desktop
 
+  install-clean:
+    <<: *common
+
+    command:
+      - rm -rf ~/.local/share/discord
 
   ## UPDATE ##
 

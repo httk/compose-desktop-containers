@@ -9,13 +9,11 @@ x-application:
   override-default: |
     version: "3.8"
 
-    # Comment out as desired below to give slack access to dbus session and/or system bus
-    #
-    #services:
-    #  slack:
-    #    x-app-features:
-    #      - dbus-proxy: --filter
-    #      - dbus-system-proxy: --filter
+    services:
+      python-develop:
+         volumes:
+           - "${HOME}/Documents/containers/develop:/home/${USER}/Documents/containers/develop"
+         working_dir: "/home/${USER}/Documents/containers/develop"
 
   env-default: |
     # No configurable options
@@ -65,21 +63,6 @@ services:
 
   ## INSTALL ##
 
-  download: &download
-    <<: *common
-
-    command:
-      - echo "DOWNLOAD"
-      - echo "Nothing to do"
-
-  download: &install
-    <<: *common
-
-    command:
-      - echo "INSTALL"
-      - echo "Nothing to do"
-
-
   ## UPDATE ##
 
   update-check: &update-check
@@ -90,8 +73,11 @@ services:
       - echo "Nothing to do"
       
   update: &update
-    <<: *install
+    <<: *common
 
+    command:
+      - echo "UPDATE"
+      - echo "Nothing to do"
 
   ## EXECUTE ###
 

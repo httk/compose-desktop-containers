@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=OneDrive (container)
-StartupWMClass=onedrive
-Comment=Microsoft Teams
-Exec=
-Icon=onedrive
-Type=Application
-Categories=Network;
-Path=/usr/bin

@@ -1,0 +1,74 @@
+#!/bin/bash
+
+set -e
+
+SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
+DEST_ABSPATH="$(cd -- "$DEST"; pwd -P)"
+PODMAN_CONFIG=$(podman-compose -f compose.yaml config 2>/dev/null)
+
+if ! yq -r '."x-application"' compose.yaml > /dev/null 2>&1 || [ "$(yq -r '."x-application"' compose.yaml 2>/dev/null)" == "null" ]; then
+
+    echo "=== Error dump ==="
+    yq -r '."x-application"' "$SOURCE" && true
+    echo "=================="
+
+    echo "The file compose.yaml in this directory does not seem to be a valid compose-desktop-container yaml file."
+    exit 1
+fi
+
+if [ ! -e override.yaml ]; then
+    if [ "$(yq -r '."x-application"."override-default"' compose.yaml)" != "null" ]; then
+	yq -r '."x-application"."override-default"' compose.yaml > override.yaml
+    else
+	cat <<EOF > override.yaml
+version: "3.8"
+EOF
+    fi
+fi
+
+if [ ! -e .env ]; then
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."env-default"')" != "null" ]; then
+	yq -r '."x-application"."env-default"' compose.yaml > .env
+    else
+	cat <<EOF > .env
+# No configurable options
+EOF
+    fi
+    if [ ! -e env ]; then
+	ln -s .env env
+    fi
+fi
+
+if [ "$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."readme"')" != "null" ]; then
+    yq -r '."x-application"."readme"' compose.yaml > README.md
+else
+    cat <<EOF > README.md
+This app is missing a README.
+EOF
+fi
+
+if [ -z "$1" ]; then
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."download-clean"')" != "null" ]; then
+	"$SCRIPTPATH/cdc-launch" "download-clean"
+    fi
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.download')" != "null" ]; then
+	"$SCRIPTPATH/cdc-launch" download
+    fi
+elif [ ! -e "home/Downloads/$1" ]; then
+    echo "There is no download matching the requested version."
+    exit 1
+fi
+if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."build-clean"')" != "null" ]; then
+    "$SCRIPTPATH/cdc-launch" "build-clean" "$1"
+fi
+if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.build')" != "null" ]; then
+    "$SCRIPTPATH/cdc-launch" build "$1"
+fi
+if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."install-clean"')" != "null" ]; then
+    "$SCRIPTPATH/cdc-launch" "install-clean" "$1"
+fi
+if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.install')" != "null" ]; then
+    "$SCRIPTPATH/cdc-launch" install "$1"
+fi
+    
+"$SCRIPTPATH/cdc-post-install"

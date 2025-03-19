@@ -6,6 +6,6 @@ SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 DEST_ABSPATH="$(cd -- "$DEST"; pwd -P)"
 PODMAN_CONFIG=$(podman-compose -f compose.yaml config 2>/dev/null)
 
-if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.build')" != "null" ]; then
-    "$SCRIPTPATH/cdc-launch" build "$1"
+if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.download')" != "null" ]; then
+    "$SCRIPTPATH/cdc-launch" download "$1"
 fi

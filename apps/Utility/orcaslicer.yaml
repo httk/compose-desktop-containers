@@ -77,6 +77,14 @@ services:
       - chmod +x "Downloads/$$LATESTFILENAME"
       - ln -sf "$$LATESTFILENAME" Downloads/OrcaSlicer_Linux_Ubuntu2404_latest.AppImage
 
+  download-clean:
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD CLEAN"
+      - rm -f "$$(readlink -f Downloads/OrcaSlicer_Linux_Ubuntu2404_latest.AppImage)"
+      - rm -f Downloads/OrcaSlicer_Linux_Ubuntu2404_latest.AppImage
+
   install: &install
     <<: *common
 
@@ -90,6 +98,12 @@ services:
         cp squashfs-root/OrcaSlicer.png ~/.local/share/icons/hicolor/192x192/apps/. &&
         cp squashfs-root/OrcaSlicer.desktop ~/.local/share/applications/OrcaSlicer.desktop &&
         rm -rf ~/.local/share/orcaslicer/tmp
+
+  install-clean:
+    <<: *common
+
+    command:
+      - rm -rf ~/.local/share/orcaslicer  
 
   ## UPDATE ##
 

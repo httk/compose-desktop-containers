@@ -78,6 +78,14 @@ services:
         fi;
       - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/blender-latest-linux-x64.tar.xz
 
+  download-clean:
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD CLEAN"
+      - rm -f "$$(readlink -f Downloads/blender-latest-linux-x64.tar.xz)"
+      - rm -f Downloads/blender-latest-linux-x64.tar.xz
+
   install: &install
     <<: *common
 
@@ -92,6 +100,11 @@ services:
         mkdir -p ~/.local/share/applications &&
         cp blender/blender.desktop ~/.local/share/applications/blender.desktop &&
         sed -i 's%^Exec=.*$$%Exec=/home/$${USER}/install/blender/blender%'  ~/.local/share/applications/blender.desktop
+
+  install-clean:
+
+    command:
+      - rm -rf ~/.local/share/blender
 
   ## UPDATE ##
 
