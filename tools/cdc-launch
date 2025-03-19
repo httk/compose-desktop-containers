@@ -131,7 +131,12 @@ ADJUSTMENT_ENVS=()
 ADJUSTMENT_DEVS=()
 ADJUSTMENT_VOLS=()
 ADJUSTMENT_CAPS=()
-#echo "CHECK" $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-features\"[]? | select(type==\"object\") | keys[]?")
+
+# If compose file specifically uses x-app-init, we need to force CAP_SETUID + CAP_SETGID to start as root and then drop to user
+if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-init\"")" != "null" ]; then
+    ADJUSTMENT_CAPS+=( "CAP_SETUID" "CAP_SETGID" )    
+fi
+
 if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" != "null" ]; then
     for SERVICE in $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-features\"[]? | select(type==\"string\")") $(echo "$PODMAN_CONFIG" | yq -r ".services.\"${ACTION}\".\"x-app-features\"[] | select(type==\"object\") | keys[]?"); do
 
