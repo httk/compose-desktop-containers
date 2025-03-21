@@ -80,9 +80,6 @@ services:
     volumes:
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
 
-    devices:
-      - "/dev/dri:/dev/dri"
-
     userns_mode: "keep-id"
 
     network_mode: none
@@ -95,7 +92,7 @@ services:
     network_mode: bridge
 
     x-app-features:
-      - x11
+      - wayland-fallback-x11
 
     command:
       - echo "DOWNLOAD"
@@ -110,6 +107,9 @@ services:
       - echo "The easiest way to trigger the install icon is to"
       - echo "go via the '9-dots-menu' to these applications."
       - echo "***********************************************************"
+
+      - yad --title "Download Microsoft 365 apps" --info --text "We need to \"download\" the Microsoft 365 progressive web applications (PWA).\n\nGoogle Chrome will now start, please use the browser window to navigate to the respective Microsoft 365 app (preferably using the \"9-dots-menu\"). When viewing the app, there should appear an 'install' icon in the browser navigator field. Click on this icon to download the PWA.\n\nPlease follow the above instuctions to download/install:\n\n- OneDrive\n- Microsoft Teams\n- Outlook\n- Forms"
+
       - google-chrome ${OZONE_FLAG} 'https://www.microsoft365.com/'
 
   install: &install
@@ -160,6 +160,7 @@ services:
       - video
       - sound
       - x11
+      - dri-full
 
     network_mode: bridge
 
@@ -202,7 +203,8 @@ services:
     x-app-container_name: cdc_microsoft365
     x-app-features:
       - x11
-      
+      - full-dri
+
     network_mode: bridge
 
     command:
@@ -240,7 +242,8 @@ services:
     x-app-container_name: cdc_microsoft365
     x-app-features:
       - x11
-      
+      - dri-full
+
     network_mode: bridge
 
     command:
@@ -292,6 +295,7 @@ services:
     x-app-container_name: cdc_microsoft365
     x-app-features:
       - x11
+      - dri-full
 
     network_mode: bridge
 
@@ -330,11 +334,16 @@ services:
   interactive:
     <<: *common
 
+    network_mode: bridge
+
+    read_only: false
+
     x-app-container_name: cdc_microsoft365
     x-app-features:
+      - x11
+      - dri-full
       - video
       - sound
-      - x11
 
     command:
       - echo "INTERACTIVE"

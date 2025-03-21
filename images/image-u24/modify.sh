@@ -59,3 +59,5 @@ fi
 podman commit wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=$USER" cdc-u24
 podman rm -fi wrap-upgrade-tmp
 podman image prune -f
+
+podman run --rm -w "/home/$USER" --user="$USER" --shm-size=512M --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."

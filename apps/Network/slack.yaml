@@ -39,7 +39,7 @@ services:
 
     cap_drop:
       - ALL
-      
+
     cap_add:
       - SYS_CHROOT
 
@@ -91,7 +91,7 @@ services:
       - echo "DOWNLOAD CLEAN"
       - rm -f "$$(readlink -f Downloads/slack-latest-amd64.deb)"
       - rm -f Downloads/slack-latest-amd64.deb
-  
+
   install: &install
     <<: *common
 
@@ -155,7 +155,7 @@ services:
     command:
       - echo "SLACK"
       - pipewire-pulse &
-      - exec ~/.local/share/slack/usr/bin/slack "$$@"
+      - exec ~/.local/share/slack/slack/usr/bin/slack "$$@"
 
     x-app-features:
       - video
