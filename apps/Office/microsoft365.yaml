@@ -336,8 +336,6 @@ services:
 
     network_mode: bridge
 
-    read_only: false
-
     x-app-container_name: cdc_microsoft365
     x-app-features:
       - x11

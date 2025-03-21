@@ -131,6 +131,7 @@ ADJUSTMENT_ENVS=()
 ADJUSTMENT_DEVS=()
 ADJUSTMENT_VOLS=()
 ADJUSTMENT_CAPS=()
+OVERRIDE_ALLOW_READ="no"
 
 # If compose file specifically uses x-app-init, we need to force CAP_SETUID + CAP_SETGID to start as root and then drop to user
 if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-init\"")" != "null" ]; then
@@ -185,6 +186,7 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" 
                     exit 1
                 fi
                 PODMAN_ARGS+=( "--device nvidia.com/gpu=all" )
+                OVERRIDE_ALLOW_READ="yes"
             fi
 
 	elif [ "$SERVICE" = "ozone" ]; then
@@ -264,10 +266,16 @@ fi
 
 CRUNVER="$(crun --version | awk '/crun version /{print $3}')"
 if ! sort -C -V <<< $'1.9.1\n'"$CRUNVER"; then
+    OVERRIDE_ALLOW_READ=yes
+EOF
+fi
+
+if [ "$OVERRIDE_ALLOW_READ" == "yes" ]; then
     cat <<EOF >> "$ADJUSTMENT_FILE"
     read_only: false
 EOF
 fi
+
 
 echo "==== ADJUSTMENT FILE ===="
 cat "$ADJUSTMENT_FILE"
