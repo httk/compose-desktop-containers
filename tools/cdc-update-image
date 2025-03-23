@@ -1,0 +1,72 @@
+#!/bin/bash
+
+set -e 
+
+SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
+
+if [ "$1" == "-h" -o -z "$1" ]; then
+    echo "Usage: $0 <image> [<containers dir1> ...]"
+    exit 0
+fi
+
+IMAGE_NAME="$1"
+shift 1
+
+if [[ $IMAGE_NAME != cdc-* ]]; then
+    echo "This command will only operate on images starting with cdc-"
+    exit 1
+fi
+
+PKGS=()
+PKGS_ONLY=()
+for CONTAINERS_DIR in "$@"; do
+    for APP_DIR in "$CONTAINERS_DIR"/*; do
+	if [ ! -e "$APP_DIR/compose.yaml" ]; then
+	    continue
+	fi
+	echo "Adding image package dependencies in $APP_DIR"
+	PKGS+=( $(yq -r '."x-application".images.u24.pkgs[]? // empty' "$APP_DIR/compose.yaml") )
+	PKGS_ONLY+=( $(yq -r '."x-application".images.u24."pkgs-only[]?" // empty' "$APP_DIR/compose.yaml") )
+    done
+done
+if [ -n "${PKGS}" ]; then
+    PKGS_LINES="-y install $(printf "%s\n" "${PKGS[@]}" | sort -u | tr '\n' ' ')"
+    echo "Will install: $PKGS_LINES"
+else
+    PKGS_LINES="check"
+fi
+if [ -n "${PKGS_ONLY}" ]; then
+    PKGS_ONLY_LINES="--no-install-recommends -y install $(printf "%s\n" "${PKGS_ONLY[@]}" | sort -u | tr '\n' ' ')"
+    echo "Will install without depends: $PKGS_ONLY_LINES"
+else
+    PKGS_ONLY_LINES="check"
+fi
+
+podman rm -fi wrap-upgrade-tmp
+podman run \
+       -w "/" \
+       --hostname="$NAME" \
+       --user=root \
+       --name=wrap-upgrade-tmp \
+       --cap-drop=ALL \
+       --cap-add=CAP_FOWNER \
+       --cap-add=CAP_CHOWN \
+       --cap-add=CAP_DAC_OVERRIDE \
+       --cap-add=CAP_DAC_READ_SEARCH \
+       --cap-add=CAP_SETUID \
+       --cap-add=CAP_SETGID \
+       --read-only=false \
+       --read-only-tmpfs \
+       --systemd=false \
+       --security-opt=no-new-privileges \
+       --userns=keep-id \
+       -e LANG \
+       "$IMAGE_NAME" bash -c 'set +e; (apt-get update && apt-get -s dist-upgrade | grep -q "^Inst" && apt-get dist-upgrade -y || exit 1); ONE=$?; (apt-get -s '$PKGS_LINES' | grep -q "^Inst" && apt-get '$PKGS_LINES' || exit 1); TWO=$?; (apt-get -s '$PKGS_ONLY_LINES' | grep -q "^Inst" && apt-get '$PKGS_ONLY_LINES' || exit 1); THREE=$?; if [ "$ONE" -eq 1 -a "$TWO" -eq 1 -a "$THREE" -eq 1 ]; then exit 1; fi' || exit 0
+
+echo "Changes made, commiting updated image."
+
+podman commit wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=$USER" "$IMAGE_NAME"
+podman rm -fi wrap-upgrade-tmp
+podman image prune -f
+
+podman run --rm -w "/home/$USER" --user="$USER" --shm-size=512M --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc-test-upgrade" "$IMAGE_NAME" echo "Updated image complete."
