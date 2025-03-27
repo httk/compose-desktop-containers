@@ -171,10 +171,12 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" 
 	elif [ "$SERVICE" = "wayland" ]; then
 	    ADJUSTMENT_ENVS+=( "WAYLAND_DISPLAY: ${WAYLAND_DISPLAY}" )
 	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro" )
-
+	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAG: --ozone-platform=wayland")
+	    
 	elif [ "$SERVICE" = "x11" ]; then
 	    ADJUSTMENT_ENVS+=( "DISPLAY: \"${DISPLAY}\"" "XAUTHORITY: \"${XAUTHORITY}\"" )
 	    ADJUSTMENT_VOLS+=( "/tmp/.X11-unix:/tmp/.X11-unix:rw" "${XAUTHORITY}:${XAUTHORITY}:rw" )
+	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAG: --ozone-platform=x11")
 
         elif [ "$SERVICE" = "dri-full" ]; then
             GLXINFO=$(glxinfo)
@@ -188,13 +190,6 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" 
                 PODMAN_ARGS+=( "--device nvidia.com/gpu=all" )
                 OVERRIDE_ALLOW_READ="yes"
             fi
-
-	elif [ "$SERVICE" = "ozone" ]; then
-	    if [ -n "$WAYLAND_DISPLAY" ]; then
-		ADJUSTMENT_ENVS+=( "OZONE_FLAG: --ozone-platform=wayland")
-	    else
-		ADJUSTMENT_ENVS+=( "OZONE_FLAG: --ozone-platform=x11")
-	    fi
 
 	elif [ "$SERVICE" = "sound" ]; then
 	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw" )

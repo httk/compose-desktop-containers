@@ -108,9 +108,9 @@ services:
       - echo "go via the '9-dots-menu' to these applications."
       - echo "***********************************************************"
 
-      - yad --title "Download Microsoft 365 apps" --info --text "We need to \"download\" the Microsoft 365 progressive web applications (PWA).\n\nGoogle Chrome will now start, please use the browser window to navigate to the respective Microsoft 365 app (preferably using the \"9-dots-menu\"). When viewing the app, there should appear an 'install' icon in the browser navigator field. Click on this icon to download the PWA.\n\nPlease follow the above instuctions to download/install:\n\n- OneDrive\n- Microsoft Teams\n- Outlook\n- Forms"
-
-      - google-chrome ${OZONE_FLAG} 'https://www.microsoft365.com/'
+      - yad --width=600 --text-width=600 --on-top --center --button=Close --title "Download Microsoft 365 apps" --info --text "We need to \"download\" the Microsoft 365 progressive web applications (PWA).\n\nGoogle Chrome will now start, please use the browser window to navigate to the respective Microsoft 365 app (preferably using the \"9-dots-menu\"). When viewing the app, there should appear an 'install' icon in the browser navigator field. Click on this icon to download the PWA.\n\nPlease follow the above instuctions to download/install:\n\n- OneDrive\n- Microsoft Teams\n- Outlook\n- Forms"
+      - echo google-chrome $${CDC_OZONE_FLAG} 'https://www.microsoft365.com/'
+      - google-chrome $${CDC_OZONE_FLAG} 'https://www.microsoft365.com/'
 
   install: &install
     <<: *common
@@ -159,7 +159,7 @@ services:
     x-app-features:
       - video
       - sound
-      - x11
+      - wayland-fallback-x11
       - dri-full
 
     network_mode: bridge
@@ -173,8 +173,8 @@ services:
       - pipewire-pulse &
       - echo "== LAUNCHER:"
       - cat install/microsoft365/msteams.sh
-      - echo EXECUTING install/microsoft365/msteams.sh ${OZONE_FLAG} "$$@"
-      - exec install/microsoft365/msteams.sh ${OZONE_FLAG} "$$@"
+      - echo EXECUTING install/microsoft365/msteams.sh $${CDC_OZONE_FLAG} "$$@"
+      - exec install/microsoft365/msteams.sh $${CDC_OZONE_FLAG} "$$@"
 
     x-launcher:
 
@@ -202,7 +202,7 @@ services:
 
     x-app-container_name: cdc_microsoft365
     x-app-features:
-      - x11
+      - wayland-fallback-x11
       - full-dri
 
     network_mode: bridge
@@ -213,7 +213,7 @@ services:
           echo "OneDrive is not installed, please re-run installation.";
           exit 0;
         fi
-      - exec install/microsoft365/onedrive.sh ${OZONE_FLAG} "$$@"
+      - exec install/microsoft365/onedrive.sh $${CDC_OZONE_FLAG} "$$@"
 
     x-launcher:
 
@@ -241,7 +241,7 @@ services:
 
     x-app-container_name: cdc_microsoft365
     x-app-features:
-      - x11
+      - wayland-fallback-x11
       - dri-full
 
     network_mode: bridge
@@ -252,7 +252,7 @@ services:
           echo "Outlook is not installed, please re-run installation.";
           exit 0;
         fi
-      - exec install/microsoft365/outlook.sh ${OZONE_FLAG} "$$@"
+      - exec install/microsoft365/outlook.sh $${CDC_OZONE_FLAG} "$$@"
 
     x-launcher:
 
@@ -294,7 +294,7 @@ services:
 
     x-app-container_name: cdc_microsoft365
     x-app-features:
-      - x11
+      - wayland-fallback-x11
       - dri-full
 
     network_mode: bridge
@@ -305,7 +305,7 @@ services:
           echo "Forms is not installed, please re-run installation.";
           exit 0;
         fi
-      - exec install/microsoft365/msforms.sh ${OZONE_FLAG} "$$@"
+      - exec install/microsoft365/msforms.sh $${CDC_OZONE_FLAG} "$$@"
 
     x-launcher:
 
@@ -338,7 +338,7 @@ services:
 
     x-app-container_name: cdc_microsoft365
     x-app-features:
-      - x11
+      - wayland-fallback-x11
       - dri-full
       - video
       - sound
