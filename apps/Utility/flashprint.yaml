@@ -12,9 +12,9 @@ x-application:
     version: "3.8"
 
     services:
-      blender:
+      flashprint:
         volumes:
-          - "${HOME}/Documents/containers/3d-projects:${HOME}/Documents/containers/3d-projects"
+          - "${HOME}/Documents/containers/3d-projects:/home/${USER}/Documents/containers/3d-projects"
         working_dir: "/home/${USER}/Documents/containers/3d-projects"
 
   env-default: |
@@ -97,7 +97,7 @@ services:
       - VERSION="$${1:-flashprint5_latest_amd64.deb}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/.local/share/flashprint &&
-        mkdir ~/.local/share/flashprint &&
+        mkdir -p ~/.local/share/flashprint &&
         cd ~/.local/share/flashprint &&
         dpkg-deb -x ~/Downloads/"$$VERSION" flashprint &&
         mkdir -p ~/.local/share/applications &&
@@ -171,6 +171,24 @@ services:
         icons:
           - source: flashforge5.png
             dest: flashforge5.png
+
+  flashprint-wayland:
+    <<: *common
+
+    container_name: cdc_flashprint_flashprint
+
+    network_node: bridge
+
+    x-app-features:
+      - wayland
+
+    command:
+      - echo "FLASHPRINT-WAYLAND -- WARNING, this currently does not seem to work"
+      - QT_QPA_PLATFORM=wayland LD_LIBRARY_PATH=~/.local/share/flashprint/flashprint/usr/lib exec ~/.local/share/flashprint/flashprint/usr/share/FlashPrint5/FlashPrint "$$@"
+
+    x-launcher:
+        desktop:
+
 
   ## INTERACTIVE ##
 
