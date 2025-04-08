@@ -172,11 +172,14 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" 
 	    ADJUSTMENT_ENVS+=( "WAYLAND_DISPLAY: ${WAYLAND_DISPLAY}" )
 	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro" )
 	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAG: --ozone-platform=wayland")
-	    
+            ADJUSTMENT_ENVS+=( "QT_QPA_PLATFORM: wayland")
+            ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: wayland")
+
 	elif [ "$SERVICE" = "x11" ]; then
 	    ADJUSTMENT_ENVS+=( "DISPLAY: \"${DISPLAY}\"" "XAUTHORITY: \"${XAUTHORITY}\"" )
 	    ADJUSTMENT_VOLS+=( "/tmp/.X11-unix:/tmp/.X11-unix:rw" "${XAUTHORITY}:${XAUTHORITY}:rw" )
 	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAG: --ozone-platform=x11")
+            ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: x11")
 
         elif [ "$SERVICE" = "dri-full" ]; then
             GLXINFO=$(glxinfo)
@@ -408,6 +411,6 @@ else
     # 2. <command to run> first exectures the root part: ${INIT_COMMAND}, and drops priviliges using gosu by running: HOME=<homedir> gosu ${RUN_USER} "$@"
     # 3. The commands executed by gosu "$@" are the complete list of arguments sent into the bash session, which is <arguments> in (1).
     # 4. <arguments> has been given the form: bash -c "${LAUNCH_COMMAND}" bash "$@", which thus executes another bash session with "${LAUNCH_COMMAND}" where the arguments are the outermost "$@"
-    ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${INIT_COMMAND} HOME='/home/$RUN_USER' exec gosu \"${RUN_USER}\" \"\$@\"" bash bash -c "${LAUNCH_COMMAND}" bash "$@"
+    ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${INIT_COMMAND} HOME='/home/$RUN_USER' exec gosu \"${RUN_USER}\" \"\$@\"" bash bash -c "${LAUNCH_COMMAND}; exit \$?" bash "$@"
 
 fi

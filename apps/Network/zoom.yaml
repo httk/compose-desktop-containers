@@ -86,7 +86,7 @@ services:
     command:
       - echo "DOWNLOAD"
       - mkdir -p Downloads
-      - curl -L -o Downloads/zoom_x86_64.tar.xz "https://zoom.us/client/latest/zoom_x86_64.tar.xz"
+      #- curl -L -o Downloads/zoom_x86_64.tar.xz "https://zoom.us/client/latest/zoom_x86_64.tar.xz"
       - curl -L -o Downloads/zoom_amd64.deb "https://zoom.us/client/latest/zoom_amd64.deb"
 
   download-clean:
@@ -96,13 +96,13 @@ services:
       - echo "DOWNLOAD CLEAN"
       - rm -f Downloads/zoom_amd64.deb
       - rm -f Downloads/zoom_x86_64.tar.xz
-  
+
 
   install: &install
     <<: *common
 
     command:
-      - VERSION="$${1:-zoom_x86_64.tar.xz}";
+      - VERSION="$${1:-zoom_amd64.deb}";
       - echo "INSTALL $$VERSION";
       - mkdir -p ~/.local/share/icons/hicolor/256x256/apps/ &&
         rm -rf ~/.local/share/zoom &&
@@ -110,13 +110,13 @@ services:
         cd ~/.local/share/zoom &&
         mkdir tmp &&
         cd tmp &&
-        ar x ~/Downloads/zoom_amd64.deb &&
+        ar x ~/Downloads/"$$VERSION" &&
         tar -xf data.tar.xz &&
         cp ./usr/share/pixmaps/Zoom.png ~/.local/share/icons/hicolor/256x256/apps/Zoom.png &&
+        mv ./opt/zoom .. &&
         cd .. && rm -rf tmp &&
-        tar -xf ~/Downloads/"$$VERSION" &&
         mkdir -p ~/.local/share/applications &&
-        echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/${USER}/install/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
+        echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/${USER}/.local/share/zoom/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
         update-desktop-database ~/.local/share/applications/
 
   install-clean:
@@ -160,8 +160,6 @@ services:
   zoom: &zoom
     <<: *common
 
-    container_name: cdc_zoom_zoom
-
     network_mode: bridge
 
     x-app-features:
@@ -169,18 +167,19 @@ services:
       - sound
       - x11
 
+    volumes:
+      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+      - "${CDC_APP_DIR}/home/.local/share/zoom/zoom:/opt/zoom:ro"
+
+    # - exec ~/.local/share/zoom/zoom/zoom "$$@"
+
     command:
       - echo "ZOOM:" $${HOME}
       - pipewire-pulse &
-      - LD_LIBRARY_PATH=~/.local/share/zoom/zoom:~/.local/share/zoom/zoom/Qt/lib exec ~/.local/share/zoom/zoom/zoom "$$@"
+      - setsid /opt/zoom/ZoomLauncher "$$@"
+      - echo "hello world"
 
     x-launcher:
-
-      # zoom in x11 mode does not need dbus?
-      #dbus-proxy: ""
-
-      devices:
-        - video
 
       desktop:
 
@@ -202,12 +201,27 @@ services:
             dest: zoom.png
 
 
+  zoom-force-wayland:
+    <<: *zoom
+
+    # Empty x-launcher -> desktop to avoid desktop launcher
+    x-launcher:
+      desktop:
+
+    x-app-features:
+      - video
+      - sound
+      - wayland
+
+    command:
+      - echo "ZOOM:" $${HOME}
+      - pipewire-pulse &
+      - /opt/zoom/ZoomLauncher "$$@"
+
   ## INTERACTIVE ##
 
   interactive:
     <<: *zoom
-
-    container_name: cdc_zoom_interactive
 
     command:
       - echo "INTERACTIVE"
