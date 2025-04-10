@@ -69,8 +69,8 @@ function POST_PROCESS_LAUNCHER() {
 }
 
 for LAUNCHER in $(echo "$PODMAN_CONFIG" | yq -r '.services | keys[]'); do
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER\".\"x-launcher\"")" != "null" ]; then
-	POST_PROCESS_LAUNCHER "$SCRIPTPATH/cdc-launch" "$LAUNCHER" ".services.\"$LAUNCHER\".\"x-launcher\""
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER\".\"x-app-launcher\"")" != "null" ]; then
+	POST_PROCESS_LAUNCHER "$SCRIPTPATH/cdc-launch" "$LAUNCHER" ".services.\"$LAUNCHER\".\"x-app-launcher\""
     fi
 done
 

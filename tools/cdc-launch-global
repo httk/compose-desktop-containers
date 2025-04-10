@@ -49,7 +49,7 @@ if [ "$ACTION" == "tray" ]; then
 	ENTRY_LAUNCH=$(podman-compose -f compose.yaml -f override.yaml config | yq -r ".\"x-application\".\"global-launcher\".tray.entries[$ENTRY_IDX].launch")
 	MULTI_TRAY_ARGS="$MULTI_TRAY_ARGS --app \"$ENTRY_NAME\" \"$ENTRY_WMCLASS\" \"./$ENTRY_LAUNCH\""
     done
-    
+
     /usr/bin/env --split-string="\"$TOOLPATH/../dependencies/submodules/tray-utils/bin/multi-app-tray\" --icon \"$ICON\" $MULTI_TRAY_ARGS"
     RUNNING_CONTAINERS="$(podman ps -q -f "name=cdc_$APP_*")"
     if [ -n "$RUNNING_CONTAINERS" ]; then

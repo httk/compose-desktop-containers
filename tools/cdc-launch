@@ -76,7 +76,7 @@ fi
 # Look up container name
 # Work around the fact that shared container_name does not really seem to be supported in podman-compose
 # and leads to all kind of weird behavior.
-CONTAINER_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-container_name\"")"
+CONTAINER_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".container_name")"
 if [ -z "$CONTAINER_NAME" -o "$CONTAINER_NAME" == "null" ]; then
     CONTAINER_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".container_name")"
 fi
@@ -124,7 +124,7 @@ function GET_FEATURE_ARG() {
     else
 	ARGNAME=""
     fi
-    echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-features\"[]? | select(type==\"object\") | select(has(\"$FEATURE\"))| .\"$FEATURE\"${ARGNAME}"
+    echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".features[]? | select(type==\"object\") | select(has(\"$FEATURE\"))| .\"$FEATURE\"${ARGNAME}"
 }
 
 ADJUSTMENT_ENVS=()
@@ -134,12 +134,12 @@ ADJUSTMENT_CAPS=()
 OVERRIDE_ALLOW_READ="no"
 
 # If compose file specifically uses x-app-init, we need to force CAP_SETUID + CAP_SETGID to start as root and then drop to user
-if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-init\"")" != "null" ]; then
+if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".init")" != "null" ]; then
     ADJUSTMENT_CAPS+=( "CAP_SETUID" "CAP_SETGID" )
 fi
 
-if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" != "null" ]; then
-    for SERVICE in $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-features\"[]? | select(type==\"string\")") $(echo "$PODMAN_CONFIG" | yq -r ".services.\"${ACTION}\".\"x-app-features\"[] | select(type==\"object\") | keys[]?"); do
+if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-launcher\".features")" != "null" ]; then
+    for SERVICE in $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".features[]? | select(type==\"string\")") $(echo "$PODMAN_CONFIG" | yq -r ".services.\"${ACTION}\".\"x-app-launcher\".features[] | select(type==\"object\") | keys[]?"); do
 
 	echo "Enabling service: $SERVICE"
 
@@ -157,8 +157,8 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-features\"")" 
 		#ADJUSTMENT_DEVS+=( "/dev/cameras/video0:/dev/video0" )
 		#ADJUSTMENT_DEVS+=( "/dev/cameras/video1:/dev/video1" )
 	    else
-		echo "WARNING: system appear to be missing a udev setup for /dev/cameras that allows easy sharing of cameras with containers."
-		echo "A workaround will be applied which cannot handle hot-plugging of cameras."
+		echo "WARNING: system appear to be missing a udev setup for /dev/video that allows easy sharing of video devices with containers."
+		echo "Hot-plugging of video devices while containers are running will not be supported."
 		for DEV in /dev/video*; do
 		    if [ -c "$DEV" ]; then
 	    		ADJUSTMENT_DEVS+=( "$DEV:/dev/video/${DEV#/dev/}" )
@@ -315,14 +315,14 @@ fi
 #fi
 
 PRELAUNCHER=""
-TRAY="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".tray")"
+TRAY="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".tray")"
 if [ -n "$TRAY" -a "$TRAY" != "null" ]; then
-    TRAY_ICON="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.icon")"
-    TRAY_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.name")"
-    TRAY_WMCLASS="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.\"wmclass\"")"
+    TRAY_ICON="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".tray.icon")"
+    TRAY_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".tray.name")"
+    TRAY_WMCLASS="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".tray.\"wmclass\"")"
     TRAY_WMCLASS_ARG=""
     if [ "$TRAY_WMCLASS" == "null" ]; then
-        TRAY_WMCLASS_FILE="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launcher\".tray.\"wmclass-file\"")"
+        TRAY_WMCLASS_FILE="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".tray.\"wmclass-file\"")"
         if [ "$TRAY_WMCLASS_FILE" != "null" ]; then
             TRAY_WMCLASS="$(cat "home/$TRAY_WMCLASS_FILE")"
             TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
@@ -388,8 +388,8 @@ if [ "${#INIT_COMMANDS[@]}" != "0" ]; then
     INIT_COMMAND="$(printf '%s;\n' "${INIT_COMMANDS[@]}")"
 fi
 
-if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-init\"")" != "null" ]; then
-    INIT_COMMAND="${INIT_COMMAND}$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-init\" | .[]")"$'\n'
+if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".init")" != "null" ]; then
+    INIT_COMMAND="${INIT_COMMAND}$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".init | .[]")"$'\n'
 fi
 
 #${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" config
@@ -405,6 +405,13 @@ if [ -z "$INIT_COMMAND" -o "${RUN_MODE}" != "run" ]; then
 else
 
     echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" "<init and launch command...>"
+    # Check if we are meant to update before launching
+
+    AUTO_UPDATE="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".\"auto-update\"")"
+    if [ -z "$CDC_NO_RECURSE" -a -n "$AUTO_UPDATE" -a "$AUTO_UPDATE" != "null" -a "$ACTION" != "update-check" -a "$ACTION" != "download" -a "$ACTION" != "update" ]; then
+        CDC_NO_RECURSE=1 "$SCRIPTPATH/cdc-update"
+    fi
+
     # Note:
     # The launch part of this command isn't trivial to parse:
     # 1. The outermost execution takes the form: bash -c <command to run> bash <arguments>.

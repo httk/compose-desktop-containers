@@ -70,5 +70,5 @@ fi
 if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.install')" != "null" ]; then
     "$SCRIPTPATH/cdc-launch" install "$1"
 fi
-    
+
 "$SCRIPTPATH/cdc-post-install"

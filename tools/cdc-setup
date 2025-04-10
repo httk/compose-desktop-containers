@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e 
+set -e
 
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 
@@ -35,4 +35,3 @@ ln -sf "$(realpath -- "$SOURCE")" "$DEST_ABSPATH/compose.yaml"
 cd "$DEST_ABSPATH"
 
 "$SCRIPTPATH/cdc-resetup"
-

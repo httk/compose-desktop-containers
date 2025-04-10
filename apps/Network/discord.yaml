@@ -59,9 +59,6 @@ services:
     volumes: &common-volumes
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
 
-    devices:
-      - "/dev/dri:/dev/dri"
-
     security_opt:
       - no-new-privileges
 
@@ -152,20 +149,20 @@ services:
 
     network_mode: bridge
 
-    x-app-features:
-      - video
-      - sound
-      - x11
-
     command:
       - echo "DISCORD"
       - pipewire-pulse &
       - exec ~/.local/share/discord/Discord/Discord "$$@"
 
-    x-launcher:
+    x-app-launcher:
 
-      devices:
+      features:
         - video
+        - sound
+        - x11
+        - dri-full
+
+      auto-update: true
 
       desktop:
 
