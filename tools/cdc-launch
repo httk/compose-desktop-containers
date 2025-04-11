@@ -124,7 +124,11 @@ function GET_FEATURE_ARG() {
     else
 	ARGNAME=""
     fi
-    echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".features[]? | select(type==\"object\") | select(has(\"$FEATURE\"))| .\"$FEATURE\"${ARGNAME}"
+    ARG=$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".features[]? | select(type==\"object\") | select(has(\"$FEATURE\"))| .\"$FEATURE\"${ARGNAME}")
+    if [ "$ARG" == "null" ]; then
+       ARG=""
+    fi
+    echo "$ARG"
 }
 
 ADJUSTMENT_ENVS=()
@@ -200,7 +204,11 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-launcher\".fea
 
 	elif [ "$SERVICE" == "dbus-proxy" ]; then
 	    ARGUMENTS=( $(GET_FEATURE_ARG dbus-proxy) )
-	    echo "Launching: xdg-dbus-proxy $DBUS_SESSION_BUS_ADDRESS $XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION $SYSTEM_ARGS"
+	    echo "Launching:" "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION" "${ARGUMENTS[@]}"
+	    # Workaround: sometimes xdb-dbus-proxy fails and leaves an empty directory behind, which stops further attmepts with "address in use"
+	    if [ -d "$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION" ]; then 
+		rmdir "$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION"
+	    fi
 	    xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION" "${ARGUMENTS[@]}" &
 	    DBUS_PROXY_PID=$?
 	    trap "kill $DBUS_PROXY_PID" EXIT
@@ -210,13 +218,17 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-launcher\".fea
 
 	elif [ "$SERVICE" == "dbus-system-proxy" ]; then
 	    ARGUMENTS=( $(GET_FEATURE_ARG dbus-system-proxy) )
-	    echo "Launching: xdg-dbus-proxy $DBUS_SYSTEM_BUS_ADDRESS $XDG_RUNTIME_DIR/bus-system-proxy-$APP-$ACTION $DBUS_SYSTEM_PROXY_ARGS"
-	    xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION" "${ARGUMENTS[@]}" &
+	    echo "Launching:" xdg-dbus-proxy "$DBUS_SYSTEM_BUS_ADDRESS" "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$ACTION" "${ARGUMENTS[@]}"
+	    # Workaround: sometimes xdb-dbus-proxy fails and leaves an empty directory behind, which stops further attmepts with "address in use"
+	    if [ -d "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$ACTION" ]; then 
+		rmdir "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$ACTION"
+	    fi
+	    xdg-dbus-proxy "$DBUS_SYSTEM_BUS_ADDRESS" "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$ACTION" "${ARGUMENTS[@]}" &
 	    DBUS_SYSTEM_PROXY_PID=$?
 	    trap "kill $DBUS_SYSTEM_PROXY_PID" EXIT
-	    CDC_DBUS_SYSTEM_PATH="$XDG_RUNTIME_DIR/bus-proxy-$APP-$ACTION"
+	    CDC_DBUS_SYSTEM_PATH="$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$ACTION"
 	    ADJUSTMENT_VOLS+=( "${CDC_DBUS_SYSTEM_PATH}:/run/dbus/system_bus_socket:rw" )
-	    ADJUSTMENT_ENVS+=( "DBUS_SYSTEM_BUS_ADDRESS: \"unix:path=/run/user/${UID}/bus\"" )
+	    ADJUSTMENT_ENVS+=( "DBUS_SYSTEM_BUS_ADDRESS: \"unix:path=/run/dbus/system_bus_socket\"" )
 	fi
     done
 fi

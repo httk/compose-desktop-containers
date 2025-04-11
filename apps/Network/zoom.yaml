@@ -86,7 +86,6 @@ services:
     command:
       - echo "DOWNLOAD"
       - mkdir -p Downloads
-      #- curl -L -o Downloads/zoom_x86_64.tar.xz "https://zoom.us/client/latest/zoom_x86_64.tar.xz"
       - curl -L -o Downloads/zoom_amd64.deb "https://zoom.us/client/latest/zoom_amd64.deb"
 
   download-clean:
@@ -162,11 +161,6 @@ services:
 
     network_mode: bridge
 
-    x-app-features:
-      - video
-      - sound
-      - x11
-
     volumes:
       - "${CDC_APP_DIR}/home:/home/${USER}:rw"
       - "${CDC_APP_DIR}/home/.local/share/zoom/zoom:/opt/zoom:ro"
@@ -175,11 +169,16 @@ services:
 
     command:
       - echo "ZOOM:" $${HOME}
+      - sed -i 's/^xwayland=.*$/xwayland=true/g' ~/.config/zoomus.conf
       - pipewire-pulse &
-      - setsid /opt/zoom/ZoomLauncher "$$@"
-      - echo "hello world"
+      - /opt/zoom/ZoomLauncher "$$@"
 
-    x-launcher:
+    x-app-launcher:
+
+      features:
+        - video
+        - sound
+        - x11
 
       desktop:
 
@@ -201,27 +200,37 @@ services:
             dest: zoom.png
 
 
-  zoom-force-wayland:
+  zoom-force-wayland: &zoom-force-wayland
     <<: *zoom
 
-    # Empty x-launcher -> desktop to avoid desktop launcher
-    x-launcher:
+    x-app-launcher:
+      features:
+        - video
+        - sound
+        - wayland
+        - dbus-proxy: --filter --own=org.kde.*
+
+      # I think this is meant to be enough, but I cannot get it to work
+      # --own=org.kde.StatusNotifierWatcher --own=org.kde.StatusNotifierItem --sloppy-names
+      # --talk=org.kde.StatusNotifierWatcher.* --talk=org.freedesktop.StatusNotifierWatcher.* --talk=org.freedesktop.Notifications.* --call=org.freedesktop.portal.*=* --broadcast=org.freedesktop.portal.*=@/org/freedesktop/portal/*
+      # --filter --call="org.freedesktop.portal.*=*" --talk=org.kde.StatusNotifierWatcher
+        
+      # Empty x-launcher -> desktop to avoid desktop launcher
       desktop:
 
-    x-app-features:
-      - video
-      - sound
-      - wayland
-
     command:
-      - echo "ZOOM:" $${HOME}
-      - pipewire-pulse &
+      - echo "ZOOM (FORCE WAYLAND):" $${HOME}
+      - sed -i 's/^xwayland=.*$/xwayland=false/g' ~/.config/zoomus.conf
       - /opt/zoom/ZoomLauncher "$$@"
+
+      # Pipewire-pulse not needed, because we can now access pipewire-pulse via dbus (I think)
+      #- pipewire-pulse &
+
 
   ## INTERACTIVE ##
 
   interactive:
-    <<: *zoom
+    <<: *zoom-force-wayland
 
     command:
       - echo "INTERACTIVE"
