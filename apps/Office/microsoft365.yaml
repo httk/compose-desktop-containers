@@ -239,11 +239,6 @@ services:
   outlook:
     <<: *common
 
-    x-app-container_name: cdc_microsoft365
-    x-app-features:
-      - wayland-fallback-x11
-      - dri-full
-
     network_mode: bridge
 
     command:
@@ -254,7 +249,13 @@ services:
         fi
       - exec install/microsoft365/outlook.sh $${CDC_OZONE_FLAG} "$$@"
 
-    x-launcher:
+    x-app-launcher:
+
+      features:
+        - wayland-fallback-x11
+        - dri-full
+
+      container_name: cdc_microsoft365
 
       desktop:
         file: |
@@ -292,11 +293,6 @@ services:
   msforms:
     <<: *common
 
-    x-app-container_name: cdc_microsoft365
-    x-app-features:
-      - wayland-fallback-x11
-      - dri-full
-
     network_mode: bridge
 
     command:
@@ -307,7 +303,13 @@ services:
         fi
       - exec install/microsoft365/msforms.sh $${CDC_OZONE_FLAG} "$$@"
 
-    x-launcher:
+    x-app-launcher:
+
+      container_name: cdc_microsoft365
+
+      features:
+        - wayland-fallback-x11
+        - dri-full
 
       desktop:
         file: |
