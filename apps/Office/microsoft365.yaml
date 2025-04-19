@@ -4,6 +4,7 @@ x-application:
 
   readme: |
     Microsoft365: run the progressive web apps for MS Teams and OneDrive (which includes Word, Excel, etc.)
+    Note: for now these must run in x11 / via xwayland, because otherwise the tray icon will not work.
 
   override-default: |
     version: "3.8"
@@ -84,15 +85,15 @@ services:
 
     network_mode: none
 
+    devices:
+      - "/dev/dri:/dev/dri"
+
   ## INSTALL ##
 
   download: &download
     <<: *common
 
     network_mode: bridge
-
-    x-app-features:
-      - wayland-fallback-x11
 
     command:
       - echo "DOWNLOAD"
@@ -111,6 +112,11 @@ services:
       - yad --width=600 --text-width=600 --on-top --center --button=Close --title "Download Microsoft 365 apps" --info --text "We need to \"download\" the Microsoft 365 progressive web applications (PWA).\n\nGoogle Chrome will now start, please use the browser window to navigate to the respective Microsoft 365 app (preferably using the \"9-dots-menu\"). When viewing the app, there should appear an 'install' icon in the browser navigator field. Click on this icon to download the PWA.\n\nPlease follow the above instuctions to download/install:\n\n- OneDrive\n- Microsoft Teams\n- Outlook\n- Forms"
       - echo google-chrome $${CDC_OZONE_FLAG} 'https://www.microsoft365.com/'
       - google-chrome $${CDC_OZONE_FLAG} 'https://www.microsoft365.com/'
+
+    x-app-launcher:
+
+      features:
+        - wayland-fallback-x11
 
   install: &install
     <<: *common
@@ -155,13 +161,6 @@ services:
   msteams:
     <<: *common
 
-    x-app-container_name: cdc_microsoft365
-    x-app-features:
-      - video
-      - sound
-      - wayland-fallback-x11
-      - dri-full
-
     network_mode: bridge
 
     command:
@@ -176,7 +175,13 @@ services:
       - echo EXECUTING install/microsoft365/msteams.sh $${CDC_OZONE_FLAG} "$$@"
       - exec install/microsoft365/msteams.sh $${CDC_OZONE_FLAG} "$$@"
 
-    x-launcher:
+    x-app-launcher:
+
+      container_name: cdc_microsoft365
+      features:
+        - video
+        - sound
+        - x11
 
       desktop:
         file: |
@@ -200,11 +205,6 @@ services:
   onedrive:
     <<: *common
 
-    x-app-container_name: cdc_microsoft365
-    x-app-features:
-      - wayland-fallback-x11
-      - full-dri
-
     network_mode: bridge
 
     command:
@@ -215,8 +215,14 @@ services:
         fi
       - exec install/microsoft365/onedrive.sh $${CDC_OZONE_FLAG} "$$@"
 
-    x-launcher:
+    x-app-launcher:
 
+      container_name: cdc_microsoft365
+
+      features:
+        - x11
+        - full-dri
+      
       desktop:
         file: |
           [Desktop Entry]
@@ -252,7 +258,7 @@ services:
     x-app-launcher:
 
       features:
-        - wayland-fallback-x11
+        - x11
         - dri-full
 
       container_name: cdc_microsoft365
@@ -308,7 +314,7 @@ services:
       container_name: cdc_microsoft365
 
       features:
-        - wayland-fallback-x11
+        - x11
         - dri-full
 
       desktop:
@@ -338,12 +344,15 @@ services:
 
     network_mode: bridge
 
-    x-app-container_name: cdc_microsoft365
-    x-app-features:
-      - wayland-fallback-x11
-      - dri-full
-      - video
-      - sound
+    x-app-launcher:
+
+      container_name: cdc_microsoft365
+
+      features:
+        - x11
+        - full-dri
+        - video
+        - sound
 
     command:
       - echo "INTERACTIVE"

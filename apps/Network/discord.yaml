@@ -66,6 +66,9 @@ services:
 
     network_mode: none
 
+    devices:
+      - "/dev/dri:/dev/dri"
+
   ## INSTALL ##
 
   download: &download
@@ -145,8 +148,6 @@ services:
   discord:
     <<: *common
 
-    container_name: cdc_discord_discord
-
     network_mode: bridge
 
     command:
@@ -156,11 +157,12 @@ services:
 
     x-app-launcher:
 
+      container_name: cdc_discord_discord
+
       features:
         - video
         - sound
         - x11
-        - dri-full
 
       auto-update: true
 
