@@ -95,6 +95,10 @@ services:
 
     network_mode: bridge
 
+    x-app-launcher:
+      features:
+        - wayland-fallback-x11
+
     command:
       - echo "DOWNLOAD"
       - mkdir -p ~/install/microsoft365
@@ -178,10 +182,12 @@ services:
     x-app-launcher:
 
       container_name: cdc_microsoft365
+
       features:
         - video
         - sound
         - x11
+        - dri-full
 
       desktop:
         file: |
@@ -221,8 +227,8 @@ services:
 
       features:
         - x11
-        - full-dri
-      
+        - dri-full
+
       desktop:
         file: |
           [Desktop Entry]
@@ -350,10 +356,10 @@ services:
 
       features:
         - x11
-        - full-dri
         - video
         - sound
+        - dri-full
 
-    command:
-      - echo "INTERACTIVE"
-      - bash "$$@"
+      command:
+        - echo "INTERACTIVE"
+        - bash "$$@"
