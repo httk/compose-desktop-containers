@@ -42,7 +42,6 @@ services:
       XDG_RUNTIME_DIR: "/tmp/${USER}/run"
       XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
       DESKTOP_SESSION: "${DESKTOP_SESSION}"
-      XDG_SESSION_TYPE: "${XDG_SESSION_TYPE}"
 
     cap_drop:
       - ALL
