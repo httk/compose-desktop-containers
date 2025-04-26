@@ -19,3 +19,9 @@ if grep -q 'direct rendering: Yes' <<< "$GLXINFO" && grep -q 'OpenGL vendor stri
         echo "There are workarounds (xorg-xwayland-explicit-sync), but the only simple full fix seems to be to switch your desktop to x11, or to change to run desktop graphics on your iGPU."
     fi
 fi
+
+if command -v nvidia-smi 2>/dev/null; then
+    echo "For GPU feature support, you need to install the NVIDIA Container Toolkit:"
+    echo 'curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg   && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list |     sed "s#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g" | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list'
+    echo 'sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml'
+fi

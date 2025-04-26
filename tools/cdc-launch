@@ -186,7 +186,7 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-launcher\".fea
             ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: x11")
 
         elif [ "$SERVICE" = "dri-full" ]; then
-            GLXINFO=$(glxinfo)
+            GLXINFO=$(glxinfo || true)
             if grep -q 'direct rendering: Yes' <<< "$GLXINFO" && grep -q 'OpenGL vendor string: NVIDIA' <<< "$GLXINFO"; then
                 if [ ! -e /etc/cdi/nvidia.yaml -a ! -e /var/run/cdi/nvidia.yaml ]; then
                     echo "To support 'full-dri', this system needs a CDI configuration from the NVIDIA container toolkit, which is not detected!"
@@ -197,7 +197,11 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-launcher\".fea
                 PODMAN_ARGS+=( "--device nvidia.com/gpu=all" )
                 OVERRIDE_ALLOW_READ="yes"
             fi
-
+	elif [ "$SERVICE" = "gpu" ]; then
+	    if nvidia-smi 2>/dev/null; then
+                PODMAN_ARGS+=( "--device nvidia.com/gpu=all" )
+                OVERRIDE_ALLOW_READ="yes"		
+	    fi
 	elif [ "$SERVICE" = "sound" ]; then
 	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw" )
 	    ADJUSTMENT_DEVS+=( "/dev/snd:/dev/snd" )
