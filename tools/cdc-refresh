@@ -48,35 +48,23 @@ EOF
 fi
 
 if [ -z "$1" ]; then
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."redownload"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "redownload"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.download')" != "null" ]; then
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.download')" != "null" ]; then
 	"$SCRIPTPATH/cdc-launch" "download"
     fi
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."rebuild"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "rebuild"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.build')" != "null" ]; then
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.build')" != "null" ]; then
 	"$SCRIPTPATH/cdc-launch" "build"
     fi
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."reinstall"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "reinstall"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.install')" != "null" ]; then
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.install')" != "null" ]; then
 	"$SCRIPTPATH/cdc-launch" "install"
     fi    
 else
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."redownload"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "redownload" "$1"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.download')" != "null" ]; then
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.download')" != "null" ]; then
 	"$SCRIPTPATH/cdc-launch" "download" "$1"
     fi
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."rebuild"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "rebuild" "$1"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.build')" != "null" ]; then
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.build')" != "null" ]; then
 	"$SCRIPTPATH/cdc-launch" "build" "$1"
     fi
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."reinstall"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "reinstall" "$1"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.install')" != "null" ]; then
+    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.install')" != "null" ]; then
 	"$SCRIPTPATH/cdc-launch" "install" "$1"
     fi
 fi    

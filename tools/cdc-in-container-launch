@@ -1,0 +1,12 @@
+#!/bin/bash
+
+echo "==== LAUNCH COMMANDS ===="
+printf "%s\n" "$@"
+echo "========================="
+LAUNCH_SCRIPT=$(printf '%s;\n' "$@")
+
+launch() {
+    bash -c "$LAUNCH_SCRIPT" -- "$@"
+}
+
+eval launch "$CDC_LAUNCH_ARGS"

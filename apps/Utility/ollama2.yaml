@@ -1,0 +1,169 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    python-develop: bare-bones console with access to host network
+    for Python development.
+
+  override-default: |
+    version: "3.8"
+
+    # Comment out as desired below to give slack access to dbus session and/or system bus
+    #
+    #services:
+    #  slack:
+    #    x-app-features:
+    #      - dbus-proxy: --filter
+    #      - dbus-system-proxy: --filter
+
+  env-default: |
+    # No configurable options
+
+  images:
+    u24:
+      pkgs:
+        - cmake
+
+
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    working_dir: /home/${USER}
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: false
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+    network_mode: none
+
+  ## INSTALL ##
+
+  download: &download
+    <<: *common
+
+    command:
+      - echo "DOWNLOAD"
+      - mkdir -p llms
+      - cd llms
+      - if [ ! -e ollama ]; then git clone https://github.com/ollama/ollama.git; fi
+
+  build: &build
+    <<: *common
+
+    image: "cdc-u24-ollama-build"
+
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM cdc-u24
+	RUN export DEBIAN_FRONTEND=noninteractive
+        RUN apt-get update && apt-get -y dist-upgrade && apt-get -y install cmake ccache nvidia-cuda-toolkit
+
+    container_name: cdc_affinity_build
+
+    network_mode: bridge
+
+    user: root
+
+    cap_add:
+      - SYS_CHROOT
+      - CAP_FOWNER
+      - CAP_CHOWN
+      - CAP_DAC_OVERRIDE
+      - CAP_DAC_READ_SEARCH
+      - CAP_SETUID
+      - CAP_SETGID
+
+    command:
+      - echo "BUILD"
+      - whoami
+      - export DEBIAN_FRONTEND=noninteractive
+      - apt-get update
+      - apt-get -y dist-upgrade
+      - apt-get -y install cmake ccache nvidia-cuda-toolkit
+      - su ${USER} <<<'
+          whoami;
+          export LDFLAGS=-s;
+          cd ~/llms/ollama;
+          rm -rf build;
+          cmake --preset "CUDA 12" && cmake --build --parallel --preset "CUDA 12" && cmake --install build --component CUDA --strip --parallel "$$(grep -c ^processor /proc/cpuinfo)";
+        '
+
+  install: &install
+    <<: *common
+
+    user: root
+
+    command:
+      - echo "INSTALL"
+
+  ## UPDATE ##
+
+  update-check: &update-check
+    <<: *common
+
+    command:
+      - echo "UPDATE CHECK"
+      - echo "Nothing to do"
+
+  update: &update
+    <<: *install
+
+
+  ## EXECUTE ###
+
+  python-develop:
+    <<: *common
+
+    network_mode: host
+
+    command:
+      - echo "python-develop"
+      - bash
+
+    x-launcher:
+      command_line: true
+
+  ## INTERACTIVE ##
+
+  interactive:
+    <<: *common
+
+    network_mode: host
+
+    command:
+      - echo "INTERACTIVE"
+      - bash

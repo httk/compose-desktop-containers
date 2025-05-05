@@ -57,7 +57,7 @@ services:
     shm_size: "1G"
 
     volumes: &common-volumes
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+      - "${COMPOSE_PATH?Setting COMPOSE_PATH is required.}/home:/home/${USER}:rw"
 
     devices:
       - "/dev/dri:/dev/dri"
@@ -67,36 +67,60 @@ services:
 
     userns_mode: "keep-id"
 
-    network_mode: none
-
   ## INSTALL ##
 
-  download: &download
+  download:
     <<: *common
 
-    command:
+    x-launch-script: &download_script
       - echo "DOWNLOAD"
       - mkdir -p Downloads
       - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.name')"
       - LATESTURL="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep ollama-linux-amd64.tgz)"
       - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
-      - curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL"
+      - |
+        if [ ! -e "Downloads/$$LATESTFILENAME" ]; then
+          curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL"
+        fi
       - ln -sf "$$LATESTFILENAME" Downloads/ollama-linux-amd64-latest.tgz
 
-  install: &install
+  redownload:
     <<: *common
 
-    command:
+    x-launch-script: &redownload_script
+      - echo "REDOWNLOAD"
+      - mkdir -p Downloads
+      - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.name')"
+      - LATESTURL="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep ollama-linux-amd64.tgz)"
+      - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
+      - rm -rf "Downloads/$$LATESTFILENAME" Downloads/ollama-linux-amd64-latest.tgz
+      - *download_script
+
+  install:
+    <<: *common
+
+    x-launch-script: &install_script
       - VERSION="$${1:-ollama-linux-amd64-latest.tgz}";
       - echo "INSTALL $$VERSION"; 
-      - rm -rf ~/Installation &&
-        mkdir ~/Installation &&
-        cd ~/Installation &&
-        tar -zxf ~/Downloads/"$$VERSION"
+      - |
+        if [ ! -e ~/.local/share/ollama ]; then
+          mkdir -p ~/.local/share/ollama
+          cd ~/.local/share/ollama
+          tar -zxf ~/Downloads/"$$VERSION"
+        fi
+
+  reinstall:
+    <<: *common
+
+    x-launch-script: &reinstall_script
+      - VERSION="$${1:-ollama-linux-amd64-latest.tgz}"
+      - echo "REINSTALL $$VERSION" 
+      - rm -rf ~/.local/share/ollama
+      - *install_script
 
   ## UPDATE ##
 
-  update-check: &update-check
+  update-check:
     <<: *common
 
     command:
@@ -111,37 +135,52 @@ services:
       - echo "File missing, or server-side file newer"
       - exit 1
 
-  update: &update
-    <<: *install
+  update:
+    <<: *common
 
+    x-launch-script:
+      - echo "UPDATE"
+      - *redownload_script
+      - *reinstall_script
 
   ## EXECUTE ###
 
   ollama-serve:
     <<: *common
 
-    network_mode: bridge
-    x-app-container_name: cdc_ollama_ollama
+    ports:
+      - "11434"
 
     command:
       - echo "ollama-serve"
-      - ~/Installation/bin/ollama serve
+      - printf "+%s+\n" "$@"
+      #- OLLAMA_HOST=0.0.0.0:11434 ~/.local/share/ollama/bin/ollama serve
 
-    x-launcher:
-      command_line: true
+    environment:
+      <<: *common-env
+      CDC_LAUNCH_ARGS: "\"test me\" more"
+    
+
+    entrypoint:
+      - "/home/$USER/cdc-launch"
+
+    stdin_open: true
+    tty: true
+
+    x-application:
+      container_name: cdc_ollama_ollama
+      interactive: true
 
   ollama:
     <<: *common
 
-    network_mode: bridge
-    x-app-container_name: cdc_ollama_ollama
-    
-    command:
+    x-launch-script:
       - echo "ollama"
-      - ~/Installation/bin/ollama "$@"
+      - ~/.local/share/ollama/bin/ollama "$@"
 
-    x-launcher:
-      command_line: true
+    x-application:
+      container_name: cdc_ollama_ollama
+      interactive: true
 
 
   ## INTERACTIVE ##
@@ -149,8 +188,10 @@ services:
   interactive:
     <<: *common
 
-    network_mode: host
+    x-application:
+      container_name: cdc_ollama_ollama
+      interactive: true
 
-    command:
+    x-launch-script:
       - echo "INTERACTIVE"
       - bash

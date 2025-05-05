@@ -2,7 +2,7 @@
 #
 # Launch sets the following environment variables for use in docker-compose
 #
-#   CDC_APP_DIR: the application directory of the compose app
+#   COMPOSE_PATH: the application directory of the compose app
 #   CDC_DBUS_PATH: the path to the unix socket used by dbus or dbus-proxy
 
 set -e
@@ -12,6 +12,7 @@ LAUNCHPATH="$(cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)"
 TOOLPATH="$(dirname -- "$(realpath -- "$0")")"
 PODMAN_RUN_ARGS=()
 PODMAN_ARGS=()
+#PODMAN_ARGS=( "-p 127.0.0.1:11434:11434" )
 INIT_COMMANDS=()
 NAME_ARG=""
 
@@ -76,7 +77,7 @@ fi
 # Look up container name
 # Work around the fact that shared container_name does not really seem to be supported in podman-compose
 # and leads to all kind of weird behavior.
-CONTAINER_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".container_name")"
+CONTAINER_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".container_name")"
 if [ -z "$CONTAINER_NAME" -o "$CONTAINER_NAME" == "null" ]; then
     CONTAINER_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".container_name")"
 fi
@@ -124,7 +125,7 @@ function GET_FEATURE_ARG() {
     else
 	ARGNAME=""
     fi
-    ARG=$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".features[]? | select(type==\"object\") | select(has(\"$FEATURE\"))| .\"$FEATURE\"${ARGNAME}")
+    ARG=$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".features[]? | select(type==\"object\") | select(has(\"$FEATURE\"))| .\"$FEATURE\"${ARGNAME}")
     if [ "$ARG" == "null" ]; then
        ARG=""
     fi
@@ -138,12 +139,12 @@ ADJUSTMENT_CAPS=()
 OVERRIDE_ALLOW_READ="no"
 
 # If compose file specifically uses x-app-init, we need to force CAP_SETUID + CAP_SETGID to start as root and then drop to user
-if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".init")" != "null" ]; then
+if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".init")" != "null" ]; then
     ADJUSTMENT_CAPS+=( "CAP_SETUID" "CAP_SETGID" )
 fi
 
-if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-launcher\".features")" != "null" ]; then
-    for SERVICE in $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".features[]? | select(type==\"string\")") $(echo "$PODMAN_CONFIG" | yq -r ".services.\"${ACTION}\".\"x-app-launcher\".features[] | select(type==\"object\") | keys[]?"); do
+if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-application\".features")" != "null" ]; then
+    for SERVICE in $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".features[]? | select(type==\"string\")") $(echo "$PODMAN_CONFIG" | yq -r ".services.\"${ACTION}\".\"x-application\".features[] | select(type==\"object\") | keys[]?"); do
 
 	echo "Enabling service: $SERVICE"
 
@@ -196,6 +197,8 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$ACTION\".\"x-app-launcher\".fea
                 fi
                 PODMAN_ARGS+=( "--device nvidia.com/gpu=all" )
                 OVERRIDE_ALLOW_READ="yes"
+	    else
+		ADJUSTMENT_VOLS+=( "/dev/dri:/dev/dri" )
             fi
 	elif [ "$SERVICE" = "gpu" ]; then
 	    if nvidia-smi 2>/dev/null; then
@@ -298,7 +301,7 @@ echo "======================="
 # Alternative wayy of finding running container, but I prefer just going directly through podman
 #RUNNING_NAME=$(podman-compose -f ./compose.yaml ps --format "{{.Names}}" | awk -F_ -vaction="$ACTION" '{if ($2 == action) { print $2} }')
 
-export CDC_APP_DIR="$(pwd -P)"
+export COMPOSE_PATH="$(pwd -P)"
 
 RUNNING_ID="$(podman ps -qf "name=$CONTAINER_NAME")"
 STOPPED_ID="$(podman ps -a -q -f "name=$CONTAINER_NAME")"
@@ -309,36 +312,36 @@ else
         podman rm "$STOPPED_ID"
     fi
     RUN_MODE="run"
-    PODMAN_ARGS+=("--hostname \"$CDC_HOSTNAME\"")
+    PODMAN_ARGS+=("--hostname \"${CDC_HOSTNAME}\"" "--add-host \"${CDC_HOSTNAME}:127.0.0.1\"")
     NAME_ARG="--name ${CONTAINER_NAME}"
     PODMAN_RUN_ARGS+=("--rm")
 fi
 echo "RUN_MODE $RUN_MODE (RUNNING ID: $RUNNING_ID - STOPPED_ID: $STOPPED_ID)"
 
-LAUNCH_COMMAND=""
-if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".command")" != "null" ]; then
-    LAUNCH_COMMAND="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".command | .[]")"
+LAUNCH_SCRIPT=""
+if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launch-script\"")" != "null" ]; then
+    LAUNCH_SCRIPT="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-launch-script\" | recurse(.[]? // empty) | select(type != \"array\")")"
 fi
-if [ -z "$LAUNCH_COMMAND" -o "$LAUNCH_COMMAND" == "null" ]; then
+if [ -z "$LAUNCH_SCRIPT" -o "$LAUNCH_SCRIPT" == "null" ]; then
     echo "No launch command defined for $APP $ACTION"
     exit 1
 fi
 
 #if [ -n "$RUNNING_ID" ]; then
 #    echo "Container already running; starting process inside running container."
-#    exec /usr/bin/env --split-string="podman-compose --env-file \"$CDC_APP_DIR/.env\" --in-pod false -f compose.yaml -f \"$ADJUSTMENT_FILE\" $CONFIG_FILE $PODMAN_RUN_ARGS exec ${RUN_USER_ARG} \"$ACTION\"" bash -c "$LAUNCH_COMMAND" bash "$@"
+#    exec /usr/bin/env --split-string="podman-compose --env-file \"$COMPOSE_PATH/.env\" --in-pod false -f compose.yaml -f \"$ADJUSTMENT_FILE\" $CONFIG_FILE $PODMAN_RUN_ARGS exec ${RUN_USER_ARG} \"$ACTION\"" bash -c "$LAUNCH_SCRIPT" bash "$@"
 #    exit 1
 #fi
 
 PRELAUNCHER=""
-TRAY="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".tray")"
+TRAY="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".tray")"
 if [ -n "$TRAY" -a "$TRAY" != "null" ]; then
-    TRAY_ICON="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".tray.icon")"
-    TRAY_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".tray.name")"
-    TRAY_WMCLASS="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".tray.\"wmclass\"")"
+    TRAY_ICON="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".tray.icon")"
+    TRAY_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".tray.name")"
+    TRAY_WMCLASS="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".tray.\"wmclass\"")"
     TRAY_WMCLASS_ARG=""
     if [ "$TRAY_WMCLASS" == "null" ]; then
-        TRAY_WMCLASS_FILE="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".tray.\"wmclass-file\"")"
+        TRAY_WMCLASS_FILE="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".tray.\"wmclass-file\"")"
         if [ "$TRAY_WMCLASS_FILE" != "null" ]; then
             TRAY_WMCLASS="$(cat "home/$TRAY_WMCLASS_FILE")"
             TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
@@ -357,7 +360,7 @@ if [ -n "$CDC_DEBUG" ]; then
     echo "=============="
 fi
 
-#echo /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_APP_DIR}/.env\" --in-pod false -f compose.yaml -f \"${ADJUSTMENT_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_COMMAND}" bash "$@"
+#echo /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${COMPOSE_PATH}/.env\" --in-pod false -f compose.yaml -f \"${ADJUSTMENT_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${ACTION}\"" bash -c "${LAUNCH_SCRIPT}" bash "$@"
 
 # Handle changes between versions of podman in how to not create a pod
 # (we need "--userns", which cannot be used in pods)
@@ -384,7 +387,7 @@ fi
 #    echo "Found dependenecies: $DEPS"
 #
 #    if [ "$RUN_MODE" != "exec" ]; then
-#	echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" ${PODMAN_RUN_ARGS[@]} ${NAME_ARG} "${ACTION}" sleep infinity
+#	echo ${PRELAUNCHER} podman-compose  --env-file "${COMPOSE_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" ${PODMAN_RUN_ARGS[@]} ${NAME_ARG} "${ACTION}" sleep infinity
 #	RUN_MODE="exec"
 #	NAME_ARG=""
 #    fi
@@ -404,36 +407,47 @@ if [ "${#INIT_COMMANDS[@]}" != "0" ]; then
     INIT_COMMAND="$(printf '%s;\n' "${INIT_COMMANDS[@]}")"
 fi
 
-if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".init")" != "null" ]; then
-    INIT_COMMAND="${INIT_COMMAND}$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".init | .[]")"$'\n'
+if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".init")" != "null" ]; then
+    INIT_COMMAND="${INIT_COMMAND}$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".init | .[]")"$'\n'
 fi
 
-#${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" config
+#${PRELAUNCHER} podman-compose  --env-file "${COMPOSE_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" config
 
 # Applications that have a root-running init command, either manually configured, or because of selected features, need to start as root and then drop priviledges,
 # this requires additional capabilities: CAP_SETUID and CAP_SETGID, so we only launch that way if necessay.
 
 if [ -z "$INIT_COMMAND" -o "${RUN_MODE}" != "run" ]; then
 
-    echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user "${RUN_USER}" ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" "<launch command...>"
-    ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user "${RUN_USER}" ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${LAUNCH_COMMAND}" bash "$@"
+    echo ${PRELAUNCHER} podman-compose  --env-file "${COMPOSE_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user "${RUN_USER}" ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" "<launch command...>"
+
+    echo "==== LAUNCH COMMAND ===="
+    echo "${LAUNCH_SCRIPT}"
+    echo "========"
+    
+    ${PRELAUNCHER} podman-compose  --env-file "${COMPOSE_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user "${RUN_USER}" ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${LAUNCH_SCRIPT}" bash "$@"
 
 else
 
-    echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" "<init and launch command...>"
+    echo ${PRELAUNCHER} podman-compose  --env-file "${COMPOSE_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" "<init and launch command...>"
     # Check if we are meant to update before launching
 
-    AUTO_UPDATE="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-app-launcher\".\"auto-update\"")"
+    AUTO_UPDATE="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$ACTION\".\"x-application\".\"auto-update\"")"
     if [ -z "$CDC_NO_RECURSE" -a -n "$AUTO_UPDATE" -a "$AUTO_UPDATE" != "null" -a "$ACTION" != "update-check" -a "$ACTION" != "download" -a "$ACTION" != "update" ]; then
         CDC_NO_RECURSE=1 "$SCRIPTPATH/cdc-update"
     fi
 
+    echo "==== INIT COMMAND ===="
+    echo "${INIT_COMMAND}"
+    echo "==== LAUNCH COMMAND ===="
+    echo "${LAUNCH_SCRIPT}"
+    echo "========"
+    
     # Note:
     # The launch part of this command isn't trivial to parse:
     # 1. The outermost execution takes the form: bash -c <command to run> bash <arguments>.
     # 2. <command to run> first exectures the root part: ${INIT_COMMAND}, and drops priviliges using gosu by running: HOME=<homedir> gosu ${RUN_USER} "$@"
     # 3. The commands executed by gosu "$@" are the complete list of arguments sent into the bash session, which is <arguments> in (1).
-    # 4. <arguments> has been given the form: bash -c "${LAUNCH_COMMAND}" bash "$@", which thus executes another bash session with "${LAUNCH_COMMAND}" where the arguments are the outermost "$@"
-    ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_DIR}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${INIT_COMMAND} HOME='/home/$RUN_USER' exec gosu \"${RUN_USER}\" \"\$@\"" bash bash -c "${LAUNCH_COMMAND}; exit \$?" bash "$@"
+    # 4. <arguments> has been given the form: bash -c "${LAUNCH_SCRIPT}" bash "$@", which thus executes another bash session with "${LAUNCH_SCRIPT}" where the arguments are the outermost "$@"
+    ${PRELAUNCHER} podman-compose --env-file "${COMPOSE_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${ACTION}" bash -c "${INIT_COMMAND} HOME='/home/$RUN_USER' exec gosu \"${RUN_USER}\" \"\$@\"" bash bash -c "${LAUNCH_SCRIPT}; exit \$?" bash "$@"
 
 fi
