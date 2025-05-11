@@ -1,12 +1,25 @@
 #!/bin/bash
 
-echo "==== LAUNCH COMMANDS ===="
-printf "%s\n" "$@"
+echo "==== INIT COMMANDS ===="
+echo "$CDC_INIT_SCRIPT"
 echo "========================="
-LAUNCH_SCRIPT=$(printf '%s;\n' "$@")
 
-launch() {
-    bash -c "$LAUNCH_SCRIPT" -- "$@"
-}
+echo "==== LAUNCH COMMANDS ===="
+echo "$CDC_LAUNCH_SCRIPT"
+echo "========================="
 
-eval launch "$CDC_LAUNCH_ARGS"
+ARGS=()
+for ARG64 in $CDC_CALL_ARGS; do
+    ARGS+=( "$(base64 -d <<< "$ARG64")" )
+done
+
+echo "==== LAUNCH ARGS ===="
+printf "+%s+\n" "${ARGS[@]}"
+echo "====================="
+
+if [ -n "$CDC_INIT_SCRIPT" ]; then
+    exec bash -c "${CDC_INIT_SCRIPT}; HOME='/home/$CDC_USER' exec gosu \"${CDC_USER}\" \"\$@\"" -- bash -c "${CDC_LAUNCH_SCRIPT}; exit \$?" -- "${ARGS[@]}"
+else
+    echo "LAUNCHING:" bash -c "$CDC_LAUNCH_SCRIPT" -- "${ARGS[@]}"
+    exec bash -c "$CDC_LAUNCH_SCRIPT" -- "${ARGS[@]}"
+fi
