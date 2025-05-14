@@ -9,22 +9,8 @@ x-application:
   override-default: |
     version: "3.8"
 
-    # Comment out as desired below to give slack access to dbus session and/or system bus
-    #
-    #services:
-    #  slack:
-    #    x-app-features:
-    #      - dbus-proxy: --filter
-    #      - dbus-system-proxy: --filter
-
   env-default: |
     # No configurable options
-
-  images:
-    u24:
-      pkgs:
-        - cmake
-
 
 
 services:
@@ -47,6 +33,7 @@ services:
       LANG: "${LANG}"
       XDG_RUNTIME_DIR: "/tmp/${USER}/run"
       XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
 
     cap_drop:
       - ALL
@@ -54,7 +41,7 @@ services:
     security_opt:
       - no-new-privileges
 
-    read_only: false
+    read_only: true
     tmpfs:
       - /tmp
       - /run
@@ -72,101 +59,91 @@ services:
 
     userns_mode: "keep-id"
 
-  ## INSTALL ##
+  ## DOWNLOAD ##
 
   download:
     <<: *common
 
     network_mode: bridge
 
-    x-application:
-      launch-script: &download_script
-        - echo "DOWNLOAD"
-        - mkdir -p Downloads
-        - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.name')"
-        - LATESTURL="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep ollama-linux-amd64.tgz)"
-        - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
-        - |
-          if [ ! -e "Downloads/$$LATESTFILENAME" ]; then
-            curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL"
-          fi
-        - ln -sf "$$LATESTFILENAME" Downloads/ollama-linux-amd64-latest.tgz
+    x-launchers:
+      download:
+        script: &download_script
+          - echo "DOWNLOAD"
+          - mkdir -p Downloads
+          - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.name')"
+          - LATESTURL="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep ollama-linux-amd64.tgz)"
+          - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
+          - |
+            if [ ! -e "Downloads/$$LATESTFILENAME" ]; then
+              curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL"
+            fi
+          - ln -sf "$$LATESTFILENAME" Downloads/ollama-linux-amd64-latest.tgz
 
-  redownload:
-    <<: *common
+      redownload:
+        script: &redownload_script
+          - echo "REDOWNLOAD"
+          - mkdir -p Downloads
+          - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.name')"
+          - LATESTURL="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep ollama-linux-amd64.tgz)"
+          - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
+          - rm -rf "Downloads/$$LATESTFILENAME" Downloads/ollama-linux-amd64-latest.tgz
+          - *download_script
 
-    network_mode: bridge
-
-    x-application:
-      launch-script: &redownload_script
-        - echo "REDOWNLOAD"
-        - mkdir -p Downloads
-        - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.name')"
-        - LATESTURL="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep ollama-linux-amd64.tgz)"
-        - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
-        - rm -rf "Downloads/$$LATESTFILENAME" Downloads/ollama-linux-amd64-latest.tgz
-        - *download_script
+  ## INSTALL ##
 
   install:
     <<: *common
 
-    x-application:
-      launch-script: &install_script
-        - VERSION="$${1:-ollama-linux-amd64-latest.tgz}";
-        - echo "INSTALL $$VERSION"; 
-        - |
-          if [ ! -e ~/.local/share/ollama ]; then
-            mkdir -p ~/.local/share/ollama
-            cd ~/.local/share/ollama
-            tar -zxf ~/Downloads/"$$VERSION"
-          fi
+    x-launchers:
+      install:
+        script: &install_script
+          - VERSION="$${1:-ollama-linux-amd64-latest.tgz}";
+          - echo "INSTALL $$VERSION";
+          - |
+            if [ ! -e ~/.local/share/ollama ]; then
+              mkdir -p ~/.local/share/ollama
+              cd ~/.local/share/ollama
+              tar -zxf ~/Downloads/"$$VERSION"
+            fi
 
-  reinstall:
-    <<: *common
-
-    network_mode: bridge
-
-    x-application:
-      launch-script: &reinstall_script
-        - VERSION="$${1:-ollama-linux-amd64-latest.tgz}"
-        - echo "REINSTALL $$VERSION" 
-        - rm -rf ~/.local/share/ollama
-        - *install_script
+      reinstall:
+        script: &reinstall_script
+          - VERSION="$${1:-ollama-linux-amd64-latest.tgz}"
+          - echo "REINSTALL $$VERSION"
+          - rm -rf ~/.local/share/ollama
+          - *install_script
 
   ## UPDATE ##
-
-  update-check:
-    <<: *common
-
-    network_mode: bridge
-
-    x-application:
-      launch-script:
-        - echo "UPDATE CHECK"
-        - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output)"
-        - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
-        - mkdir -p Downloads
-        - if [ -e "Downloads/$$LATESTFILENAME" ]; then
-            echo "No new version";
-            exit 0;
-          fi
-        - echo "File missing, or server-side file newer"
-        - exit 1
 
   update:
     <<: *common
 
     network_mode: bridge
 
-    x-application:
-      launch-script:
-        - echo "UPDATE"
-        - *redownload_script
-        - *reinstall_script
+    x-launchers:
+      update-check:
+        script:
+          - echo "UPDATE CHECK"
+          - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output)"
+          - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
+          - mkdir -p Downloads
+          - if [ -e "Downloads/$$LATESTFILENAME" ]; then
+              echo "No new version";
+              exit 0;
+            fi
+          - echo "File missing, or server-side file newer"
+          - exit 1
+
+      update:
+        script:
+          - echo "UPDATE"
+          - *redownload_script
+          - *reinstall_script
 
   ## EXECUTE ###
 
-  ollama-serve:
+  ollama:
     <<: *common
 
     network_mode: bridge
@@ -174,32 +151,22 @@ services:
     ports:
       - "11434:11434"
 
-    x-application:
-      launch-script:
-        - echo "ollama-serve"
-        - OLLAMA_HOST=0.0.0.0:11434 ~/.local/share/ollama/bin/ollama serve
-      features:
-        - GPU
+    x-launchers:
+      ollama-serve:
+        script:
+          - echo "ollama-serve"
+          - OLLAMA_HOST=0.0.0.0:11434 ~/.local/share/ollama/bin/ollama serve
+        features:
+          - GPU
 
-  ollama:
-    <<: *common
+      ollama:
+        script:
+          - echo "ollama"
+          - ~/.local/share/ollama/bin/ollama "$@"
 
-    x-application:
-      use_service: ollama-serve
-      launch-script:
-        - echo "ollama"
-        - ~/.local/share/ollama/bin/ollama "$@"
+      interactive:
+        interactive: true
 
-  ## INTERACTIVE ##
-
-  interactive:
-    <<: *common
-
-    x-application:
-      use_service: ollama-serve
-      interactive: true
-
-      launch-script:
-        - echo "INTERACTIVE"
-        - bash
-
+        script:
+          - echo "INTERACTIVE"
+          - bash

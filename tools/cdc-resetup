@@ -48,37 +48,19 @@ EOF
 fi
 
 if [ -z "$1" ]; then
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."redownload"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "redownload"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.download')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "download"
-    fi
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."rebuild"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "rebuild"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.build')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "build"
-    fi
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."reinstall"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "reinstall"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.install')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "install"
-    fi    
+    (
+        export CDC_LAUNCH_SILENT=1
+        "$SCRIPTPATH/cdc-launch" "redownload" || "$SCRIPTPATH/cdc-launch" "download" || true
+        "$SCRIPTPATH/cdc-launch" "rebuild" || "$SCRIPTPATH/cdc-launch" "build" || true
+        "$SCRIPTPATH/cdc-launch" "reinstall" || "$SCRIPTPATH/cdc-launch" "install" || true
+    )
 else
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."redownload"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "redownload" "$1"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.download')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "download" "$1"
-    fi
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."rebuild"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "rebuild" "$1"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.build')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "build" "$1"
-    fi
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '.services."reinstall"')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "reinstall" "$1"
-    elif [ "$(echo "$PODMAN_CONFIG" | yq -r '.services.install')" != "null" ]; then
-	"$SCRIPTPATH/cdc-launch" "install" "$1"
-    fi
-fi    
+    (
+        export CDC_LAUNCH_SILENT=1
+        "$SCRIPTPATH/cdc-launch" "redownload" "$1" || "$SCRIPTPATH/cdc-launch" "download" "$1" || true
+        "$SCRIPTPATH/cdc-launch" "rebuild" "$1" || "$SCRIPTPATH/cdc-launch" "build" "$1" || true
+        "$SCRIPTPATH/cdc-launch" "reinstall" "$1" || "$SCRIPTPATH/cdc-launch" "install" "$1" || true
+    )
+fi
 
 "$SCRIPTPATH/cdc-post-install"

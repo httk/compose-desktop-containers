@@ -157,12 +157,12 @@ services:
       - pipewire-pulse &
       - exec ~/.local/share/slack/slack/usr/bin/slack "$$@"
 
-    x-app-features:
+    x-app-launcher:
+
+      features:
       - video
       - sound
       - x11
-
-    x-launcher:
 
       desktop:
 
