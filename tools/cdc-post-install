@@ -23,12 +23,18 @@ function POST_PROCESS_LAUNCHER() {
     LAUNCHER=$2
     YQPATH=$3
 
-    ln -sf "$CDCLAUNCHER" "$LAUNCHER"
-    if [ "$(echo "$PODMAN_CONFIG" | yq "${YQPATH}.desktop")" != "null" ]; then
+    if [ "$(yq -r "${YQPATH}.type" <<< "$PODMAN_CONFIG")" == "setup" ]; then
+	mkdir -p setup
+	ln -sf "$CDCLAUNCHER" "setup/$LAUNCHER"	
+    elif [ "$(yq -r "${YQPATH}.type" <<< "$PODMAN_CONFIG")" != "hidden" ]; then
+	ln -sf "$CDCLAUNCHER" "$LAUNCHER"
+    fi
+
+    if [ "$(yq "${YQPATH}.desktop" <<< "$PODMAN_CONFIG")" != "null" ]; then
 	mkdir -p ~/.local/share/applications
 	echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.file" > ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
 	sed -i "s|^Exec=$LAUNCHER|Exec=\"${DEST_ABSPATH}/$LAUNCHER\"|" ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
-	WMCLASS_FILE="$(echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.\"wmclass-file\"")"
+	WMCLASS_FILE="$(yq -r "${YQPATH}.desktop.\"wmclass-file\"" <<< "$PODMAN_CONFIG")"
 	if [ -n "$WMCLASS_FILE" -a "$WMCLASS_FILE" != "null" ]; then
 	    WMCLASS=$(cat "home/$WMCLASS_FILE")
 	    sed -i "s|^StartupWMClass=.*\$|StartupWMClass=$WMCLASS|" ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
@@ -36,16 +42,16 @@ function POST_PROCESS_LAUNCHER() {
 	desktop-file-validate ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
 	echo "Wrote: ~/.local/share/applications/${LAUNCHER}_cdc.desktop"
 
-	ICONS_NBR=$(echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.icons | length")
+	ICONS_NBR=$(yq -r "${YQPATH}.desktop.icons | length" <<< "$PODMAN_CONFIG")
 	for (( ICON_IDX=0; ICON_IDX<ICONS_NBR; ICON_IDX++ )); do
 	    # Sanetize icon paths somewhat
-	    ICON_SRC=$(echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.icons[$ICON_IDX].source")
+	    ICON_SRC=$(yq -r "${YQPATH}.desktop.icons[$ICON_IDX].source" <<< "$PODMAN_CONFIG")
 	    ICON_SRC=${ICON_SRC//[^[:ascii:]]}
 	    ICON_SRC=${ICON_SRC//../}
-	    ICON_DEST=$(echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.icons[$ICON_IDX].dest")
+	    ICON_DEST=$(yq -r "${YQPATH}.desktop.icons[$ICON_IDX].dest" <<< "$PODMAN_CONFIG")
 	    ICON_DEST=${ICON_DEST//[^[:ascii:]]}
 	    ICON_DEST=${ICON_DEST//../}
-	    ICON_PLACE=$(echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.icons[$ICON_IDX].dest")
+	    ICON_PLACE=$(yq -r "${YQPATH}.desktop.icons[$ICON_IDX].dest" <<< "$PODMAN_CONFIG")
 	    if [ "${ICON_DEST}" == "${ICON_DEST#$APP/}" ]; then
 		for ICON_SIZE in "scalable" "512x512" "256x256" "192x192" "128x128" "96x96" "72x72" "64x64" "48x48" "36x36" "32x32" "24x24" "22x22" "16x16" "8x8"; do
 		    ICON_SRC_PATH="home/.local/share/icons/hicolor/$ICON_SIZE/apps/${ICON_SRC}"
@@ -68,16 +74,14 @@ function POST_PROCESS_LAUNCHER() {
     fi
 }
 
-for LAUNCHER in $(echo "$PODMAN_CONFIG" | yq -r '.services | keys[]'); do
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER\".\"x-application\"")" != "null" ]; then
-	POST_PROCESS_LAUNCHER "$SCRIPTPATH/cdc-launch" "$LAUNCHER" ".services.\"$LAUNCHER\".\"x-application\""
-    fi
+for LAUNCHER in $(yq -r '."x-launchers" | keys[]' <<< "$PODMAN_CONFIG"); do
+    POST_PROCESS_LAUNCHER "$SCRIPTPATH/cdc-launch" "$LAUNCHER" ".\"x-launchers\".\"$LAUNCHER\""
 done
 
-if [ "$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."global-launcher"')" != "null" ]; then
-    LAUNCHER="$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."global-launcher".name')"
-    POST_PROCESS_LAUNCHER "$SCRIPTPATH/cdc-launch-global" "$LAUNCHER" '."x-application"."global-launcher"'
-fi
+#if [ "$(yq -r '."x-application"."global-launcher"' <<< "$PODMAN_CONFIG")" != "null" ]; then
+#    LAUNCHER="$(yq -r '."x-application"."global-launcher".name' <<< "$PODMAN_CONFIG")"
+#    POST_PROCESS_LAUNCHER "$SCRIPTPATH/cdc-launch-global" "$LAUNCHER" '."x-application"."global-launcher"'
+#fi
 
 update-desktop-database ~/.local/share/applications/
 gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor

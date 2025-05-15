@@ -11,9 +11,12 @@ set -e
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 LAUNCHPATH="$(cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)"
 TOOLPATH="$(dirname -- "$(realpath -- "$0")")"
-PODMAN_RUN_ARGS=()
-PODMAN_ARGS=()
-INIT_COMMANDS=()
+
+PODMAN_COMPOSE_UP_ARGS=()
+PODMAN_COMPOSE_EXEC_ARGS=()
+PODMAN_COMPOSE_EXEC_POST_ARGS=()
+PODMAN_UP_ARGS=()
+PODMAN_EXEC_ARGS=()
 
 if [ -z "$(readlink "$0")" ]; then
     # Non-symlink invokation
@@ -23,12 +26,16 @@ if [ -z "$(readlink "$0")" ]; then
 	echo "Run the app via the requested launcher"
 	exit 0
     fi
-    LAUNCHER_NAME="$1"
+    LAUNCHER="$1"
     shift 1
 else
     # Symlink invokation
-    LAUNCHER_NAME=$(basename "$0")
-    cd "$LAUNCHPATH"
+    LAUNCHER=$(basename "$0")
+    if [ "$(basename "$LAUNCHPATH")" != "setup" ]; then
+	cd "$LAUNCHPATH"
+    else
+	cd "$(dirname "$LAUNCHPATH")"
+    fi
 fi
 
 APP="$(basename -- "$(pwd -P)")"
@@ -43,20 +50,25 @@ if ! yq -r '."x-application"' compose.yaml > /dev/null 2>&1 || [ "$(yq -r '."x-a
 fi
 
 export CDC_APP_PATH="$(pwd -P)"
+export CDC_USER="$USER"
+
 PODMAN_CONFIG=$(podman-compose -f compose.yaml -f override.yaml config)
-
-SERVICE=$(echo "$PODMAN_CONFIG" | yq -r --arg launcher_name "ollama-serve" '
-  .services
-  | to_entries
-  | map(select(.value."x-launchers"[$launcher_name]))
-  | .[0].key
-' compose.yaml)
-
-if [ -z "$SERVICE" -o "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".\"launch-script\"")" == "null" ]; then
+if [ "$(yq -r ".\"x-launchers\".\"$LAUNCHER\"" <<< "$PODMAN_CONFIG")" == "null" ]; then
     if [ "$CDC_LAUNCH_SILENT" != "1" ]; then
-        echo "The requested launcher ${LAUNCHER_NAME} does not seem to be defined."
+        echo "The requested launcher ${LAUNCHER} does not seem to be defined."
     fi
     exit 1
+fi
+
+SERVICE=$(yq -r ".\"x-launchers\".\"$LAUNCHER\".service" <<< "$PODMAN_CONFIG")
+if [ -z "$SERVICE" -o "$SERVICE" == "null" ]; then
+    echo "The launcher stanza for ${LAUNCHER} is missing 'service'."
+    exit 1
+fi
+
+TYPE=$(yq -r ".\"x-launchers\".\"$LAUNCHER\".type" <<< "$PODMAN_CONFIG")
+if [ -z "$TYPE" -o "$TYPE" == "null" ]; then
+    TYPE=normal
 fi
 
 CONFIG_FILE=()
@@ -69,22 +81,12 @@ if [ -e .env ]; then
     ENV_FILE+=("--env-file" ".env")
 fi
 
-# The launcher for this service actually runs via another service
-# Work around the fact that shared container_name does not really seem to be supported in podman-compose
-# and leads to all kind of weird behavior.
-USE_SERVICE="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".use_service")"
-if [ -z "$USE_SERVICE" -o "$USE_SERVICE" == "null" ]; then
-   USE_SERVICE="$LAUNCHER_NAME"
-fi
-echo "Use service: $USE_SERVICE"
-
-if yq -e ".services.\"$LAUNCHER_NAME\".\"x-application\".interactive == true" > /dev/null <<< "$PODMAN_CONFIG"; then
-    export CDC_HOSTNAME="cdc_${APP}_${LAUNCHER_NAME}"
-#    PODMAN_ARGS+=("-it")
-#    INTERACTIVE="true"
+# Launchers built explicity to run in the console use a different hostname to avoid confusion;
+# launchers that run in the background need to use the hosts hostname to not confuse e.g., X11 about which host they run on
+if yq -e ".\"x-launchers\".\"$LAUNCHER\".console == true" > /dev/null <<< "$PODMAN_CONFIG"; then
+    export CDC_HOSTNAME="cdc_${APP}_${LAUNCHER}"
 else
     export CDC_HOSTNAME=$(hostname)
-#    INTERACTIVE=""
 fi
 
 ADJUSTMENT_FILE=$(mktemp /tmp/desktop-containers-override.XXXXXX.yaml)
@@ -93,12 +95,8 @@ cat <<EOF > "$ADJUSTMENT_FILE"
 version: "3.8"
 EOF
 
-#cat <<EOF >> "$ADJUSTMENT_FILE"
-#services:
-#  $LAUNCHER_NAME:
-#    container_name: $CONTAINER_NAME
-#EOF
-
+# Prepare sensible values for DBUS_SESSION_BUS_ADDRESS and DBUS_SYSTEM_BUS_ADDRESS in case they are not set
+# and figure out the paths to the respective socket.
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
     export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${UID}/bus"
 fi
@@ -116,65 +114,68 @@ function GET_FEATURE_ARG() {
     else
 	ARGNAME=""
     fi
-    ARG=$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".features[]? | select(type==\"object\") | select(has(\"$FEATURE\"))| .\"$FEATURE\"${ARGNAME}")
+    ARG=$(yq -r ".\"x-launchers\".\"$LAUNCHER\".features[]? | select(type==\"object\") | select(has(\"$FEATURE\"))| .\"$FEATURE\"${ARGNAME}" <<< "$PODMAN_CONFIG")
     if [ "$ARG" == "null" ]; then
        ARG=""
     fi
     echo "$ARG"
 }
 
-#ADJUSTMENT_ENVS=( "CDC_LAUNCH_SCRIPT: \"\${CDC_LAUNCH_SCRIPT}\"" "CDC_INIT_SCRIPT: \"\${CDC_INIT_SCRIPT}\"" "CDC_CALL_ARGS: \"\${CDC_CALL_ARGS}\"" "CDC_USER: \"\${CDC_USER}\"" )
 ADJUSTMENT_ENVS=()
 ADJUSTMENT_DEVS=()
 ADJUSTMENT_VOLS=()
 ADJUSTMENT_CAPS=()
 OVERRIDE_ALLOW_READ="no"
 
-export CDC_USER="$USER"
-
-if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".\"launch-script\"")" != "null" ]; then
-    export CDC_LAUNCH_SCRIPT="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".\"launch-script\" | recurse(.[]? // empty) | select(type != \"array\")")"
+if [ "$(yq -r ".\"x-launchers\".\"$LAUNCHER\".script" <<< "$PODMAN_CONFIG")" != "null" ]; then
+    LAUNCH_SCRIPT="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".script | recurse(.[]? // empty) | select(type != \"array\")" <<< "$PODMAN_CONFIG")"
 else
-    export CDC_LAUNCH_SCRIPT=""
+    LAUNCH_SCRIPT=""
 fi
-if [ -z "$CDC_LAUNCH_SCRIPT" -o "$CDC_LAUNCH_SCRIPT" == "null" ]; then
-    echo "No launch command defined for $APP $LAUNCHER_NAME"
+if [ -z "$LAUNCH_SCRIPT" -o "$LAUNCH_SCRIPT" == "null" ]; then
+    echo "No launch command defined for $APP $LAUNCHER"
     exit 1
 fi
-
-export CDC_INIT_SCRIPT=""
-if [ "${#INIT_COMMANDS[@]}" != "0" ]; then
-    CDC_INIT_SCRIPT="$(printf '%s;\n' "${INIT_COMMANDS[@]}")"
+if [ -n "$CDC_DEBUG" ]; then
+  echo "==== LAUNCH SCRIPT ===="
+  printf "%s\n" "$LAUNCH_SCRIPT"
+  echo "======================="
 fi
 
-if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".\"init-script\"")" != "null" ]; then
-    CDC_INIT_SCRIPT="${CDC_INIT_SCRIPT}$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".\"init-script\" | recurse(.[]? // empty) | select(type != \"array\")")"
-fi
-
-export CDC_CALL_ARGS=""
-for ARG in "$@"; do
-    CDC_CALL_ARGS="${CDC_CALL_ARGS} $(echo "$ARG"|base64)"
-done
+#export CDC_INIT_SCRIPT=""
+#if [ "${#INIT_COMMANDS[@]}" != "0" ]; then
+#    CDC_INIT_SCRIPT="$(printf '%s;\n' "${INIT_COMMANDS[@]}")"
+#fi
+#
+#if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER\".\"x-application\".\"init-script\"" <<< "$PODMAN_CONFIG")" != "null" ]; then
+#    CDC_INIT_SCRIPT="${CDC_INIT_SCRIPT}$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER\".\"x-application\".\"init-script\" | recurse(.[]? // empty) | select(type != \"array\")")"
+#fi
+#
+#export CDC_CALL_ARGS=""
+#for ARG in "$@"; do
+#    CDC_CALL_ARGS="${CDC_CALL_ARGS} $(echo "$ARG"|base64)"
+#done
 
 # If compose file specifically uses x-app-init, we need to force CAP_SETUID + CAP_SETGID to start as root and then drop to user
-if [ -n "$CDC_INIT_SCRIPT" ]; then
-    ADJUSTMENT_CAPS+=( "CAP_SETUID" "CAP_SETGID" )
-fi
+#if [ -n "$CDC_INIT_SCRIPT" ]; then
+#    ADJUSTMENT_CAPS+=( "CAP_SETUID" "CAP_SETGID" )
+#fi
 
-if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$LAUNCHER_NAME\".\"x-application\".features")" != "null" ]; then
-    for SERVICE in $(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".features[]? | select(type==\"string\")") $(echo "$PODMAN_CONFIG" | yq -r ".services.\"${LAUNCHER_NAME}\".\"x-application\".features[] | select(type==\"object\") | keys[]?"); do
+if [ "$(yq ".\"x-launchers\".\"$LAUNCHER\".features" <<< "$PODMAN_CONFIG")" != "null" ]; then
+    # Loop over all featues that are strings or objects
+    for FEATURE in $(yq -r ".\"x-launchers\".\"$LAUNCHER\".features[]? | select(type==\"string\")" <<< "$PODMAN_CONFIG") $(yq -r ".services.\"${LAUNCHER}\".features[]? | select(type==\"object\") | keys[]?" <<< "$PODMAN_CONFIG"); do
 
-	echo "Enabling service: $SERVICE"
+	echo "Enabling feature: $FEATURE"
 
-	if [ "$SERVICE" = "wayland-fallback-x11" ]; then
+	if [ "$FEATURE" = "wayland-fallback-x11" ]; then
 	    if [ -n "$WAYLAND_DISPLAY" ]; then
-		SERVICE="wayland"
+		FEATURE="wayland"
 	    else
-		SERVICE="x11"
+		FEATURE="x11"
 	    fi
 	fi
 
-	if [ "$SERVICE" = "video" ]; then
+	if [ "$FEATURE" = "video" ]; then
 	    if [ -e /dev/video ]; then
 		ADJUSTMENT_VOLS+=( "/dev/video:/dev/video" )
 		#ADJUSTMENT_DEVS+=( "/dev/cameras/video0:/dev/video0" )
@@ -191,20 +192,20 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$LAUNCHER_NAME\".\"x-application
 	    INIT_COMMANDS+=( "echo -n {0..9} | xargs -d ' '  -i ln -s /dev/video/video{} /dev/video{}" )
             ADJUSTMENT_CAPS+=( "CAP_SETUID" "CAP_SETGID" )
 
-	elif [ "$SERVICE" = "wayland" ]; then
+	elif [ "$FEATURE" = "wayland" ]; then
 	    ADJUSTMENT_ENVS+=( "WAYLAND_DISPLAY: ${WAYLAND_DISPLAY}" )
 	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro" )
 	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAG: --ozone-platform=wayland")
             ADJUSTMENT_ENVS+=( "QT_QPA_PLATFORM: wayland")
             ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: wayland")
 
-	elif [ "$SERVICE" = "x11" ]; then
+	elif [ "$FEATURE" = "x11" ]; then
 	    ADJUSTMENT_ENVS+=( "DISPLAY: \"${DISPLAY}\"" "XAUTHORITY: \"${XAUTHORITY}\"" )
 	    ADJUSTMENT_VOLS+=( "/tmp/.X11-unix:/tmp/.X11-unix:rw" "${XAUTHORITY}:${XAUTHORITY}:rw" )
 	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAG: --ozone-platform=x11")
             ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: x11")
 
-        elif [ "$SERVICE" = "dri-full" ]; then
+        elif [ "$FEATURE" = "dri-full" ]; then
             GLXINFO=$(glxinfo || true)
             if grep -q 'direct rendering: Yes' <<< "$GLXINFO" && grep -q 'OpenGL vendor string: NVIDIA' <<< "$GLXINFO"; then
                 if [ ! -e /etc/cdi/nvidia.yaml -a ! -e /var/run/cdi/nvidia.yaml ]; then
@@ -213,55 +214,54 @@ if [ "$(echo "$PODMAN_CONFIG" | yq ".services.\"$LAUNCHER_NAME\".\"x-application
                     echo "  nvidia-ctk cdi generate | sudo tee cat > /etc/cdi/nvidia.yaml"
                     exit 1
                 fi
-                PODMAN_ARGS+=( "--device nvidia.com/gpu=all" )
+                PODMAN_UP_ARGS+=( "--device nvidia.com/gpu=all" )
                 OVERRIDE_ALLOW_READ="yes"
 	    else
 		ADJUSTMENT_VOLS+=( "/dev/dri:/dev/dri" )
             fi
-	elif [ "$SERVICE" = "gpu" ]; then
+	elif [ "$FEATURE" = "gpu" ]; then
 	    if nvidia-smi 2>/dev/null; then
-                PODMAN_ARGS+=( "--device nvidia.com/gpu=all" )
+                PODMAN_UP_ARGS+=( "--device nvidia.com/gpu=all" )
                 OVERRIDE_ALLOW_READ="yes"
 	    fi
-	elif [ "$SERVICE" = "sound" ]; then
+	elif [ "$FEATURE" = "sound" ]; then
 	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw" )
 	    ADJUSTMENT_DEVS+=( "/dev/snd:/dev/snd" )
 
-	elif [ "$SERVICE" == "dbus-proxy" ]; then
+	elif [ "$FEATURE" == "dbus-proxy" ]; then
 	    ARGUMENTS=( $(GET_FEATURE_ARG dbus-proxy) )
-	    echo "Launching:" "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER_NAME" "${ARGUMENTS[@]}"
+	    echo "Launching:" "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER" "${ARGUMENTS[@]}"
 	    # Workaround: sometimes xdb-dbus-proxy fails and leaves an empty directory behind, which stops further attmepts with "address in use"
-	    if [ -d "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER_NAME" ]; then
-		rmdir "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER_NAME"
+	    if [ -d "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER" ]; then
+		rmdir "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER"
 	    fi
-	    xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER_NAME" "${ARGUMENTS[@]}" &
+	    xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER" "${ARGUMENTS[@]}" &
 	    DBUS_PROXY_PID=$?
 	    trap "kill $DBUS_PROXY_PID" EXIT
-	    CDC_DBUS_PATH="$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER_NAME"
+	    CDC_DBUS_PATH="$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER"
             ADJUSTMENT_VOLS+=( "${CDC_DBUS_PATH}:/run/user/${UID}/bus:rw" )
 	    ADJUSTMENT_ENVS+=( "DBUS_SESSION_BUS_ADDRESS: \"unix:path=/run/user/${UID}/bus\"" )
 
-	elif [ "$SERVICE" == "dbus-system-proxy" ]; then
+	elif [ "$FEATURE" == "dbus-system-proxy" ]; then
 	    ARGUMENTS=( $(GET_FEATURE_ARG dbus-system-proxy) )
-	    echo "Launching:" xdg-dbus-proxy "$DBUS_SYSTEM_BUS_ADDRESS" "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER_NAME" "${ARGUMENTS[@]}"
+	    echo "Launching:" xdg-dbus-proxy "$DBUS_SYSTEM_BUS_ADDRESS" "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER" "${ARGUMENTS[@]}"
 	    # Workaround: sometimes xdb-dbus-proxy fails and leaves an empty directory behind, which stops further attmepts with "address in use"
-	    if [ -d "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER_NAME" ]; then
-		rmdir "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER_NAME"
+	    if [ -d "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER" ]; then
+		rmdir "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER"
 	    fi
-	    xdg-dbus-proxy "$DBUS_SYSTEM_BUS_ADDRESS" "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER_NAME" "${ARGUMENTS[@]}" &
+	    xdg-dbus-proxy "$DBUS_SYSTEM_BUS_ADDRESS" "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER" "${ARGUMENTS[@]}" &
 	    DBUS_SYSTEM_PROXY_PID=$?
 	    trap "kill $DBUS_SYSTEM_PROXY_PID" EXIT
-	    CDC_DBUS_SYSTEM_PATH="$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER_NAME"
+	    CDC_DBUS_SYSTEM_PATH="$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER"
 	    ADJUSTMENT_VOLS+=( "${CDC_DBUS_SYSTEM_PATH}:/run/dbus/system_bus_socket:rw" )
 	    ADJUSTMENT_ENVS+=( "DBUS_SYSTEM_BUS_ADDRESS: \"unix:path=/run/dbus/system_bus_socket\"" )
 	fi
     done
 fi
 
-#  container_name: "$CONTAINER_NAME"
 cat <<EOF >> "$ADJUSTMENT_FILE"
 services:
-  $LAUNCHER_NAME:
+  $SERVICE:
     x-dummy: none
 EOF
 if [ -n "$ADJUSTMENT_DEVS" ]; then
@@ -312,43 +312,21 @@ if [ "$OVERRIDE_ALLOW_READ" == "yes" ]; then
 EOF
 fi
 
-
-echo "==== ADJUSTMENT FILE ===="
-cat "$ADJUSTMENT_FILE"
-echo "======================="
-
-# Alternative wayy of finding running container, but I prefer just going directly through podman
-#RUNNING_NAME=$(podman-compose -f ./compose.yaml ps --format "{{.Names}}" | awk -F_ -vaction="$LAUNCHER_NAME" '{if ($2 == action) { print $2} }')
-
-#RUNNING_ID="$(podman ps -qf "name=$CONTAINER_NAME")"
-#STOPPED_ID="$(podman ps -a -q -f "name=$CONTAINER_NAME")"
-#if [ -n "$RUNNING_ID" ]; then
-#    RUN_MODE="exec"
-#else
-#    if [ -n "$STOPPED_ID" ]; then
-#        podman rm "$STOPPED_ID"
-#    fi
-#    RUN_MODE="up"
-#    PODMAN_ARGS+=("--hostname \"${CDC_HOSTNAME}\"" "--add-host \"${CDC_HOSTNAME}:127.0.0.1\"")
-#    NAME_ARG="--name ${CONTAINER_NAME}"
-#fi
-#echo "RUN_MODE $RUN_MODE (RUNNING ID: $RUNNING_ID - STOPPED_ID: $STOPPED_ID)"
-
-#if [ -n "$RUNNING_ID" ]; then
-#    echo "Container already running; starting process inside running container."
-#    exec /usr/bin/env --split-string="podman-compose --env-file \"$CDC_APP_PATH/.env\" --in-pod false -f compose.yaml -f \"$ADJUSTMENT_FILE\" $CONFIG_FILE $PODMAN_RUN_ARGS exec ${CDC_USER_ARG} \"$LAUNCHER_NAME\"" bash -c "$LAUNCH_SCRIPT" bash "$@"
-#    exit 1
-#fi
-
+if [ -n "$CDC_DEBUG" ]; then
+  echo "==== ADJUSTMENT FILE ===="
+  cat "$ADJUSTMENT_FILE"
+  echo "======================="
+fi
+  
 PRELAUNCHER=""
-TRAY="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".tray")"
+TRAY="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray" <<< "$PODMAN_CONFIG")"
 if [ -n "$TRAY" -a "$TRAY" != "null" ]; then
-    TRAY_ICON="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".tray.icon")"
-    TRAY_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".tray.name")"
-    TRAY_WMCLASS="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".tray.\"wmclass\"")"
+    TRAY_ICON="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.icon" <<< "$PODMAN_CONFIG")"
+    TRAY_NAME="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.name" <<< "$PODMAN_CONFIG")"
+    TRAY_WMCLASS="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.\"wmclass\"" <<< "$PODMAN_CONFIG")"
     TRAY_WMCLASS_ARG=""
     if [ "$TRAY_WMCLASS" == "null" ]; then
-        TRAY_WMCLASS_FILE="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".tray.\"wmclass-file\"")"
+        TRAY_WMCLASS_FILE="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.\"wmclass-file\"" <<< "$PODMAN_CONFIG")"
         if [ "$TRAY_WMCLASS_FILE" != "null" ]; then
             TRAY_WMCLASS="$(cat "home/$TRAY_WMCLASS_FILE")"
             TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
@@ -367,109 +345,65 @@ if [ -n "$CDC_DEBUG" ]; then
     echo "=============="
 fi
 
-#echo /usr/bin/env --split-string="${PRELAUNCHER} podman-compose  --env-file \"${CDC_APP_PATH}/.env\" --in-pod false -f compose.yaml -f \"${ADJUSTMENT_FILE}\" ${CONFIG_FILE} ${PODMAN_RUN_ARGS} run --name \"${CONTAINER_NAME}\" --rm \"${LAUNCHER_NAME}\"" bash -c "${LAUNCH_SCRIPT}" bash "$@"
-
 # Handle changes between versions of podman in how to not create a pod
 # (we need "--userns", which cannot be used in pods)
 PODMAN_VERSION=$(podman-compose version --short 2>/dev/null)
 #VERSION=$(podman-compose --version | awk '/podman-compose/{print $NF}')
 if sort -CV <<< "1.2.0"$'\n'"$PODMAN_VERSION"; then
-    NOPOD="--in-pod false"
-else
-    NOPOD=""
+    PODMAN_COMPOSE_UP_ARGS+=("--in-pod" "false")
+    PODMAN_COMPOSE_EXEC_ARGS+=("--in-pod" "false")
 fi
 
-#COMPOSE_PODMAN_ARGS=()
-#for ARG in "${PODMAN_ARGS[@]}"; do
-#    COMPOSE_PODMAN_ARGS+=("--podman-run-args" "\\${ARG}")
-#done
-if [ -n "${PODMAN_ARGS[0]}" ]; then
-    ARGS=${PODMAN_ARGS[@]}
-    COMPOSE_PODMAN_ARGS=("--podman-run-args" "\\$ARGS")
-else
-    COMPOSE_PODMAN_ARGS=()
+if [ -n "${PODMAN_UP_ARGS[0]}" ]; then
+    # This mangling seems to get the escaping right enough
+    ARGS=${PODMAN_UP_ARGS[@]}
+    PODMAN_COMPOSE_UP_ARGS+=("--podman-run-args" "\\$ARGS")
 fi
 
-#if [ "$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-run-dependencies\"")" != "null" ]; then
-#    DEPS="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-run-dependencies\"[]")"
-#    echo "Found dependenecies: $DEPS"
-#
-#    if [ "$RUN_MODE" != "exec" ]; then
-#	echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" ${PODMAN_RUN_ARGS[@]} ${NAME_ARG} "${LAUNCHER_NAME}" sleep infinity
-#	RUN_MODE="exec"
-#	NAME_ARG=""
-#    fi
-#
- #   for DEP in $DEPS; do
-#	(
-#	    echo "Launching dependency: $DEP"
-#	    export CDC_PARENT_CONTAINER="$CONTAINER_NAME"
-#            "${SCRIPTPATH}/cdc-launch" "$DEP"
-#            unset CDC_PARENT_CONTAINER
-#	)
-#    done
-#fi
+if [ -n "${PODMAN_EXEC_ARGS[0]}" ]; then
+    # This mangling seems to get the escaping right enough
+    ARGS=${PODMAN_EXEC_ARGS[@]}
+    PODMAN_COMPOSE_EXEC_ARGS+=("--podman-run-args" "\\$ARGS")
+fi
 
-#${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" config
+# Run auto-update if we are supposed to do that before launching
+AUTO_UPDATE="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".\"auto-update\"" <<< "$PODMAN_CONFIG")"
+if [ -z "$CDC_NO_RECURSE" -a -n "$AUTO_UPDATE" -a "$AUTO_UPDATE" != "null" -a "$LAUNCHER" != "update-check" -a "$LAUNCHER" != "download" -a "$LAUNCHER" != "update" ]; then
+    CDC_NO_RECURSE=1 "${SCRIPTPATH}/cdc-update"
+fi
 
-# Applications that have a root-running init command, either manually configured, or because of selected features, need to start as root and then drop priviledges,
-# this requires additional capabilities: CAP_SETUID and CAP_SETGID, so we only launch that way if necessay.
-
-#if [ -z "$INIT_COMMAND" -o "${RUN_MODE}" != "run" ]; then
-
-#    echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user "${CDC_USER}" ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${LAUNCHER_NAME}" "<launch command...>"
-
-#    echo "==== LAUNCH COMMAND ===="
-#    echo "${LAUNCH_SCRIPT}"
-#    echo "========"
-
-#    ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user "${CDC_USER}" ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${LAUNCHER_NAME}" bash -c "${LAUNCH_SCRIPT}" bash "$@"
-
-#else
-
-#    echo ${PRELAUNCHER} podman-compose  --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${LAUNCHER_NAME}" "<init and launch command...>"
-    # Check if we are meant to update before launching
-
-#    AUTO_UPDATE="$(echo "$PODMAN_CONFIG" | yq -r ".services.\"$LAUNCHER_NAME\".\"x-application\".\"auto-update\"")"
-#    if [ -z "$CDC_NO_RECURSE" -a -n "$AUTO_UPDATE" -a "$AUTO_UPDATE" != "null" -a "$LAUNCHER_NAME" != "update-check" -a "$LAUNCHER_NAME" != "download" -a "$LAUNCHER_NAME" != "update" ]; then
-#        CDC_NO_RECURSE=1 "$SCRIPTPATH/cdc-update"
-#    fi
-
-#    echo "==== INIT COMMAND ===="
-#    echo "${INIT_COMMAND}"
-#    echo "==== LAUNCH COMMAND ===="
-#    echo "${LAUNCH_SCRIPT}"
-#    echo "========"
-
-    # Note:
-    # The launch part of this command isn't trivial to parse:
-    # 1. The outermost execution takes the form: bash -c <command to run> bash <arguments>.
-    # 2. <command to run> first exectures the root part: ${INIT_COMMAND}, and drops priviliges using gosu by running: HOME=<homedir> gosu ${CDC_USER} "$@"
-    # 3. The commands executed by gosu "$@" are the complete list of arguments sent into the bash session, which is <arguments> in (1).
-    # 4. <arguments> has been given the form: bash -c "${LAUNCH_SCRIPT}" bash "$@", which thus executes another bash session with "${LAUNCH_SCRIPT}" where the arguments are the outermost "$@"
-#    ${PRELAUNCHER} podman-compose --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" "${RUN_MODE}" --user root ${PODMAN_RUN_ARGS[@]} $NAME_ARG "${LAUNCHER_NAME}" bash -c "${INIT_COMMAND} HOME='/home/$CDC_USER' exec gosu \"${CDC_USER}\" \"\$@\"" bash bash -c "${LAUNCH_SCRIPT}; exit \$?" bash "$@"
-
-#fi
-
-#echo ${PRELAUNCHER} podman-compose --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" up ${PODMAN_RUN_ARGS[@]} "${LAUNCHER_NAME}"
-
-
-if sort -CV <<< "1.0.6"$'\n'"$PODMAN_VERSION"; then
-    # Extract or guess podman-config:s container name
-    CONTAINER_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services[\"$USE_SERVICE\"].container_name // \"${APP}_${USE_SERVICE}_1\"")"
+# If the service is already running, get its CONTAINER_ID
+if sort -CV <<< "1.0.7"$'\n'"$PODMAN_VERSION"; then
+    # podman-compose 1.0.7 and forward has a 'stats' action that allows finding the CONTAINER_ID directly
+    CONTAINER_ID="$(podman-compose -p "${APP}" stats "${SERVICE}" --no-reset --no-stream --format '{{.ID}}')"
+else
+    # First extract or guess podman-config:s container name
+    CONTAINER_NAME="$(echo "$PODMAN_CONFIG" | yq -r ".services[\"$SERVICE\"].container_name // \"${APP}_${SERVICE}_1\"")"
+    # Then use podman directly to find the CONTAINER_ID
     CONTAINER_ID="$(podman inspect --format '{{.Id}}' "$CONTAINER_NAME" 2>/dev/null || true)"
-else
-    CONTAINER_ID="$(podman-compose -p "${APP}" stats "${USE_SERVICE}" --no-reset --no-stream --format '{{.ID}}')"
 fi
-
-#CONTAINER_ID=""
-echo "CONTAINER ID: $CONTAINER_ID"
 
 if [ -z "$CONTAINER_ID" ]; then
-    trap 'podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" down "${USE_SERVICE}"' exit
-    #echo podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" up -d ${PODMAN_RUN_ARGS[@]} "${USE_SERVICE}"
-    podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" up -d ${PODMAN_RUN_ARGS[@]} "${USE_SERVICE}"
-    podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" logs "${USE_SERVICE}"
+    trap 'podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" down "${SERVICE}" > /dev/null; rm -f "$ADJUSTMENT_FILE"' exit
+    if [ -n "$CDC_DEBUG" ]; then
+	echo podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up -d "${SERVICE}"
+    fi
+    CONTAINER_ID=$(podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up -d "${SERVICE}")
+    podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" logs "${SERVICE}"
+else
+    echo "Service already running with CONTAINER_ID: $CONTAINER_ID"
 fi
 
-${PRELAUNCHER} podman-compose -p "$APP" --env-file "${CDC_APP_PATH}/.env" ${NOPOD} -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${COMPOSE_PODMAN_ARGS[@]}" exec --user "${USER}" "${USE_SERVICE}" bash -c "${CDC_LAUNCH_SCRIPT}" bash "$@"
+if [ "$CDC_DEBUG" == 1 ]; then
+    echo ${PRELAUNCHER} podman-compose -p "$APP" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_EXEC_ARGS[@]}" exec "${PODMAN_COMPOSE_EXEC_POST_ARGS[@]}" --user "${USER}" "${SERVICE}" bash -c "${LAUNCH_SCRIPT}" bash "$@"
+fi
+    
+if [ "$TYPE" != "background" ]; then
+
+    ${PRELAUNCHER} podman-compose -p "$APP" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_EXEC_ARGS[@]}" exec "${PODMAN_COMPOSE_EXEC_POST_ARGS[@]}" --user "${USER}" "${SERVICE}" bash -c "${LAUNCH_SCRIPT}" bash "$@"
+
+else
+
+    ${PRELAUNCHER} podman-compose -p "$APP" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_EXEC_ARGS[@]}" exec "${PODMAN_COMPOSE_EXEC_POST_ARGS[@]}" --user "${USER}" "${SERVICE}" bash -c "${LAUNCH_SCRIPT}" bash "$@" </dev/null
+
+fi
