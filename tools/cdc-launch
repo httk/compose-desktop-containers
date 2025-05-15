@@ -114,7 +114,7 @@ function GET_FEATURE_ARG() {
     else
 	ARGNAME=""
     fi
-    ARG=$(yq -r ".\"x-launchers\".\"$LAUNCHER\".features[]? | select(type==\"object\") | select(has(\"$FEATURE\"))| .\"$FEATURE\"${ARGNAME}" <<< "$PODMAN_CONFIG")
+    ARG=$(yq -r ".services.\"$SERVICE\".\"x-features\"[]? | select(type==\"object\") | select(has(\"$FEATURE\"))| .\"$FEATURE\"${ARGNAME}" <<< "$PODMAN_CONFIG")
     if [ "$ARG" == "null" ]; then
        ARG=""
     fi
@@ -161,9 +161,9 @@ fi
 #    ADJUSTMENT_CAPS+=( "CAP_SETUID" "CAP_SETGID" )
 #fi
 
-if [ "$(yq ".\"x-launchers\".\"$LAUNCHER\".features" <<< "$PODMAN_CONFIG")" != "null" ]; then
+if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "null" ]; then
     # Loop over all featues that are strings or objects
-    for FEATURE in $(yq -r ".\"x-launchers\".\"$LAUNCHER\".features[]? | select(type==\"string\")" <<< "$PODMAN_CONFIG") $(yq -r ".services.\"${LAUNCHER}\".features[]? | select(type==\"object\") | keys[]?" <<< "$PODMAN_CONFIG"); do
+    for FEATURE in $(yq -r ".services.\"$SERVICE\".\"x-features\"[]? | select(type==\"string\")" <<< "$PODMAN_CONFIG") $(yq -r ".services.\"$SERVICE\".\"x-features\"[]? | select(type==\"object\") | keys[]?" <<< "$PODMAN_CONFIG"); do
 
 	echo "Enabling feature: $FEATURE"
 
@@ -397,7 +397,7 @@ fi
 if [ "$CDC_DEBUG" == 1 ]; then
     echo ${PRELAUNCHER} podman-compose -p "$APP" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_EXEC_ARGS[@]}" exec "${PODMAN_COMPOSE_EXEC_POST_ARGS[@]}" --user "${USER}" "${SERVICE}" bash -c "${LAUNCH_SCRIPT}" bash "$@"
 fi
-    
+
 if [ "$TYPE" != "background" ]; then
 
     ${PRELAUNCHER} podman-compose -p "$APP" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_EXEC_ARGS[@]}" exec "${PODMAN_COMPOSE_EXEC_POST_ARGS[@]}" --user "${USER}" "${SERVICE}" bash -c "${LAUNCH_SCRIPT}" bash "$@"

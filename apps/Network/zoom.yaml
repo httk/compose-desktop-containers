@@ -78,7 +78,7 @@ x-launchers:
   update-check:
     service: setup
     type: setup
-    script:
+    script: &update_check_script
       - echo "UPDATE CHECK"
       - mkdir -p Downloads
       - if [ -e Downloads/zoom_x86_64.tar.xz ]; then
@@ -113,10 +113,7 @@ x-launchers:
       - sed -i 's/^xwayland=.*$/xwayland=true/g' ~/.config/zoomus.conf
       - pipewire-pulse &
       - /opt/zoom/ZoomLauncher "$$@"
-    features:
-      - video
-      - sound
-      - x11
+
     desktop:
 
       file: |
@@ -138,25 +135,12 @@ x-launchers:
 
 
   zoom-force-wayland:
-    service: run
+    service: run-wayland
     type: background
     script:
       - echo "ZOOM (FORCE WAYLAND):" $${HOME}
       - sed -i 's/^xwayland=.*$/xwayland=false/g' ~/.config/zoomus.conf
       - /opt/zoom/ZoomLauncher "$$@"
-
-    features:
-      - video
-      - sound
-      - wayland
-      - dbus-proxy: --filter --own=org.kde.*
-
-      # I think this is meant to be enough, but I cannot get it to work
-      # --own=org.kde.StatusNotifierWatcher --own=org.kde.StatusNotifierItem --sloppy-names
-      # --talk=org.kde.StatusNotifierWatcher.* --talk=org.freedesktop.StatusNotifierWatcher.* --talk=org.freedesktop.Notifications.* --call=org.freedesktop.portal.*=* --broadcast=org.freedesktop.portal.*=@/org/freedesktop/portal/*
-      # --filter --call="org.freedesktop.portal.*=*" --talk=org.kde.StatusNotifierWatcher
-
-      # Empty x-launcher -> desktop to avoid desktop launcher
 
   interactive:
     service: run
@@ -167,8 +151,6 @@ x-launchers:
 
 
 services:
-
-  ## COMMON PART ##
 
   common: &common
 
@@ -204,7 +186,7 @@ services:
 
     shm_size: "1G"
 
-    volumes: &common-volumes
+    volumes:
       - "${CDC_APP_PATH}/home:/home/${USER}:rw"
 
     devices:
@@ -215,8 +197,6 @@ services:
 
     userns_mode: "keep-id"
 
-  ## SETUP ##
-
   setup:
     <<: *common
 
@@ -225,18 +205,7 @@ services:
   setup-nonet:
     <<: *common
 
-  reinstall:
-    <<: *common
-
-    network_mode: bridge
-
-    x-application:
-      launch-script: &reinstall_script
-    command:
-      - rm -rf ~/.local/share/zoom
-
-
-  ## EXECUTE ###
+    network_mode: none
 
   run:
     <<: *common
@@ -244,5 +213,31 @@ services:
     network_mode: bridge
 
     volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
       - "${CDC_APP_PATH}/home/.local/share/zoom/zoom:/opt/zoom:ro"
+
+    x-features:
+      - video
+      - sound
+      - x11
+
+  run-wayland:
+    <<: *common
+
+    network_mode: bridge
+
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+      - "${CDC_APP_PATH}/home/.local/share/zoom/zoom:/opt/zoom:ro"
+
+    x-features:
+      - video
+      - sound
+      - wayland
+      - dbus-proxy: --filter --own=org.kde.*
+
+      # I think this is meant to be enough, but I cannot get it to work
+      # --own=org.kde.StatusNotifierWatcher --own=org.kde.StatusNotifierItem --sloppy-names
+      # --talk=org.kde.StatusNotifierWatcher.* --talk=org.freedesktop.StatusNotifierWatcher.* --talk=org.freedesktop.Notifications.* --call=org.freedesktop.portal.*=* --broadcast=org.freedesktop.portal.*=@/org/freedesktop/portal/*
+      # --filter --call="org.freedesktop.portal.*=*" --talk=org.kde.StatusNotifierWatcher
 

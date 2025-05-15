@@ -94,8 +94,6 @@ x-launchers:
     script:
       - echo "Launching:\ ollama-serve"
       - OLLAMA_HOST=0.0.0.0:11434 ~/.local/share/ollama/bin/ollama serve
-    features:
-      - gpu
 
   ollama:
     service: run
@@ -171,3 +169,6 @@ services:
 
     ports:
       - "11434:11434"
+
+    features:
+      - gpu
