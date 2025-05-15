@@ -18,13 +18,153 @@ x-application:
     version: "3.8"
 
     services:
-      zoom:
+      run:
          volumes:
            - "${HOME}/Documents/containers/meetings:/home/${USER}/Documents/containers/meetings"
          working_dir: "/home/${USER}/Documents/containers/meetings"
 
   env-default: |
     # No configurable options
+
+x-launchers:
+  download:
+    service: setup
+    type: setup
+
+    # Zoom doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
+    script: &download_script
+      - echo "DOWNLOAD"
+      - mkdir -p Downloads
+      - curl -L -o Downloads/zoom_amd64.deb "https://zoom.us/client/latest/zoom_amd64.deb"
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
+      - rm -rf Downloads/zoom_amd64.deb
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - VERSION="$${1:-zoom_amd64.deb}";
+      - echo "INSTALL $$VERSION";
+      - mkdir -p ~/.local/share/icons/hicolor/256x256/apps/ &&
+        rm -rf ~/.local/share/zoom &&
+        mkdir ~/.local/share/zoom &&
+        cd ~/.local/share/zoom &&
+        mkdir tmp &&
+        cd tmp &&
+        ar x ~/Downloads/"$$VERSION" &&
+        tar -xf data.tar.xz &&
+        cp ./usr/share/pixmaps/Zoom.png ~/.local/share/icons/hicolor/256x256/apps/Zoom.png &&
+        mv ./opt/zoom .. &&
+        cd .. && rm -rf tmp &&
+        mkdir -p ~/.local/share/applications &&
+        echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/${USER}/.local/share/zoom/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
+        update-desktop-database ~/.local/share/applications/
+
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - VERSION="$${1:-zoom_amd64.deb}";
+      - echo "REINSTALL $$VERSION"
+      - rm -rf ~/.local/share/zoom
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE CHECK"
+      - mkdir -p Downloads
+      - if [ -e Downloads/zoom_x86_64.tar.xz ]; then
+          LASTMOD_LINE="$$(curl -sI -L "https://zoom.us/client/latest/zoom_x86_64.tar.xz" | grep -i '^last-modified:' | cut "-d:" -f2- | sed 's/^\s*\|\s$$//g')";
+          if [ -z "$$LASTMOD_LINE" ]; then
+            echo "Could not get last modified date";
+            exit 0;
+          fi;
+          REMOTE_TS="$$(date -d "${LASTMOD_LINE}" +%s)";
+          LOCAL_TS="$$(date -r "Downloads/zoom_x86_64.tar.xz" +%s)";
+          if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ]; then
+            echo "No new version";
+            exit 0;
+          fi;
+        fi;
+      - echo "File missing, or server-side file newer"
+      - exit 1
+
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - *redownload_script
+      - *reinstall_script
+
+  zoom:
+    service: run
+    type: background
+    script:
+      - echo "ZOOM:" $${HOME}
+      - sed -i 's/^xwayland=.*$/xwayland=true/g' ~/.config/zoomus.conf
+      - pipewire-pulse &
+      - /opt/zoom/ZoomLauncher "$$@"
+    features:
+      - video
+      - sound
+      - x11
+    desktop:
+
+      file: |
+        [Desktop Entry]
+        Name=Zoom (container)
+        StartupWMClass=zoom
+        Comment=Zoom Video Conference
+        Exec=zoom %U
+        Terminal=false
+        Type=Application
+        Icon=zoom
+        Categories=Network
+        MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;
+        X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall
+
+      icons:
+        - source: Zoom.png
+          dest: zoom.png
+
+
+  zoom-force-wayland:
+    service: run
+    type: background
+    script:
+      - echo "ZOOM (FORCE WAYLAND):" $${HOME}
+      - sed -i 's/^xwayland=.*$/xwayland=false/g' ~/.config/zoomus.conf
+      - /opt/zoom/ZoomLauncher "$$@"
+
+    features:
+      - video
+      - sound
+      - wayland
+      - dbus-proxy: --filter --own=org.kde.*
+
+      # I think this is meant to be enough, but I cannot get it to work
+      # --own=org.kde.StatusNotifierWatcher --own=org.kde.StatusNotifierItem --sloppy-names
+      # --talk=org.kde.StatusNotifierWatcher.* --talk=org.freedesktop.StatusNotifierWatcher.* --talk=org.freedesktop.Notifications.* --call=org.freedesktop.portal.*=* --broadcast=org.freedesktop.portal.*=@/org/freedesktop/portal/*
+      # --filter --call="org.freedesktop.portal.*=*" --talk=org.kde.StatusNotifierWatcher
+
+      # Empty x-launcher -> desktop to avoid desktop launcher
+
+  interactive:
+    service: run
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash
+
 
 services:
 
@@ -75,58 +215,15 @@ services:
 
     userns_mode: "keep-id"
 
-  ## DOWNLOAD ##
+  ## SETUP ##
 
-  download: &download
+  setup:
     <<: *common
 
     network_mode: bridge
 
-    # Zoom doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
-    x-application:
-      launch-script: &download_script
-        - echo "DOWNLOAD"
-        - mkdir -p Downloads
-        - curl -L -o Downloads/zoom_amd64.deb "https://zoom.us/client/latest/zoom_amd64.deb"
-
-
-  redownload:
+  setup-nonet:
     <<: *common
-
-    network_mode: bridge
-
-    command:
-      - echo "WHAT"
-
-    x-application:
-      launch-script: &redownload_script
-        - echo "REDOWNLOAD"
-        - rm -rf Downloads/zoom_amd64.deb
-        - *download_script
-
-  ## INSTALL ##
-
-  install: &install
-    <<: *common
-
-    x-application:
-      launch-script: &install_script
-        - VERSION="$${1:-zoom_amd64.deb}";
-        - echo "INSTALL $$VERSION";
-        - mkdir -p ~/.local/share/icons/hicolor/256x256/apps/ &&
-          rm -rf ~/.local/share/zoom &&
-          mkdir ~/.local/share/zoom &&
-          cd ~/.local/share/zoom &&
-          mkdir tmp &&
-          cd tmp &&
-          ar x ~/Downloads/"$$VERSION" &&
-          tar -xf data.tar.xz &&
-          cp ./usr/share/pixmaps/Zoom.png ~/.local/share/icons/hicolor/256x256/apps/Zoom.png &&
-          mv ./opt/zoom .. &&
-          cd .. && rm -rf tmp &&
-          mkdir -p ~/.local/share/applications &&
-          echo -e "[Desktop Entry]\nName=ZoomLauncher\nComment=Zoom Video Conference\nExec=/home/${USER}/.local/share/zoom/zoom/ZoomLauncher %U\nTerminal=false\nType=Application\nCategories=Network;\nMimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;\nX-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall\nName[en_US]=ZoomLauncher" > ~/.local/share/applications/ZoomLauncher.desktop &&
-          update-desktop-database ~/.local/share/applications/
 
   reinstall:
     <<: *common
@@ -135,130 +232,17 @@ services:
 
     x-application:
       launch-script: &reinstall_script
-        - VERSION="$${1:-zoom_amd64.deb}";
-        - echo "REINSTALL $$VERSION"
-        - rm -rf ~/.local/share/zoom
-        - *install_script
-
     command:
       - rm -rf ~/.local/share/zoom
 
-  ## UPDATE ##
-
-  update-check: &update-check
-    <<: *common
-
-    network_mode: bridge
-
-    command:
-      - echo "UPDATE CHECK"
-      - mkdir -p Downloads
-      - if [ -e Downloads/zoom_x86_64.tar.xz ]; then
-          LASTMOD_LINE="$$(curl -sI -L "https://zoom.us/client/latest/zoom_x86_64.tar.xz" | grep -i '^last-modified:' | cut "-d:" -f2- | sed 's/^\s*\|\s$$//g')";
-          if [ -z "$$LASTMOD_LINE" ]; then
-            echo "Could not get last modified date";
-            exit 0;
-          fi;
-          REMOTE_TS="$$(date -d "${LASTMOD_LINE}" +%s)";
-          LOCAL_TS="$$(date -r "Downloads/zoom_x86_64.tar.xz" +%s)";
-          if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ]; then
-            echo "No new version";
-            exit 0;
-          fi;
-        fi;
-      - echo "File missing, or server-side file newer"
-      - exit 1
-
-  update:
-    <<: *common
-
-    network_mode: bridge
-
-    x-application:
-      launch-script:
-        - echo "UPDATE"
-        - *redownload_script
-        - *reinstall_script
 
   ## EXECUTE ###
 
-  zoom: &zoom
+  run:
     <<: *common
 
     network_mode: bridge
 
     volumes:
       - "${CDC_APP_PATH}/home/.local/share/zoom/zoom:/opt/zoom:ro"
-
-    x-application:
-      launch-script:
-        - echo "ZOOM:" $${HOME}
-        - sed -i 's/^xwayland=.*$/xwayland=true/g' ~/.config/zoomus.conf
-        - pipewire-pulse &
-        - /opt/zoom/ZoomLauncher "$$@"
-
-      features:
-        - video
-        - sound
-        - x11
-
-      desktop:
-
-        file: |
-          [Desktop Entry]
-          Name=Zoom (container)
-          StartupWMClass=zoom
-          Comment=Zoom Video Conference
-          Exec=zoom %U
-          Terminal=false
-          Type=Application
-          Icon=zoom
-          Categories=Network
-          MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;
-          X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall
-
-        icons:
-          - source: Zoom.png
-            dest: zoom.png
-
-
-  zoom-force-wayland: &zoom-force-wayland
-    <<: *zoom
-
-    x-application:
-      features:
-        - video
-        - sound
-        - wayland
-        - dbus-proxy: --filter --own=org.kde.*
-
-      # I think this is meant to be enough, but I cannot get it to work
-      # --own=org.kde.StatusNotifierWatcher --own=org.kde.StatusNotifierItem --sloppy-names
-      # --talk=org.kde.StatusNotifierWatcher.* --talk=org.freedesktop.StatusNotifierWatcher.* --talk=org.freedesktop.Notifications.* --call=org.freedesktop.portal.*=* --broadcast=org.freedesktop.portal.*=@/org/freedesktop/portal/*
-      # --filter --call="org.freedesktop.portal.*=*" --talk=org.kde.StatusNotifierWatcher
-
-      # Empty x-launcher -> desktop to avoid desktop launcher
-      desktop:
-
-    launcher:
-      - echo "ZOOM (FORCE WAYLAND):" $${HOME}
-      - sed -i 's/^xwayland=.*$/xwayland=false/g' ~/.config/zoomus.conf
-      - /opt/zoom/ZoomLauncher "$$@"
-
-      # Pipewire-pulse not needed, because we can now access pipewire-pulse via dbus (I think)
-      #- pipewire-pulse &
-
-
-  ## INTERACTIVE ##
-
-  interactive:
-    <<: *common
-
-    x-application:
-      use_service: zoom
-      interactive: true
-
-      launch-script:
-        - echo "INTERACTIVE"
-        - bash
 

@@ -9,7 +9,7 @@ x-application:
 
     > screen -dm -- ./ollama-serve
     > curl http://localhost:11434/api/generate -d '{ "model": "", "prompt": "How are you today?"}'
-    
+
   override-default: |
     version: "3.8"
 
@@ -34,7 +34,7 @@ x-launchers:
 
   redownload:
     service: setup
-    type: setup    
+    type: setup
     script: &redownload_script
       - echo "REDOWNLOAD"
       - mkdir -p Downloads
@@ -46,7 +46,7 @@ x-launchers:
 
   install:
     service: setup-nonet
-    type: setup    
+    type: setup
     script: &install_script
       - VERSION="$${1:-ollama-linux-amd64-latest.tgz}";
       - echo "INSTALL $$VERSION";
@@ -59,7 +59,7 @@ x-launchers:
 
   reinstall:
     service: setup-nonet
-    type: setup    
+    type: setup
     script: &reinstall_script
       - VERSION="$${1:-ollama-linux-amd64-latest.tgz}"
       - echo "REINSTALL $$VERSION"
@@ -68,7 +68,7 @@ x-launchers:
 
   update-check:
     service: setup
-    type: setup    
+    type: setup
     script:
       - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.name')"
       - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
@@ -82,7 +82,7 @@ x-launchers:
 
   update:
     service: setup
-    type: setup    
+    type: setup
     script:
       - echo "UPDATE"
       - *redownload_script
