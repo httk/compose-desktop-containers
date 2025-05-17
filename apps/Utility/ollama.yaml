@@ -37,11 +37,8 @@ x-launchers:
     type: setup
     script: &redownload_script
       - echo "REDOWNLOAD"
-      - mkdir -p Downloads
-      - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.name')"
-      - LATESTURL="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep ollama-linux-amd64.tgz)"
-      - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
-      - rm -rf "Downloads/$$LATESTFILENAME" Downloads/ollama-linux-amd64-latest.tgz
+      - rm -f "$$(readlink -f Downloads/ollama-linux-amd64-latest.tgz)"
+      - rm -f Downloads/ollama-linux-amd64-latest.tgz
       - *download_script
 
   install:

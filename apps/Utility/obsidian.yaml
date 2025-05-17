@@ -8,21 +8,125 @@ x-application:
   config-default: |
     version: "3.8"
 
-    # This container has no configurable options
+    services:
+      run:
+         volumes:
+           - "${HOME}/Documents/containers/notes:/home/${USER}/Documents/containers/notes"
+         working_dir: "/home/${USER}/Documents/containers/notes"
 
   images:
     u24:
       pkgs:
         - texlive-latex-base
         - texlive-latex-extra
+	- texlive-luatex
+
+
+x-launchers:
+  download:
+    service: setup
+    type: setup
+
+    # Zoom doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
+    script: &download_script
+      - echo "DOWNLOAD"
+      - mkdir -p Downloads
+      - LATESTURL="$$(curl -L 'https://obsidian.md/download' | sed -n 's|^.*"\(https://.*/obsidian_[0-9.]\+_amd64\.deb\)".*$$|\1|p')"
+      - LATESTFILENAME="$${LATESTURL##*/}"
+      - if [ -z "$$LATESTFILENAME" ]; then
+          echo "Failed to determine latest version.";
+          exit 1;
+        fi
+      - echo curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/obsidian_latest_amd64.deb
+      - curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/obsidian_latest_amd64.deb
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
+      - rm -f "$$(readlink -f Downloads/obsidian_latest_amd64.deb)"
+      - rm -f Downloads/obsidian_latest_amd64.deb
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - VERSION="$${1:-obsidian_latest_amd64.deb}";
+      - echo "INSTALL $$VERSION";
+      - rm -rf ~/.local/share/obsidian &&
+        mkdir ~/.local/share/obsidian &&
+        cd ~/.local/share/obsidian &&
+        dpkg-deb -x ~/Downloads/"$$VERSION" obsidian &&
+        mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps/ &&
+        cp obsidian/usr/share/applications/obsidian.desktop ~/.local/share/applications/obsidian.desktop &&
+        sed -i 's%^Exec=.*%Exec=/home/${USER}/obsidian/obsidian/opt/Obsidian/%' ~/.local/share/applications/obsidian.desktop ~/.local/share/applications/obsidian.desktop &&
+        cp obsidian/usr/share/icons/hicolor/256x256/apps/obsidian.png ~/.local/share/icons/hicolor/256x256/apps/.
+
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - echo "REINSTALL"
+      - rm -rf ~/.local/share/obsidian
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
+      - echo "UPDATE CHECK"
+      - mkdir -p Downloads
+      - LATESTURL="$$(curl -L 'https://obsidian.md/download' | sed -n 's|^.*"\(https://.*/obsidian_[0-9.]\+_amd64\.deb\)".*$$|\1|p')"
+      - LATESTFILENAME="$${LATESTURL##*/}"
+      - if [ -e "Downloads/$$LATESTFILENAME" ]; then
+          echo "No new version";
+          exit 0;
+        fi;
+      - echo "File missing, or server-side file newer"
+      - exit 1
+
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - *download_script
+      - *reinstall_script
+
+  obsidian:
+    service: run
+    type: background
+    script:
+      - echo "OBSIDIAN";
+      - LD_LIBRARY_PATH=~/.local/share/obsidian/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian $${CDC_OZONE_FLAGS} "$$@"
+
+    desktop:
+
+      file: |
+        [Desktop Entry]
+        Name=Obsidian (container)
+        StartupWMClass=obsidian
+        Comment=Personal knowledge base and note-taking software application.
+        Exec=obsidian %U
+        Terminal=false
+        Type=Application
+        Icon=obsidian
+        Categories=Utility;
+
+      icons:
+        - source: obsidian.png
+          dest: obsidian.png
 
 services:
-
-  ## COMMON PART ##
 
   common: &common
 
     image: "cdc-u24"
+
+    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    network_mode: none
 
     working_dir: /home/$USER
     user: "${USER}"
@@ -31,9 +135,11 @@ services:
       LANG: "${LANG}"
       XDG_RUNTIME_DIR: "/tmp/${USER}/run"
       XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
 
     cap_drop:
       - ALL
+
     cap_add:
       - SYS_CHROOT
 
@@ -47,8 +153,8 @@ services:
 
     shm_size: "1G"
 
-    volumes: &common-volumes
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
 
     devices:
       - "/dev/dri:/dev/dri"
@@ -58,131 +164,25 @@ services:
 
     userns_mode: "keep-id"
 
+  setup:
+    <<: *common
+
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
     network_mode: none
 
-
-  ## INSTALL ##
-
-  download: &download
+  run:
     <<: *common
 
     network_mode: bridge
 
-    environment:
-      <<: *common-env
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+      - "${CDC_APP_PATH}/home/.local/share/zoom/zoom:/opt/zoom:ro"
 
-    command:
-      - echo "DOWNLOAD"
-      - mkdir -p Downloads
-      - LATESTURL="$$(curl -L 'https://obsidian.md/download' | sed -n 's|^.*"\(https://.*/obsidian_[0-9.]\+_amd64\.deb\)".*$$|\1|p')"
-      - LATESTFILENAME="$${LATESTURL##*/}"
-      - if [ -z "$$LATESTFILENAME" ]; then
-          echo "Failed to determine latest version.";
-          exit 1;
-        fi
-      - echo curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/obsidian_latest_amd64.deb
-      - curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/obsidian_latest_amd64.deb
-
-  download-clean:
-    <<: *common
-
-    command:
-      - echo "DOWNLOAD CLEAN"
-      - rm -f "$$(readlink -f Downloads/obsidian_latest_amd64.deb)"
-      - rm -f Downloads/obsidian_latest_amd64.deb
-
-
-  install: &install
-    <<: *common
-
-    command:
-      - VERSION="$${1:-obsidian_latest_amd64.deb}";
-      - echo "INSTALL $$VERSION";
-      - rm -rf ~/.local/share/obsidian &&
-        mkdir ~/.local/share/obsidian &&
-        cd ~/.local/share/obsidian &&
-        dpkg-deb -x ~/Downloads/"$$VERSION" obsidian &&
-        mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps/ &&
-        cp obsidian/usr/share/applications/obsidian.desktop ~/.local/share/applications/obsidian.desktop &&
-        sed -i 's%^Exec=.*%Exec=/home/${USER}/obsidian/obsidian/opt/Obsidian/%' ~/.local/share/applications/obsidian.desktop ~/.local/share/applications/obsidian.desktop &&
-        cp obsidian/usr/share/icons/hicolor/256x256/apps/obsidian.png ~/.local/share/icons/hicolor/256x256/apps/.
-
-  install-clean:
-    <<: *common
-
-    command:
-      - rm -rf ~/.local/share/obsidian
-
-  ## UPDATE ##
-
-  update-check: &update-check
-    <<: *common
-
-    network_mode: bridge
-
-    command:
-      - echo "UPDATE CHECK"
-      - mkdir -p Downloads
-      - LATESTURL="$$(curl -L 'https://obsidian.md/download' | sed -n 's|^.*"\(https://.*/obsidian_[0-9.]\+_amd64\.deb\)".*$$|\1|p')"
-      - LATESTFILENAME="$${LATESTURL##*/}"
-      - if [ -e "Downloads/$$LATESTFILENAME" ]; then
-          echo "No new version";
-          exit 0;
-        fi;
-      - echo "File missing, or server-side file newer"
-      - exit 1
-
-  update: &update
-    <<: *install
-
-
-  ## EXECUTE ###
-
-  obsidian:
-    <<: *common
-
-    container_name: cdc_obsidian_obsidian
-
-    network_mode: bridge
-
-    x-app-features:
+    x-features:
+      - dri
       - wayland-fallback-x11
-
-    command:
-      - echo "OBSIDIAN";
-      - if [ -n "$WAYLAND_DISPLAY" ]; then
-           LD_LIBRARY_PATH=~/.local/share/obsidian/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian --ozone-platform=wayland --ozone-platform-hint=auto --enable-features=UseOzonePlatform,WaylandWindowDecorations "$$@"
-        else
-           LD_LIBRARY_PATH=~/.local/share/obsidian/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian "$$@"
-        fi
-
-    x-launcher:
-
-      desktop:
-
-        file: |
-          [Desktop Entry]
-          Name=Obsidian (container)
-          StartupWMClass=obsidian
-          Comment=Personal knowledge base and note-taking software application.
-          Exec=obsidian %U
-          Terminal=false
-          Type=Application
-          Icon=obsidian
-          Categories=Utility;
-
-        icons:
-          - source: obsidian.png
-            dest: obsidian.png
-
-  ## INTERACTIVE ##
-
-  interactive:
-    <<: *common
-
-    x-app-features:
-      - wayland-fallback-x11
-
-    command:
-      - echo "INTERACTIVE"
-      - bash

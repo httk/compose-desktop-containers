@@ -78,3 +78,4 @@ yad
 pre-commit
 icoutils
 imagemagick
+ocl-icd-libopencl1

@@ -80,6 +80,34 @@ RUN apt-get clean autoclean -y && apt-get autoremove -y && rm -rf /var/tmp/* && 
 $COMMANDS_LINES
 EOF
 
+# Test for NVIDIA GPU
+if command -v nvidia-smi 2>/dev/null; then
+    cat >> ./Containerfile <<EOF
+EOF
+fi
+
+# Test for intel GPU
+if [ "1" == "0" ]; then
+    cat >> ./Containerfile <<EOF
+RUN mkdir -p /tmp/gpu && \
+ cd /tmp/gpu && \
+ wget https://github.com/oneapi-src/level-zero/releases/download/v1.21.9/level-zero_1.21.9+u24.04_amd64.deb && \
+ wget https://github.com/intel/intel-graphics-compiler/releases/download/v2.8.3/intel-igc-core-2_2.8.3+18762_amd64.deb && \
+ wget https://github.com/intel/intel-graphics-compiler/releases/download/v2.8.3/intel-igc-opencl-2_2.8.3+18762_amd64.deb && \
+ wget https://github.com/intel/compute-runtime/releases/download/25.09.32961.7/intel-level-zero-gpu_1.6.32961.7_amd64.deb && \
+ wget https://github.com/intel/compute-runtime/releases/download/25.09.32961.7/intel-opencl-icd_25.09.32961.7_amd64.deb && \
+ wget https://github.com/intel/compute-runtime/releases/download/25.09.32961.7/libigdgmm12_22.6.0_amd64.deb && \
+ dpkg -i *.deb && \
+ rm *.deb
+EOF
+fi
+
+# Test for AMD GPU
+if [ "1" == "0" ]; then
+    cat >> ./Containerfile <<EOF
+EOF
+fi
+
 LOCALTIME=$(readlink /etc/localtime)
 if [ -n "$LOCALTIME" ]; then
     TZ_LOCATION="${LOCALTIME##*/}"
@@ -124,4 +152,4 @@ EOF
 podman build -t cdc-u24 --label=wrap .
 podman image prune -f --filter label=wrap
 
-podman run --rm -w "/home/$USER" --user="$USER" --shm-size=512M --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
+podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
