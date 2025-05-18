@@ -19,7 +19,7 @@ x-application:
       pkgs:
         - texlive-latex-base
         - texlive-latex-extra
-	- texlive-luatex
+        - texlive-luatex
 
 
 x-launchers:
