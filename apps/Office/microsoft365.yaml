@@ -9,27 +9,114 @@ x-application:
   override-default: |
     version: "3.8"
 
+    services:
+      run:
+         volumes:
+           - "${HOME}/Documents/containers/meetings:/home/${USER}/Documents/containers/meetings"
+         working_dir: "/home/${USER}/Documents/containers/meetings"
+
   env-default: |
     # This container has no configurable options
 
-  global-launcher:
-    name: microsoft365
-    default-action: tray
+
+x-launchers:
+
+  download:
+    service: setup
+    type: setup
+
+    # Zoom doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
+    script: &download_script
+      - echo "DOWNLOAD"
+      - echo "***********************************************************"
+      - echo "Running chrome, please navigate to the microsoft 365 apps"
+      - echo "and use the 'install' icon in the navigator field for:"
+      - echo "- OneDrive"
+      - echo "- Teams"
+      - echo "- Outlook"
+      - echo "- Forms"
+      - echo "The easiest way to trigger the install icon is to"
+      - echo "go via the '9-dots-menu' to these applications."
+      - echo "***********************************************************"
+
+      - yad --width=600 --text-width=600 --on-top --center --button=Close --title "Download Microsoft 365 apps" --info --text "We need to \"download\" the Microsoft 365 progressive web applications (PWA).\n\nGoogle Chrome will now start, please use the browser window to navigate to the respective Microsoft 365 app (preferably using the \"9-dots-menu\"). When viewing the app, there should appear an 'install' icon in the browser navigator field. Click on this icon to download the PWA.\n\nPlease follow the above instuctions to download/install:\n\n- OneDrive\n- Microsoft Teams\n- Outlook\n- Forms"
+      - echo google-chrome $${CDC_OZONE_FLAG} 'https://www.microsoft365.com/'
+      - google-chrome $${CDC_OZONE_FLAG} 'https://www.microsoft365.com/'
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - echo "INSTALL"
+      - mkdir -p ~/.local/share/microsoft365
+      - for APPNAME in "Microsoft Teams|msteams" "Microsoft OneDrive|onedrive" "Outlook (PWA)|outlook" "Microsoft Forms|msforms"; do
+          APP_FULL_NAME=$${APPNAME%|*};
+          DESKTOP_FILE="$$(find ~/.local/share/applications/ -name "*.desktop" | xargs grep -l "^Name=$${APP_FULL_NAME}$$")";
+          if [ -n "$$DESKTOP_FILE" ]; then
+            DESKTOP_FILE_NAME=$$(basename $$DESKTOP_FILE .desktop);
+            COMMAND=$$(awk -FExec= '/^Exec=/{print $2; exit}' "$$DESKTOP_FILE");
+            CHROMIUM_APP_ID="$${DESKTOP_FILE_NAME%*-Default}";
+            CHROMIUM_APP_ID="$${CHROMIUM_APP_ID##chrome-}";
+            echo "Chromium app ID for $$APP_FULL_NAME is $$CHROMIUM_APP_ID";
+            echo -e "#!/bin/bash\nexec $${COMMAND} \"\$$@\" \n" > ~/.local/share/microsoft365/$${APPNAME#*|}.sh;
+            chmod +x ~/.local/share/microsoft365/$${APPNAME#*|}.sh;
+            echo -n "$$CHROMIUM_APP_ID" > ~/.local/share/microsoft365/$${APPNAME#*|}.appid;
+            echo -n "crx_$$CHROMIUM_APP_ID" > ~/.local/share/microsoft365/$${APPNAME#*|}.wmclass;
+            cp ~/.local/share/icons/hicolor/256x256/apps/"chrome-$${CHROMIUM_APP_ID}-Default.png" ~/.local/share/icons/hicolor/256x256/apps/$${APPNAME#*|}.png;
+          else
+            echo "Warning, $${APPNAME_FULL_NAME} does not seem to be downloaded and will thus not be installed, re-run the download step and retry.";
+          fi;
+        done
+
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - rm -rf ~/.local/share/microsoft365
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
+      - echo "UPDATE CHECK"
+      - echo "Progressive web app: updates are automatic"
+      - exit 0
+
+  update:
+    service: setup
+    type: setup
+    prelaunchers:
+      - redownload
+      - reinstall
+    script:
+      - echo "UPDATE"
+
+  microsoft365:
+    type: tray
+
     tray:
       icon: microsoft365
       entries:
         - name: "Teams"
-          wmclass-file: install/microsoft365/msteams.wmclass
+          wmclass-file: ~/.local/share/microsoft365/msteams.wmclass
           launch: msteams
         - name: "OneDrive"
-          wmclass-file: install/microsoft365/onedrive.wmclass
+          wmclass-file: ~/.local/share/microsoft365/onedrive.wmclass
           launch: onedrive
         - name: "Outlook"
-          wmclass-file: install/microsoft365/outlook.wmclass
+          wmclass-file: ~/.local/share/microsoft365/outlook.wmclass
           launch: outlook
         - name: "Forms"
-          wmclass-file: install/microsoft365/msforms.wmclass
+          wmclass-file: ~/.local/share/microsoft365/msforms.wmclass
           launch: msforms
+
     desktop:
       file: |
         [Desktop Entry]
@@ -46,13 +133,161 @@ x-application:
         - source: outlook.png
           dest: microsoft365.png
 
-services:
+  msteams:
+    service: run-msteams
+    type: background
 
-  ## COMMON PART ##
+    script:
+      - echo "MSTEAMS"
+      - if [ ! -e ~/.local/share/microsoft365/msteams.sh ]; then
+          echo "MS Teams is not installed, please re-run installation.";
+          exit 0;
+        fi
+      - pipewire-pulse &
+      - exec ~/.local/share/microsoft365/msteams.sh $${CDC_OZONE_FLAG} "$$@"
+
+    desktop:
+      file: |
+        [Desktop Entry]
+        Name=Microsoft Teams (container)
+        Comment=Microsoft Teams
+        GenericName=Internet Messenger
+        StartupWMClass=msteams
+        Exec=msteams
+        Icon=msteams
+        Type=Application
+        Categories=Network;InstantMessaging;
+        Path=/usr/bin
+
+      wmclass-file: install/microsoft365/msteams.wmclass
+
+      icons:
+        - source: msteams.png
+          dest: msteams.png
+
+
+  onedrive:
+    service: run-onedrive
+    type: background
+
+    script:
+      - echo "ONEDRIVE"
+      - if [ ! -e install/microsoft365/onedrive.sh ]; then
+          echo "OneDrive is not installed, please re-run installation.";
+          exit 0;
+        fi
+      - exec install/microsoft365/onedrive.sh $${CDC_OZONE_FLAG} "$$@"
+
+    desktop:
+      file: |
+        [Desktop Entry]
+        Name=Microsoft OneDrive (container)
+        StartupWMClass=onedrive
+        Comment=Microsoft OneDrive
+        GenericName=Cloud file tool
+        Exec=onedrive
+        Icon=onedrive
+        Type=Application
+        Categories=Network;
+        Path=/usr/bin
+
+      wmclass-file: install/microsoft365/onedrive.wmclass
+
+      icons:
+        - source: onedrive.png
+          dest: onedrive.png
+
+  outlook:
+    service: run-outlook
+    type: background
+
+    script:
+      - echo "OUTLOOK"
+      - if [ ! -e install/microsoft365/outlook.sh ]; then
+          echo "Outlook is not installed, please re-run installation.";
+          exit 0;
+        fi
+      - exec install/microsoft365/outlook.sh $${CDC_OZONE_FLAG} "$$@"
+
+    desktop:
+      file: |
+        [Desktop Entry]
+        Name=Outlook (PWA) (container)
+        Comment=Microsoft Outlook
+        GenericName=Email and calendar
+        StartupWMClass=outlook
+        Exec=outlook
+        Icon=outlook
+        Type=Application
+        Categories=Office;
+        Path=/usr/bin
+        MimeType=x-scheme-handler/mailto;
+        Actions=New-event;New-message;Open-calendar
+
+        [Desktop Action New-event]
+        Name=New event
+        Exec=outlook --app-launch-url-for-shortcuts-menu-item=https://outlook.office.com/calendar/deeplink/compose
+
+        [Desktop Action New-message]
+        Name=New message
+        Exec=outlook --app-launch-url-for-shortcuts-menu-item=https://outlook.office.com/mail/deeplink/compose
+
+        [Desktop Action Open-calendar]
+        Name=Open calendar
+        Exec=outlook --app-launch-url-for-shortcuts-menu-item=https://outlook.office.com/calendar
+
+      wmclass-file: install/microsoft365/outlook.wmclass
+
+      icons:
+        - source: outlook.png
+          dest: outlook.png
+
+  msforms:
+    service: run-msforms
+    type: background
+
+    script:
+      - echo "MSFORMS"
+      - if [ ! -e install/microsoft365/msforms.sh ]; then
+          echo "Forms is not installed, please re-run installation.";
+          exit 0;
+        fi
+      - exec install/microsoft365/msforms.sh $${CDC_OZONE_FLAG} "$$@"
+
+    desktop:
+      file: |
+        [Desktop Entry]
+        Name=Microsoft Forms (container)
+        Comment=Tool to create online surveys, forms, polls and quizzies
+        GenericName=Form tool
+        StartupWMClass=msforms
+        Exec=msforms
+        Icon=msforms
+        Type=Application
+        Categories=Network;
+        Path=/usr/bin
+
+      wmclass-file: install/microsoft365/msforms.wmclass
+
+      icons:
+        - source: msforms.png
+          dest: msforms.png
+
+
+  interactive:
+    service: run-msteams
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash "$$@"
+
+
+services:
 
   common: &common
 
     image: "cdc-u24"
+    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
 
     working_dir: /home/$USER
     user: "${USER}"
@@ -61,6 +296,7 @@ services:
       LANG: "${LANG}"
       XDG_RUNTIME_DIR: "/tmp/${USER}/run"
       XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
 
     cap_drop:
       - ALL
@@ -79,7 +315,7 @@ services:
     shm_size: "1G"
 
     volumes:
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
 
     userns_mode: "keep-id"
 
@@ -88,278 +324,50 @@ services:
     devices:
       - "/dev/dri:/dev/dri"
 
-  ## INSTALL ##
+    volumes:
 
-  download: &download
+  setup:
+    <<: *common
+
+    network_mode: bridge
+    features:
+      - wayland-fallback-x11
+
+  setup-nonet:
+    <<: *common
+
+    network_mode: none
+
+  run-msteams:
     <<: *common
 
     network_mode: bridge
 
-    x-app-launcher:
-      features:
-        - wayland-fallback-x11
+    x-features:
+      - video
+      - sound
+      - x11
 
-    command:
-      - echo "DOWNLOAD"
-      - mkdir -p ~/install/microsoft365
-      - echo "***********************************************************"
-      - echo "Running chrome, please navigate to the microsoft 365 apps"
-      - echo "and use the 'install' icon in the navigator field for:"
-      - echo "- OneDrive"
-      - echo "- Teams"
-      - echo "- Outlook"
-      - echo "- Forms"
-      - echo "The easiest way to trigger the install icon is to"
-      - echo "go via the '9-dots-menu' to these applications."
-      - echo "***********************************************************"
-
-      - yad --width=600 --text-width=600 --on-top --center --button=Close --title "Download Microsoft 365 apps" --info --text "We need to \"download\" the Microsoft 365 progressive web applications (PWA).\n\nGoogle Chrome will now start, please use the browser window to navigate to the respective Microsoft 365 app (preferably using the \"9-dots-menu\"). When viewing the app, there should appear an 'install' icon in the browser navigator field. Click on this icon to download the PWA.\n\nPlease follow the above instuctions to download/install:\n\n- OneDrive\n- Microsoft Teams\n- Outlook\n- Forms"
-      - echo google-chrome $${CDC_OZONE_FLAG} 'https://www.microsoft365.com/'
-      - google-chrome $${CDC_OZONE_FLAG} 'https://www.microsoft365.com/'
-
-    x-app-launcher:
-
-      features:
-        - wayland-fallback-x11
-
-  install: &install
-    <<: *common
-
-    command:
-      - echo "INSTALL"
-      - for APPNAME in "Microsoft Teams|msteams" "Microsoft OneDrive|onedrive" "Outlook (PWA)|outlook" "Microsoft Forms|msforms"; do
-          APP_FULL_NAME=$${APPNAME%|*};
-          DESKTOP_FILE="$$(find ~/.local/share/applications/ -name "*.desktop" | xargs grep -l "^Name=$${APP_FULL_NAME}$$")";
-          if [ -n "$$DESKTOP_FILE" ]; then
-            DESKTOP_FILE_NAME=$$(basename $$DESKTOP_FILE .desktop);
-            COMMAND=$$(awk -FExec= '/^Exec=/{print $2; exit}' "$$DESKTOP_FILE");
-            CHROMIUM_APP_ID="$${DESKTOP_FILE_NAME%*-Default}";
-            CHROMIUM_APP_ID="$${CHROMIUM_APP_ID##chrome-}";
-            echo "Chromium app ID for $$APP_FULL_NAME is $$CHROMIUM_APP_ID";
-            echo -e "#!/bin/bash\nexec $${COMMAND} \"\$$@\" \n" > ~/install/microsoft365/$${APPNAME#*|}.sh;
-            chmod +x ~/install/microsoft365/$${APPNAME#*|}.sh;
-            echo -n "$$CHROMIUM_APP_ID" > ~/install/microsoft365/$${APPNAME#*|}.appid;
-            echo -n "crx_$$CHROMIUM_APP_ID" > ~/install/microsoft365/$${APPNAME#*|}.wmclass;
-            cp ~/.local/share/icons/hicolor/256x256/apps/"chrome-$${CHROMIUM_APP_ID}-Default.png" ~/.local/share/icons/hicolor/256x256/apps/$${APPNAME#*|}.png;
-          else
-            echo "Warning, $${APPNAME_FULL_NAME} does not seem to be downloaded and will thus not be installed, re-run the download step and retry.";
-          fi;
-        done
-
-  ## UPDATE ##
-
-  update-check: &update-check
-    <<: *common
-
-    command:
-      - echo "UPDATE CHECK"
-      - echo "Progressive web app: updates are automatic" "$$@"
-      - exit 0
-
-  update: &update
-    <<: *install
-
-
-  ## EXECUTE ###
-
-  msteams:
+  run-onedrive:
     <<: *common
 
     network_mode: bridge
 
-    command:
-      - echo "MSTEAMS"
-      - if [ ! -e install/microsoft365/msteams.sh ]; then
-          echo "MS Teams is not installed, please re-run installation.";
-          exit 0;
-        fi
-      - pipewire-pulse &
-      - echo "== LAUNCHER:"
-      - cat install/microsoft365/msteams.sh
-      - echo EXECUTING install/microsoft365/msteams.sh $${CDC_OZONE_FLAG} "$$@"
-      - exec install/microsoft365/msteams.sh $${CDC_OZONE_FLAG} "$$@"
+    x-features:
+      - x11
 
-    x-app-launcher:
-
-      container_name: cdc_microsoft365
-
-      features:
-        - video
-        - sound
-        - x11
-        - dri-full
-
-      desktop:
-        file: |
-          [Desktop Entry]
-          Name=Microsoft Teams (container)
-          Comment=Microsoft Teams
-          GenericName=Internet Messenger
-          StartupWMClass=msteams
-          Exec=msteams
-          Icon=msteams
-          Type=Application
-          Categories=Network;InstantMessaging;
-          Path=/usr/bin
-
-        wmclass-file: install/microsoft365/msteams.wmclass
-
-        icons:
-          - source: msteams.png
-            dest: msteams.png
-
-  onedrive:
+  run-outlook:
     <<: *common
 
     network_mode: bridge
 
-    command:
-      - echo "ONEDRIVE"
-      - if [ ! -e install/microsoft365/onedrive.sh ]; then
-          echo "OneDrive is not installed, please re-run installation.";
-          exit 0;
-        fi
-      - exec install/microsoft365/onedrive.sh $${CDC_OZONE_FLAG} "$$@"
+    x-features:
+      - x11
 
-    x-app-launcher:
-
-      container_name: cdc_microsoft365
-
-      features:
-        - x11
-        - dri-full
-
-      desktop:
-        file: |
-          [Desktop Entry]
-          Name=Microsoft OneDrive (container)
-          StartupWMClass=onedrive
-          Comment=Microsoft OneDrive
-          GenericName=Cloud file tool
-          Exec=onedrive
-          Icon=onedrive
-          Type=Application
-          Categories=Network;
-          Path=/usr/bin
-
-        wmclass-file: install/microsoft365/onedrive.wmclass
-
-        icons:
-          - source: onedrive.png
-            dest: onedrive.png
-
-  outlook:
+  run-forms:
     <<: *common
 
     network_mode: bridge
 
-    command:
-      - echo "OUTLOOK"
-      - if [ ! -e install/microsoft365/outlook.sh ]; then
-          echo "Outlook is not installed, please re-run installation.";
-          exit 0;
-        fi
-      - exec install/microsoft365/outlook.sh $${CDC_OZONE_FLAG} "$$@"
-
-    x-app-launcher:
-
-      features:
-        - x11
-        - dri-full
-
-      container_name: cdc_microsoft365
-
-      desktop:
-        file: |
-          [Desktop Entry]
-          Name=Outlook (PWA) (container)
-          Comment=Microsoft Outlook
-          GenericName=Email and calendar
-          StartupWMClass=outlook
-          Exec=outlook
-          Icon=outlook
-          Type=Application
-          Categories=Office;
-          Path=/usr/bin
-          MimeType=x-scheme-handler/mailto;
-          Actions=New-event;New-message;Open-calendar
-
-          [Desktop Action New-event]
-          Name=New event
-          Exec=outlook --app-launch-url-for-shortcuts-menu-item=https://outlook.office.com/calendar/deeplink/compose
-
-          [Desktop Action New-message]
-          Name=New message
-          Exec=outlook --app-launch-url-for-shortcuts-menu-item=https://outlook.office.com/mail/deeplink/compose
-
-          [Desktop Action Open-calendar]
-          Name=Open calendar
-          Exec=outlook --app-launch-url-for-shortcuts-menu-item=https://outlook.office.com/calendar
-
-        wmclass-file: install/microsoft365/outlook.wmclass
-
-        icons:
-          - source: outlook.png
-            dest: outlook.png
-
-  msforms:
-    <<: *common
-
-    network_mode: bridge
-
-    command:
-      - echo "MSFORMS"
-      - if [ ! -e install/microsoft365/msforms.sh ]; then
-          echo "Forms is not installed, please re-run installation.";
-          exit 0;
-        fi
-      - exec install/microsoft365/msforms.sh $${CDC_OZONE_FLAG} "$$@"
-
-    x-app-launcher:
-
-      container_name: cdc_microsoft365
-
-      features:
-        - x11
-        - dri-full
-
-      desktop:
-        file: |
-          [Desktop Entry]
-          Name=Microsoft Forms (container)
-          Comment=Tool to create online surveys, forms, polls and quizzies
-          GenericName=Form tool
-          StartupWMClass=msforms
-          Exec=msforms
-          Icon=msforms
-          Type=Application
-          Categories=Network;
-          Path=/usr/bin
-
-        wmclass-file: install/microsoft365/msforms.wmclass
-
-        icons:
-          - source: msforms.png
-            dest: msforms.png
-
-
-  ## INTERACTIVE ##
-
-  interactive:
-    <<: *common
-
-    network_mode: bridge
-
-    x-app-launcher:
-
-      container_name: cdc_microsoft365
-
-      features:
-        - x11
-        - video
-        - sound
-        - dri-full
-
-      command:
-        - echo "INTERACTIVE"
-        - bash "$$@"
+    x-features:
+      - x11
