@@ -1,0 +1,174 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    httk development environment
+
+  override-default: |
+    version: "3.8"
+
+    services:
+      run:
+         volumes:
+           - "${HOME}/Documents/containers/devel:/home/${USER}/Documents/containers/devel"
+         working_dir: "/home/${USER}/Documents/containers/devel"
+
+  env-default: |
+    # This container has no configurable options
+
+
+x-launchers:
+  download:
+    service: setup
+    type: setup
+
+    # Zoom doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
+    script: &download_script
+      - echo "DOWNLOAD"
+      - mkdir -p ~/.local/share/icons/hicolor/scalable
+      - curl -L -o ~/.local/share/icons/hicolor/scalable/httk.svg https://httk.org/img/httk-logo-curves.svg
+      - |
+        if [ ! -e httk ]; then
+          git clone 'https://github.com/httk/httk.git'
+        fi
+      - rm -rf httk-venv
+      - python3 -m venv httk-venv
+      - httk-venv/bin/pip3 --download httk/py37requirements.txt numpy==1.26.4
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
+      - |
+        if [ -e httk ]; then
+          echo "httk develop directory already exist; will not remove possibly edited files automatically. Please remove or rename this directory manually."
+          exit 1
+        fi
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - echo "INSTALL";
+      - httk-venv/bin/pip3 install -r httk/py37requirements.txt numpy==1.26.4
+
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - echo "REINSTALL"
+      - rm -rf httk-venv
+      - python3 -m venv httk-venv
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
+      - echo "UPDATE CHECK"
+      - echo "Development environment: update manually with git pull"
+      - exit 0
+
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - echo "Development environment: update manually with git pull"
+
+  httk-console:
+    service: run
+    type: console
+    script:
+      - echo "httk-devel"
+      - cd httk
+      - bash
+
+    desktop:
+
+      file: |
+        [Desktop Entry]
+        Name=httk console (container)
+        Comment=httk console
+        Exec=zoom %U
+        Terminal=true
+        Type=Application
+        Icon=zoom
+        Categories=Development;
+
+      icons:
+        - source: .local/share/icons/hicolor/scalable/httk.svg
+          size: scalable
+          dest: httk.svg
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    network_mode: none
+
+    working_dir: /home/$USER
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
+      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
+      XDG_CURRENT_DESKTOP: "GNOME"
+      BROWSER: "falkon"
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+
+  setup:
+    <<: *common
+
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
+    network_mode: none
+
+  run:
+    <<: *common
+
+    network_mode: bridge
+
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    x-features:
+      - x11
+
+
