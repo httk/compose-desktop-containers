@@ -389,6 +389,12 @@ else
     # Then use podman directly to find the CONTAINER_ID
     CONTAINER_ID="$(podman inspect --format '{{.Id}}' "$CONTAINER_NAME" 2>/dev/null || true)"
 fi
+if [ -n "$CONTAINER_ID" ]; then
+    if [ "$(podman inspect -f '{{.State.Status}}' "$CONTAINER_ID")" != "running" ]; then
+	podman rm "$CONTAINER_ID"
+	CONTAINER_ID=""
+    fi
+fi
 
 if [ -z "$CONTAINER_ID" ]; then
     trap 'podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" down "${SERVICE}" > /dev/null; rm -f "$ADJUSTMENT_FILE"' exit

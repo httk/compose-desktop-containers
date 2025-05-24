@@ -14,6 +14,17 @@ x-application:
            - "${HOME}/Documents/containers/devel:/home/${USER}/Documents/containers/devel"
          working_dir: "/home/${USER}/Documents/containers/devel"
 
+      setup:
+         volumes:
+           - "${HOME}/Documents/containers/devel:/home/${USER}/Documents/containers/devel"
+         working_dir: "/home/${USER}/Documents/containers/devel"
+
+      setup-nonet:
+         volumes:
+           - "${HOME}/Documents/containers/devel:/home/${USER}/Documents/containers/devel"
+         working_dir: "/home/${USER}/Documents/containers/devel"
+
+
   env-default: |
     # This container has no configurable options
 
@@ -34,7 +45,9 @@ x-launchers:
         fi
       - rm -rf httk-venv
       - python3 -m venv httk-venv
-      - httk-venv/bin/pip3 --download httk/py37requirements.txt numpy==1.26.4
+      - mkdir -p httk-venv-wheelhouse
+      - source httk-venv/bin/activate
+      - python -m pip download -r httk/py37requirements.txt numpy==1.26.4 --check-build-dependencies --dest httk-venv-wheelhouse
 
   redownload:
     service: setup
@@ -49,14 +62,21 @@ x-launchers:
       - *download_script
 
   install:
-    service: setup-nonet
+    #service: setup-nonet
+    # Sigh... pip download doesn't download build dependencies? So network still needed in this step
+    # no known workaround exist. See: https://github.com/pypa/pip/issues/7863
+    # Once fixed, also add --no-index to installation, i.e.:
+    #   python -m pip install --no-index --find-links=httk-venv-wheelhouse -r httk/py37requirements.txt numpy==1.26.4
+    service: setup
     type: setup
     script: &install_script
       - echo "INSTALL";
-      - httk-venv/bin/pip3 install -r httk/py37requirements.txt numpy==1.26.4
+      - source httk-venv/bin/activate
+      - python -m pip install --find-links=httk-venv-wheelhouse -r httk/py37requirements.txt numpy==1.26.4
 
   reinstall:
-    service: setup-nonet
+    #service: setup-nonet
+    service: setup
     type: setup
     script: &reinstall_script
       - echo "REINSTALL"
@@ -84,7 +104,9 @@ x-launchers:
     type: console
     script:
       - echo "httk-devel"
+      - source httk-venv/bin/activate
       - cd httk
+      - source init.shell
       - bash
 
     desktop:
@@ -93,10 +115,10 @@ x-launchers:
         [Desktop Entry]
         Name=httk console (container)
         Comment=httk console
-        Exec=zoom %U
+        Exec=httk-console %U
         Terminal=true
         Type=Application
-        Icon=zoom
+        Icon=httk
         Categories=Development;
 
       icons:
@@ -139,7 +161,7 @@ services:
     shm_size: "1G"
 
     volumes: &common-volumes
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
 
     devices:
       - "/dev/dri:/dev/dri"
