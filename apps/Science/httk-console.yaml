@@ -47,7 +47,24 @@ x-launchers:
       - python3 -m venv httk-venv
       - mkdir -p httk-venv-wheelhouse
       - source httk-venv/bin/activate
-      - python -m pip download -r httk/py37requirements.txt numpy==1.26.4 --check-build-dependencies --dest httk-venv-wheelhouse
+      - python -m pip download -r httk/py37requirements.txt docutils pytest web.py legacy-cgi markdown pyyaml python-markdown-math numpy==1.26.4 --check-build-dependencies --dest httk-venv-wheelhouse
+      - mkdir -p ~/Downloads
+      - cd ~/Downloads
+      - FILENAME=$$(curl -sIL "https://sourceforge.net/projects/jmol/files/latest/download?source=files" | grep -o -E 'filename=.*$$' | sed -e 's/filename=//')
+      - echo "Download jmol"
+      - |
+        if [ ! -e ~/Downloads/Jmol-latest-binary.zip -o \( -n "$$FILENAME" -a ! ~/Downloads/"$$FILENAME" \) ]; then
+          curl -O -J -L --clobber "https://sourceforge.net/projects/jmol/files/latest/download?source=files"
+          LATEST=$$(ls -t Jmol*.zip | head -1)
+          ln -sf "$$LATEST" ~/Downloads/Jmol-latest-binary.zip
+        fi
+      - echo "Download isotropy"
+      - FILENAME="iso.zip"
+      - |
+        if [ ! -e ~/Downloads/iso-latest.zip -o \( -n "$$FILENAME" -a ! ~/Downloads/"$$FILENAME" \) ]; then
+          curl -o ~/Downloads/iso.zip --clobber -J -L "https://iso.byu.edu/iso/iso.zip"
+          ln -sf iso.zip ~/Downloads/iso-latest.zip
+        fi	
 
   redownload:
     service: setup
@@ -59,6 +76,10 @@ x-launchers:
           echo "httk develop directory already exist; will not remove possibly edited files automatically. Please remove or rename this directory manually."
           exit 1
         fi
+      - rm -f "$$(readlink -f Downloads/Jmol-latest-binary.zip)"
+      - rm -f Downloads/Jmol-latest-binary.zip
+      - rm -f "$$(readlink -f Downloads/iso-latest.zip)"
+      - rm -f Downloads/iso-latest.zip
       - *download_script
 
   install:
@@ -72,7 +93,22 @@ x-launchers:
     script: &install_script
       - echo "INSTALL";
       - source httk-venv/bin/activate
-      - python -m pip install --find-links=httk-venv-wheelhouse -r httk/py37requirements.txt numpy==1.26.4
+      - python -m pip install --find-links=httk-venv-wheelhouse -r httk/py37requirements.txt docutils pytest web.py markdown pyyaml python-markdown-math legacy-cgi numpy==1.26.4
+      - |
+        if [ ! -e ~/.local/share/jmol ]; then
+          mkdir ~/.local/share/jmol
+          cd ~/.local/share/jmol
+          unzip ~/Downloads/Jmol-latest-binary.zip
+          LATEST=$$(ls -t | head -1)
+          ln -sf "$$LATEST" latest
+          chmod +x latest/jmol.sh         
+        fi
+      - |
+        if [ ! -e ~/.local/share/isotropy ]; then
+          mkdir ~/.local/share/isotropy
+          cd ~/.local/share/isotropy
+          unzip ~/Downloads/iso-latest.zip
+        fi      
 
   reinstall:
     #service: setup-nonet
@@ -80,6 +116,8 @@ x-launchers:
     type: setup
     script: &reinstall_script
       - echo "REINSTALL"
+      - rm -rf ~/.local/share/jmol
+      - rm -rf ~/.local/share/isotropy
       - rm -rf httk-venv
       - python3 -m venv httk-venv
       - *install_script
@@ -104,6 +142,8 @@ x-launchers:
     type: console
     script:
       - echo "httk-devel"
+      - export PATH=$$PATH:~/.local/share/jmol/latest:~/.local/share/isotropy
+      - export ISODATA=~/.local/share/isotropy/
       - source httk-venv/bin/activate
       - cd httk
       - source init.shell
@@ -192,5 +232,3 @@ services:
 
     x-features:
       - x11
-
-
