@@ -44,6 +44,7 @@ x-launchers:
           git clone 'https://github.com/httk/httk.git'
         fi
       - DEVDIR=$$(pwd -P)
+      - mkdir -p ~/Downloads
       - cd ~/Downloads
       - echo "Download Miniforge"
       - LATESTURL="$$(curl -s https://api.github.com/repos/conda-forge/miniforge/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep 'Miniforge3-.*-Linux-x86_64.sh$$')"
@@ -224,7 +225,6 @@ services:
     environment: &common-env
       LANG: "${LANG}"
       XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
       XDG_CURRENT_DESKTOP: "GNOME"
       BROWSER: "falkon"
 
