@@ -43,15 +43,39 @@ x-launchers:
         if [ ! -e httk ]; then
           git clone 'https://github.com/httk/httk.git'
         fi
-      - rm -rf httk-venv
-      - python3 -m venv httk-venv
-      - mkdir -p httk-venv-wheelhouse
-      - source httk-venv/bin/activate
-      - python -m pip download -r httk/py37requirements.txt docutils pytest web.py legacy-cgi markdown pyyaml python-markdown-math numpy==1.26.4 --check-build-dependencies --dest httk-venv-wheelhouse
-      - mkdir -p ~/Downloads
+      - DEVDIR=$$(pwd -P)
       - cd ~/Downloads
-      - FILENAME=$$(curl -sIL "https://sourceforge.net/projects/jmol/files/latest/download?source=files" | grep -o -E 'filename=.*$$' | sed -e 's/filename=//')
+      - echo "Download Miniforge"
+      - LATESTURL="$$(curl -s https://api.github.com/repos/conda-forge/miniforge/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep 'Miniforge3-.*-Linux-x86_64.sh$$')"
+      - |
+        if [ ! -e ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -o ! -e ~/Downloads/"${LATESTURL##*/}" ]; then
+          curl -L -O "$$LATESTURL"
+          LATEST=$$(ls -t Miniforge3-*-Linux-x86_64.sh | head -1)
+          ln -sf "$$LATEST" ~/Downloads/Miniforge3-latest-Linux-x86_64.sh
+        fi
+      - mkdir -p ~/.local/share
+      - |
+        if [ ! -e ~/.local/share/miniforge ]; then
+          echo "Install miniforge (needed to complete downloads)"
+          bash ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -b -s -p ~/.local/share/miniforge
+          source ~/.local/share/miniforge/etc/profile.d/conda.sh
+          conda config --add envs_dirs "$$DEVDIR/conda/envs"
+          conda config --add pkgs_dirs "$$DEVDIR/conda/pkgs"
+          conda config --set auto_activate_base false
+        else
+          source ~/.local/share/miniforge/etc/profile.d/conda.sh
+        fi
+      - mkdir -p "$$DEVDIR/conda"
+      - mkdir -p "$$DEVDIR/httk-venvs/wheelhouse"
+      - conda update -n base -c conda-forge conda -y
+      - export CONDA_PKGS_DIRS="$$DEVDIR/conda/pkgs"
+      - export CONDA_ENVS_PATH="$$DEVDIR/conda/envs"
+      - conda list --name py39 > /dev/null || conda create -n py39 -c conda-forge python=3.9 -y
+      - (conda activate py39 && python -m venv httk-venvs/py39 && source httk-venvs/py39/bin/activate && python -m pip download -r "$$DEVDIR/httk/requirements.txt" --check-build-dependencies --dest "$$DEVDIR/httk-venvs/wheelhouse")
+      - conda list --name py27 > /dev/null || conda create -n py27 -c conda-forge python=2.7 virtualenv -y
+      - (conda activate py27 && virtualenv httk-venvs/py27 && source httk-venvs/py27/bin/activate && python -m pip download -r "$$DEVDIR/httk/requirements.txt" --dest "$$DEVDIR/httk-venvs/wheelhouse")
       - echo "Download jmol"
+      - FILENAME=$$(curl -sIL "https://sourceforge.net/projects/jmol/files/latest/download?source=files" | grep -o -E 'filename=.*$$' | sed -e 's/filename=//')
       - |
         if [ ! -e ~/Downloads/Jmol-latest-binary.zip -o \( -n "$$FILENAME" -a ! ~/Downloads/"$$FILENAME" \) ]; then
           curl -O -J -L --clobber "https://sourceforge.net/projects/jmol/files/latest/download?source=files"
@@ -64,7 +88,7 @@ x-launchers:
         if [ ! -e ~/Downloads/iso-latest.zip -o \( -n "$$FILENAME" -a ! ~/Downloads/"$$FILENAME" \) ]; then
           curl -o ~/Downloads/iso.zip --clobber -J -L "https://iso.byu.edu/iso/iso.zip"
           ln -sf iso.zip ~/Downloads/iso-latest.zip
-        fi	
+        fi
 
   redownload:
     service: setup
@@ -76,6 +100,9 @@ x-launchers:
           echo "httk develop directory already exist; will not remove possibly edited files automatically. Please remove or rename this directory manually."
           exit 1
         fi
+      - rm -f ~/.local/share/miniforge
+      - rm -f "$$(readlink -f Downloads/Miniforge3-latest-Linux-x86_64.sh)"
+      - rm -f Downloads/Miniforge3-latest-Linux-x86_64.sh
       - rm -f "$$(readlink -f Downloads/Jmol-latest-binary.zip)"
       - rm -f Downloads/Jmol-latest-binary.zip
       - rm -f "$$(readlink -f Downloads/iso-latest.zip)"
@@ -84,16 +111,28 @@ x-launchers:
 
   install:
     #service: setup-nonet
-    # Sigh... pip download doesn't download build dependencies? So network still needed in this step
-    # no known workaround exist. See: https://github.com/pypa/pip/issues/7863
-    # Once fixed, also add --no-index to installation, i.e.:
-    #   python -m pip install --no-index --find-links=httk-venv-wheelhouse -r httk/py37requirements.txt numpy==1.26.4
-    service: setup
+    # There is a chicken-or-egg problem with the installation of miniforge/conda needed to download everything needed for the install
+    # reinstall will simply reinstall miniforge/conda even though it is installed also as part of download
+    service: setup-nonet
     type: setup
     script: &install_script
       - echo "INSTALL";
-      - source httk-venv/bin/activate
-      - python -m pip install --find-links=httk-venv-wheelhouse -r httk/py37requirements.txt docutils pytest web.py markdown pyyaml python-markdown-math legacy-cgi numpy==1.26.4
+      - mkdir -p ~/.local/share
+      - |
+        if [ ! -e ~/.local/share/miniforge ]; then
+          echo "Install miniforge (needed to complete downloads)"
+          bash ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -b -s -p ~/.local/share/miniforge
+          source ~/.local/share/miniforge/etc/profile.d/conda.sh
+          conda config --add envs_dirs "$$DEVDIR/conda/envs"
+          conda config --add pkgs_dirs "$$DEVDIR/conda/pkgs"
+          conda config --set auto_activate_base false
+        else
+          source ~/.local/share/miniforge/etc/profile.d/conda.sh
+        fi
+      - conda list --name py27 > /dev/null || { echo "Files for Python 2.7 missing, please re-run download" && exit 1; }
+      - conda list --name py39 > /dev/null || { echo "Files for Python 3.9 missing, please re-run download" && exit 1; }
+      - (conda activate py39 && python -m venv httk-venvs/py39 && source httk-venvs/py39/bin/activate && python -m pip install --find-links=httk-venvs/wheelhouse -r httk/requirements.txt)
+      - (conda activate py27 && virtualenv httk-venvs/py27 && source httk-venvs/py27/bin/activate && python -m pip install --find-links=httk-venvs/wheelhouse -r httk/requirements.txt)
       - |
         if [ ! -e ~/.local/share/jmol ]; then
           mkdir ~/.local/share/jmol
@@ -101,14 +140,14 @@ x-launchers:
           unzip ~/Downloads/Jmol-latest-binary.zip
           LATEST=$$(ls -t | head -1)
           ln -sf "$$LATEST" latest
-          chmod +x latest/jmol.sh         
+          chmod +x latest/jmol.sh
         fi
       - |
         if [ ! -e ~/.local/share/isotropy ]; then
           mkdir ~/.local/share/isotropy
           cd ~/.local/share/isotropy
           unzip ~/Downloads/iso-latest.zip
-        fi      
+        fi
 
   reinstall:
     #service: setup-nonet
@@ -116,10 +155,12 @@ x-launchers:
     type: setup
     script: &reinstall_script
       - echo "REINSTALL"
+      - rm -rf ~/.local/share/miniforge
       - rm -rf ~/.local/share/jmol
       - rm -rf ~/.local/share/isotropy
-      - rm -rf httk-venv
-      - python3 -m venv httk-venv
+      - rm -rf httk-venvs
+      - python3 -m venv httk-venvs/py27
+      - python3 -m venv httk-venvs/py39
       - *install_script
 
   update-check:
@@ -144,7 +185,7 @@ x-launchers:
       - echo "httk-devel"
       - export PATH=$$PATH:~/.local/share/jmol/latest:~/.local/share/isotropy
       - export ISODATA=~/.local/share/isotropy/
-      - source httk-venv/bin/activate
+      - source ~/.local/share/miniforge/etc/profile.d/conda.sh
       - cd httk
       - source init.shell
       - bash
