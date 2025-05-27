@@ -37,44 +37,24 @@ x-launchers:
     # Zoom doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
     script: &download_script
       - echo "DOWNLOAD"
+      - export PATH="/home/${USER}/.local/bin:$${PATH}"
       - mkdir -p ~/.local/share/icons/hicolor/scalable
       - curl -L -o ~/.local/share/icons/hicolor/scalable/httk.svg https://httk.org/img/httk-logo-curves.svg
       - |
         if [ ! -e httk ]; then
           git clone 'https://github.com/httk/httk.git'
         fi
-      - DEVDIR=$$(pwd -P)
+      - mkdir -p "uv/cache" "uv/home"
+      - rm -rf ~/.local/share/uv
+      - ln -s "$$(pwd -P)/uv/home" ~/.local/share/uv
+      - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
+      - python3 -m venv httk.venvs/system
+      - source httk.venvs/system/bin/activate
+      - python -m pip install uv # needs to be installed now so we can use uv to download necessary packages
+      - uv tool install --force tox --with tox-uv
+      - uv python install 3.9 3.12
       - mkdir -p ~/Downloads
       - cd ~/Downloads
-      - echo "Download Miniforge"
-      - LATESTURL="$$(curl -s https://api.github.com/repos/conda-forge/miniforge/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep 'Miniforge3-.*-Linux-x86_64.sh$$')"
-      - |
-        if [ ! -e ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -o ! -e ~/Downloads/"${LATESTURL##*/}" ]; then
-          curl -L -O "$$LATESTURL"
-          LATEST=$$(ls -t Miniforge3-*-Linux-x86_64.sh | head -1)
-          ln -sf "$$LATEST" ~/Downloads/Miniforge3-latest-Linux-x86_64.sh
-        fi
-      - mkdir -p ~/.local/share
-      - |
-        if [ ! -e ~/.local/share/miniforge ]; then
-          echo "Install miniforge (needed to complete downloads)"
-          bash ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -b -s -p ~/.local/share/miniforge
-          source ~/.local/share/miniforge/etc/profile.d/conda.sh
-          conda config --add envs_dirs "$$DEVDIR/conda/envs"
-          conda config --add pkgs_dirs "$$DEVDIR/conda/pkgs"
-          conda config --set auto_activate_base false
-        else
-          source ~/.local/share/miniforge/etc/profile.d/conda.sh
-        fi
-      - mkdir -p "$$DEVDIR/conda"
-      - mkdir -p "$$DEVDIR/httk.venvs/wheelhouse"
-      - conda update -n base -c conda-forge conda -y
-      - export CONDA_PKGS_DIRS="$$DEVDIR/conda/pkgs"
-      - export CONDA_ENVS_PATH="$$DEVDIR/conda/envs"
-      - conda list --name py39 > /dev/null || conda create -n py39 -c conda-forge python=3.9 -y
-      - (conda activate py39 && python -m venv httk.venvs/py39 && source httk.venvs/py39/bin/activate && python -m pip download -r "$$DEVDIR/httk/requirements.txt" --check-build-dependencies --dest "$$DEVDIR/httk.venvs/wheelhouse")
-      - conda list --name py27 > /dev/null || conda create -n py27 -c conda-forge python=2.7 virtualenv -y
-      - (conda activate py27 && virtualenv httk.venvs/py27 && source httk.venvs/py27/bin/activate && python -m pip download -r "$$DEVDIR/httk/requirements.txt" --dest "$$DEVDIR/httk.venvs/wheelhouse")
       - echo "Download jmol"
       - FILENAME=$$(curl -sIL "https://sourceforge.net/projects/jmol/files/latest/download?source=files" | grep -o -E 'filename=.*$$' | sed -e 's/filename=//')
       - |
@@ -101,9 +81,7 @@ x-launchers:
           echo "httk develop directory already exist; will not remove possibly edited files automatically. Please remove or rename this directory manually."
           exit 1
         fi
-      - rm -f ~/.local/share/miniforge
-      - rm -f "$$(readlink -f Downloads/Miniforge3-latest-Linux-x86_64.sh)"
-      - rm -f Downloads/Miniforge3-latest-Linux-x86_64.sh
+      - rm -f httk.venvs/system
       - rm -f "$$(readlink -f Downloads/Jmol-latest-binary.zip)"
       - rm -f Downloads/Jmol-latest-binary.zip
       - rm -f "$$(readlink -f Downloads/iso-latest.zip)"
@@ -113,6 +91,9 @@ x-launchers:
     #  - (conda activate py27 && virtualenv httk.venvs/py27 && source httk.venvs/py27/bin/activate && python -m pip install --find-links=httk.venvs/wheelhouse -r httk/requirements.txt)
     #  - (conda activate py39 && python -m venv httk.venvs/py39 && source httk.venvs/py39/bin/activate && python -m pip install --find-links=httk.venvs/wheelhouse -r httk/requirements.txt)
 
+#      - uv venv --python 2.7 httk.venvs/py27
+#      - (source httk.venvs/py27/bin/activate; uv pip install -r httk/requirements.txt)
+
   install:
     #service: setup-nonet
     # There is a chicken-or-egg problem with the installation of miniforge/conda needed to download everything needed for the install
@@ -121,55 +102,14 @@ x-launchers:
     type: setup
     script: &install_script
       - echo "INSTALL";
+      - export PATH="/home/${USER}/.local/bin:$${PATH}"
+      - export UV_CACHE_DIR="$$(pwd -P)/httk.venvs/uv-cache"
       - mkdir -p ~/.local/share
-      - |
-        if [ ! -e ~/.local/share/miniforge ]; then
-          echo "Install miniforge (needed to complete downloads)"
-          bash ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -b -s -p ~/.local/share/miniforge
-          source ~/.local/share/miniforge/etc/profile.d/conda.sh
-          conda config --add envs_dirs "$$DEVDIR/conda/envs"
-          conda config --add pkgs_dirs "$$DEVDIR/conda/pkgs"
-          conda config --set auto_activate_base false
-        else
-          source ~/.local/share/miniforge/etc/profile.d/conda.sh
-        fi
-      - mkdir -p httk.venvs/bin
-      - |
-        cat > httk.venvs/bin/run <<EOF
-        #!/bin/bash
-        VENV_BIN_DIR=\$$( cd -- "\$$( dirname -- "\$${BASH_SOURCE[0]}" )" &> /dev/null && pwd -P)
-        source ~/.local/share/miniforge/etc/profile.d/conda.sh
-        conda activate "\$$1"
-        source "\$$VENV_BIN_DIR"/../"\$$1"/bin/activate
-        shift 1
-        exec "\$$@"
-        EOF
-      - chmod +x httk.venvs/bin/run
-      - |
-        cat > httk.venvs/bin/activate <<EOF
-        # Must source this script
-        VENV_BIN_DIR=\$$( cd -- "\$$( dirname -- "\$${BASH_SOURCE[0]}" )" &> /dev/null && pwd -P)
-        conda activate "\$$1"
-        source "\$$VENV_BIN_DIR"/../"\$$1"/bin/activate
-        EOF
-      - |
-        cat > httk.venvs/bin/create <<EOF
-        #!/bin/bash
-        VENV_BIN_DIR=\$$( cd -- "\$$( dirname -- "\$${BASH_SOURCE[0]}" )" &> /dev/null && pwd -P)
-        source ~/.local/share/miniforge/etc/profile.d/conda.sh
-        conda activate "\$$1"
-        if [ "\$$1" != "py27" ]; then
-          python -m venv httk.venvs/"\$$1"
-        else
-          virtualenv httk.venvs/"\$$1"
-        fi
-        "\$$VENV_BIN_DIR"/run "\$$1" python -m pip install --find-links="\$$VENV_BIN_DIR"/../wheelhouse -r "\$$2"
-        EOF
-      - chmod +x httk.venvs/bin/create
-      - conda list --name py27 > /dev/null || { echo "Files for Python 2.7 missing, please re-run download" && exit 1; }
-      - httk.venvs/bin/create py27 httk/requirements.txt
-      - conda list --name py39 > /dev/null || { echo "Files for Python 3.9 missing, please re-run download" && exit 1; }
-      - httk.venvs/bin/create py39 httk/requirements.txt
+      - source httk.venvs/system/bin/activate
+      - uv venv --python 3.9 httk.venvs/py39
+      - uv pip install --python httk.venvs/py39/bin/python -r httk/requirements.txt
+      - uv venv --python 3.12 httk.venvs/py312
+      - uv pip install --python httk.venvs/py312/bin/python -r httk/requirements.txt
       - ln -sf ../httk.venvs httk/.venvs
       - |
         if [ ! -e ~/.local/share/jmol ]; then
@@ -193,10 +133,9 @@ x-launchers:
     type: setup
     script: &reinstall_script
       - echo "REINSTALL"
-      - rm -rf ~/.local/share/miniforge
       - rm -rf ~/.local/share/jmol
       - rm -rf ~/.local/share/isotropy
-      - rm -rf httk.venvs
+      - rm -rf httk.venvs/py*
       - *install_script
 
   update-check:
@@ -219,13 +158,11 @@ x-launchers:
     type: console
     script:
       - echo "httk-devel"
-      - export PATH=$$PATH:~/.local/share/jmol/latest:~/.local/share/isotropy
+      - export PATH=~/.local/bin:~/.local/share/jmol/latest:~/.local/share/isotropy:"$$PATH"
+      - export UV_CACHE_DIR="$$(pwd -P)/httk.venvs/uv-cache"
       - export ISODATA=~/.local/share/isotropy/
-      - source ~/.local/share/miniforge/etc/profile.d/conda.sh
       - cd httk
-      - source .venvs/bin/activate "py39"
-      - source init.shell
-      - bash
+      - bash --init-file <(echo "uv() { ( source \"$$(pwd -P)/.venvs/system/bin/activate\"; command uv \"\$$@\" )}; source .venvs/py39/bin/activate; source init.shell")
 
     desktop:
 
