@@ -67,14 +67,14 @@ x-launchers:
           source ~/.local/share/miniforge/etc/profile.d/conda.sh
         fi
       - mkdir -p "$$DEVDIR/conda"
-      - mkdir -p "$$DEVDIR/httk-venvs/wheelhouse"
+      - mkdir -p "$$DEVDIR/httk.venvs/wheelhouse"
       - conda update -n base -c conda-forge conda -y
       - export CONDA_PKGS_DIRS="$$DEVDIR/conda/pkgs"
       - export CONDA_ENVS_PATH="$$DEVDIR/conda/envs"
       - conda list --name py39 > /dev/null || conda create -n py39 -c conda-forge python=3.9 -y
-      - (conda activate py39 && python -m venv httk-venvs/py39 && source httk-venvs/py39/bin/activate && python -m pip download -r "$$DEVDIR/httk/requirements.txt" --check-build-dependencies --dest "$$DEVDIR/httk-venvs/wheelhouse")
+      - (conda activate py39 && python -m venv httk.venvs/py39 && source httk.venvs/py39/bin/activate && python -m pip download -r "$$DEVDIR/httk/requirements.txt" --check-build-dependencies --dest "$$DEVDIR/httk.venvs/wheelhouse")
       - conda list --name py27 > /dev/null || conda create -n py27 -c conda-forge python=2.7 virtualenv -y
-      - (conda activate py27 && virtualenv httk-venvs/py27 && source httk-venvs/py27/bin/activate && python -m pip download -r "$$DEVDIR/httk/requirements.txt" --dest "$$DEVDIR/httk-venvs/wheelhouse")
+      - (conda activate py27 && virtualenv httk.venvs/py27 && source httk.venvs/py27/bin/activate && python -m pip download -r "$$DEVDIR/httk/requirements.txt" --dest "$$DEVDIR/httk.venvs/wheelhouse")
       - echo "Download jmol"
       - FILENAME=$$(curl -sIL "https://sourceforge.net/projects/jmol/files/latest/download?source=files" | grep -o -E 'filename=.*$$' | sed -e 's/filename=//')
       - |
@@ -110,6 +110,9 @@ x-launchers:
       - rm -f Downloads/iso-latest.zip
       - *download_script
 
+    #  - (conda activate py27 && virtualenv httk.venvs/py27 && source httk.venvs/py27/bin/activate && python -m pip install --find-links=httk.venvs/wheelhouse -r httk/requirements.txt)
+    #  - (conda activate py39 && python -m venv httk.venvs/py39 && source httk.venvs/py39/bin/activate && python -m pip install --find-links=httk.venvs/wheelhouse -r httk/requirements.txt)
+
   install:
     #service: setup-nonet
     # There is a chicken-or-egg problem with the installation of miniforge/conda needed to download everything needed for the install
@@ -130,10 +133,44 @@ x-launchers:
         else
           source ~/.local/share/miniforge/etc/profile.d/conda.sh
         fi
+      - mkdir -p httk.venvs/bin
+      - |
+        cat > httk.venvs/bin/run <<EOF
+        #!/bin/bash
+        VENV_BIN_DIR=\$$( cd -- "\$$( dirname -- "\$${BASH_SOURCE[0]}" )" &> /dev/null && pwd -P)
+        source ~/.local/share/miniforge/etc/profile.d/conda.sh
+        conda activate "\$$1"
+        source "\$$VENV_BIN_DIR"/../"\$$1"/bin/activate
+        shift 1
+        exec "\$$@"
+        EOF
+      - chmod +x httk.venvs/bin/run
+      - |
+        cat > httk.venvs/bin/activate <<EOF
+        # Must source this script
+        VENV_BIN_DIR=\$$( cd -- "\$$( dirname -- "\$${BASH_SOURCE[0]}" )" &> /dev/null && pwd -P)
+        conda activate "\$$1"
+        source "\$$VENV_BIN_DIR"/../"\$$1"/bin/activate
+        EOF
+      - |
+        cat > httk.venvs/bin/create <<EOF
+        #!/bin/bash
+        VENV_BIN_DIR=\$$( cd -- "\$$( dirname -- "\$${BASH_SOURCE[0]}" )" &> /dev/null && pwd -P)
+        source ~/.local/share/miniforge/etc/profile.d/conda.sh
+        conda activate "\$$1"
+        if [ "\$$1" != "py27" ]; then
+          python -m venv httk.venvs/"\$$1"
+        else
+          virtualenv httk.venvs/"\$$1"
+        fi
+        "\$$VENV_BIN_DIR"/run "\$$1" python -m pip install --find-links="\$$VENV_BIN_DIR"/../wheelhouse -r "\$$2"
+        EOF
+      - chmod +x httk.venvs/bin/create
       - conda list --name py27 > /dev/null || { echo "Files for Python 2.7 missing, please re-run download" && exit 1; }
+      - httk.venvs/bin/create py27 httk/requirements.txt
       - conda list --name py39 > /dev/null || { echo "Files for Python 3.9 missing, please re-run download" && exit 1; }
-      - (conda activate py39 && python -m venv httk-venvs/py39 && source httk-venvs/py39/bin/activate && python -m pip install --find-links=httk-venvs/wheelhouse -r httk/requirements.txt)
-      - (conda activate py27 && virtualenv httk-venvs/py27 && source httk-venvs/py27/bin/activate && python -m pip install --find-links=httk-venvs/wheelhouse -r httk/requirements.txt)
+      - httk.venvs/bin/create py39 httk/requirements.txt
+      - ln -sf ../httk.venvs httk/.venvs
       - |
         if [ ! -e ~/.local/share/jmol ]; then
           mkdir ~/.local/share/jmol
@@ -159,9 +196,7 @@ x-launchers:
       - rm -rf ~/.local/share/miniforge
       - rm -rf ~/.local/share/jmol
       - rm -rf ~/.local/share/isotropy
-      - rm -rf httk-venvs
-      - python3 -m venv httk-venvs/py27
-      - python3 -m venv httk-venvs/py39
+      - rm -rf httk.venvs
       - *install_script
 
   update-check:
@@ -188,6 +223,7 @@ x-launchers:
       - export ISODATA=~/.local/share/isotropy/
       - source ~/.local/share/miniforge/etc/profile.d/conda.sh
       - cd httk
+      - source .venvs/bin/activate "py39"
       - source init.shell
       - bash
 

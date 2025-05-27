@@ -79,3 +79,4 @@ pre-commit
 icoutils
 imagemagick
 ocl-icd-libopencl1
+tox
