@@ -28,6 +28,11 @@ x-application:
   env-default: |
     # This container has no configurable options
 
+  images:
+    u24:
+      pkgs:
+        - default-jdk
+
 
 x-launchers:
   download:
