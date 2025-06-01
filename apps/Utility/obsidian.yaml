@@ -27,7 +27,6 @@ x-launchers:
     service: setup
     type: setup
 
-    # Zoom doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
     script: &download_script
       - echo "DOWNLOAD"
       - mkdir -p Downloads
@@ -100,7 +99,7 @@ x-launchers:
     type: background
     script:
       - echo "OBSIDIAN";
-      - LD_LIBRARY_PATH=~/.local/share/obsidian/obsidian/opt/Obsidian exec Installation/obsidian/opt/Obsidian/obsidian $${CDC_OZONE_FLAGS} "$$@"
+      - LD_LIBRARY_PATH=~/.local/share/obsidian/obsidian/opt/Obsidian exec ~/.local/share/obsidian/obsidian/opt/Obsidian/obsidian $${CDC_OZONE_FLAGS} "$$@"
 
     desktop:
 
