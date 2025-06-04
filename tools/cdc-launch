@@ -60,15 +60,15 @@ if [ "$(yq -r ".\"x-launchers\".\"$LAUNCHER\"" <<< "$PODMAN_CONFIG")" == "null" 
     exit 1
 fi
 
-SERVICE=$(yq -r ".\"x-launchers\".\"$LAUNCHER\".service" <<< "$PODMAN_CONFIG")
-if [ -z "$SERVICE" -o "$SERVICE" == "null" ]; then
-    echo "The launcher stanza for ${LAUNCHER} is missing 'service'."
-    exit 1
-fi
-
 TYPE=$(yq -r ".\"x-launchers\".\"$LAUNCHER\".type" <<< "$PODMAN_CONFIG")
 if [ -z "$TYPE" -o "$TYPE" == "null" ]; then
     TYPE=normal
+fi
+
+SERVICE=$(yq -r ".\"x-launchers\".\"$LAUNCHER\".service" <<< "$PODMAN_CONFIG")
+if [ "$TYPE" != "tray" -a -z "$SERVICE" -o "$SERVICE" == "null" ]; then
+    echo "The launcher stanza for ${LAUNCHER} is missing 'service'."
+    exit 1
 fi
 
 CONFIG_FILE=()
@@ -132,7 +132,7 @@ if [ "$(yq -r ".\"x-launchers\".\"$LAUNCHER\".script" <<< "$PODMAN_CONFIG")" != 
 else
     LAUNCH_SCRIPT=""
 fi
-if [ -z "$LAUNCH_SCRIPT" -o "$LAUNCH_SCRIPT" == "null" ]; then
+if [ "$TYPE" != "tray" -a -z "$LAUNCH_SCRIPT" -o "$LAUNCH_SCRIPT" == "null" ]; then
     echo "No launch command defined for $APP $LAUNCHER"
     exit 1
 fi
@@ -224,7 +224,7 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 		# NVIDIA
                 PODMAN_UP_ARGS+=( "--device nvidia.com/gpu=all" )
                 OVERRIDE_ALLOW_READ="yes"
-	    elif [ "0" = "1" ]; then		
+	    elif [ "0" = "1" ]; then
 		# INTEL
 		DUMMY=""
 	    elif [ "0" = "1" ]; then
@@ -324,27 +324,27 @@ if [ -n "$CDC_DEBUG" ]; then
   cat "$ADJUSTMENT_FILE"
   echo "======================="
 fi
-  
-PRELAUNCHER=""
-TRAY="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray" <<< "$PODMAN_CONFIG")"
-if [ -n "$TRAY" -a "$TRAY" != "null" ]; then
-    TRAY_ICON="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.icon" <<< "$PODMAN_CONFIG")"
-    TRAY_NAME="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.name" <<< "$PODMAN_CONFIG")"
-    TRAY_WMCLASS="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.\"wmclass\"" <<< "$PODMAN_CONFIG")"
-    TRAY_WMCLASS_ARG=""
-    if [ "$TRAY_WMCLASS" == "null" ]; then
-        TRAY_WMCLASS_FILE="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.\"wmclass-file\"" <<< "$PODMAN_CONFIG")"
-        if [ "$TRAY_WMCLASS_FILE" != "null" ]; then
-            TRAY_WMCLASS="$(cat "home/$TRAY_WMCLASS_FILE")"
-            TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
-        fi
-    else
-      TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
-    fi
-    PRELAUNCHER="\"${TOOLPATH}/../dependencies/submodules/tray-utils/bin/tray-wrapper\" --app-name \"$TRAY_NAME\" --icon \"home/$TRAY_ICON\" $TRAY_WMCLASS_ARG --"
-else
-    PRELAUNCHER=""
-fi
+
+#PRELAUNCHER=""
+#TRAY="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray" <<< "$PODMAN_CONFIG")"
+#if [ -n "$TRAY" -a "$TRAY" != "null" ]; then
+#    TRAY_ICON="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.icon" <<< "$PODMAN_CONFIG")"
+#    TRAY_NAME="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.name" <<< "$PODMAN_CONFIG")"
+#    TRAY_WMCLASS="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.\"wmclass\"" <<< "$PODMAN_CONFIG")"
+#    TRAY_WMCLASS_ARG=""
+#    if [ "$TRAY_WMCLASS" == "null" ]; then
+#        TRAY_WMCLASS_FILE="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.\"wmclass-file\"" <<< "$PODMAN_CONFIG")"
+#        if [ "$TRAY_WMCLASS_FILE" != "null" ]; then
+#            TRAY_WMCLASS="$(cat "home/$TRAY_WMCLASS_FILE")"
+#            TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
+#        fi
+#    else
+#      TRAY_WMCLASS_ARG="--wm-class $TRAY_WMCLASS"
+#    fi
+#    PRELAUNCHER="\"${TOOLPATH}/../dependencies/submodules/tray-utils/bin/tray-wrapper\" --app-name \"$TRAY_NAME\" --icon \"home/$TRAY_ICON\" $TRAY_WMCLASS_ARG --"
+#else
+#    PRELAUNCHER=""
+#fi
 
 if [ -n "$CDC_DEBUG" ]; then
     echo "=== CONFIG ==="
@@ -396,7 +396,7 @@ if [ -n "$CONTAINER_ID" ]; then
     fi
 fi
 
-if [ -z "$CONTAINER_ID" ]; then
+if [ -z "$CONTAINER_ID" -a -n "$SERVICE" ]; then
     trap 'podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" down "${SERVICE}" > /dev/null; rm -f "$ADJUSTMENT_FILE"' exit
     if [ -n "$CDC_DEBUG" ]; then
 	echo podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up -d "${SERVICE}"
@@ -411,7 +411,27 @@ if [ "$CDC_DEBUG" == 1 ]; then
     echo ${PRELAUNCHER} podman-compose -p "$APP" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_EXEC_ARGS[@]}" exec "${PODMAN_COMPOSE_EXEC_POST_ARGS[@]}" --user "${USER}" "${SERVICE}" bash -c "${LAUNCH_SCRIPT}" bash "$@"
 fi
 
-if [ "$TYPE" != "background" ]; then
+if [ "$TYPE" == "tray" ]; then
+
+    MULTI_TRAY_ARGS=""
+    ICON="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.icon" <<< "$PODMAN_CONFIG")"
+    ENTRY_NBR="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.entries | length" <<< "$PODMAN_CONFIG")"
+    for (( ENTRY_IDX=0; ENTRY_IDX<ENTRY_NBR; ENTRY_IDX++ )); do
+	ENTRY_NAME="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.entries[$ENTRY_IDX].name" <<< "$PODMAN_CONFIG")"
+	ENTRY_WMCLASS="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.entries[$ENTRY_IDX].wmclass" <<< "$PODMAN_CONFIG")"
+	if [ "$ENTRY_WMCLASS" = "null" ]; then
+	    ENTRY_WMCLASS_FILE="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.entries[$ENTRY_IDX].\"wmclass-file\"" <<< "$PODMAN_CONFIG")"
+	    if [ "$ENTRY_WMCLASS_FILE" != "null" ]; then
+		ENTRY_WMCLASS=$(cat "home/$ENTRY_WMCLASS_FILE")
+	    fi
+	fi
+	ENTRY_LAUNCH="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".tray.entries[$ENTRY_IDX].launch" <<< "$PODMAN_CONFIG")"
+	MULTI_TRAY_ARGS="$MULTI_TRAY_ARGS --app \"$ENTRY_NAME\" \"$ENTRY_WMCLASS\" \"./$ENTRY_LAUNCH\""
+    done
+
+    /usr/bin/env --split-string="\"$TOOLPATH/../dependencies/submodules/tray-utils/bin/multi-app-tray\" --icon \"$ICON\" $MULTI_TRAY_ARGS"
+
+elif [ "$TYPE" != "background" ]; then
 
     ${PRELAUNCHER} podman-compose -p "$APP" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_EXEC_ARGS[@]}" exec "${PODMAN_COMPOSE_EXEC_POST_ARGS[@]}" --user "${USER}" "${SERVICE}" bash -c "${LAUNCH_SCRIPT}" bash "$@"
 

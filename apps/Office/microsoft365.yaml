@@ -100,21 +100,22 @@ x-launchers:
 
   microsoft365:
     type: tray
+    service: run
 
     tray:
       icon: microsoft365
       entries:
         - name: "Teams"
-          wmclass-file: ~/.local/share/microsoft365/msteams.wmclass
+          wmclass-file: .local/share/microsoft365/msteams.wmclass
           launch: msteams
         - name: "OneDrive"
-          wmclass-file: ~/.local/share/microsoft365/onedrive.wmclass
+          wmclass-file: .local/share/microsoft365/onedrive.wmclass
           launch: onedrive
         - name: "Outlook"
-          wmclass-file: ~/.local/share/microsoft365/outlook.wmclass
+          wmclass-file: .local/share/microsoft365/outlook.wmclass
           launch: outlook
         - name: "Forms"
-          wmclass-file: ~/.local/share/microsoft365/msforms.wmclass
+          wmclass-file: .local/share/microsoft365/msforms.wmclass
           launch: msforms
 
     desktop:
@@ -134,7 +135,7 @@ x-launchers:
           dest: microsoft365.png
 
   msteams:
-    service: run-msteams
+    service: run
     type: background
 
     script:
@@ -159,7 +160,7 @@ x-launchers:
         Categories=Network;InstantMessaging;
         Path=/usr/bin
 
-      wmclass-file: install/microsoft365/msteams.wmclass
+      wmclass-file: .local/share/microsoft365/msteams.wmclass
 
       icons:
         - source: msteams.png
@@ -167,16 +168,16 @@ x-launchers:
 
 
   onedrive:
-    service: run-onedrive
+    service: run
     type: background
 
     script:
       - echo "ONEDRIVE"
-      - if [ ! -e install/microsoft365/onedrive.sh ]; then
+      - if [ ! -e ~/.local/share/microsoft365/onedrive.sh ]; then
           echo "OneDrive is not installed, please re-run installation.";
           exit 0;
         fi
-      - exec install/microsoft365/onedrive.sh $${CDC_OZONE_FLAG} "$$@"
+      - exec ~/.local/share/microsoft365/onedrive.sh $${CDC_OZONE_FLAG} "$$@"
 
     desktop:
       file: |
@@ -191,23 +192,23 @@ x-launchers:
         Categories=Network;
         Path=/usr/bin
 
-      wmclass-file: install/microsoft365/onedrive.wmclass
+      wmclass-file: .local/share/microsoft365/onedrive.wmclass
 
       icons:
         - source: onedrive.png
           dest: onedrive.png
 
   outlook:
-    service: run-outlook
+    service: run
     type: background
 
     script:
       - echo "OUTLOOK"
-      - if [ ! -e install/microsoft365/outlook.sh ]; then
+      - if [ ! -e ~/.local/share/microsoft365/outlook.sh ]; then
           echo "Outlook is not installed, please re-run installation.";
           exit 0;
         fi
-      - exec install/microsoft365/outlook.sh $${CDC_OZONE_FLAG} "$$@"
+      - exec ~/.local/share/microsoft365/outlook.sh $${CDC_OZONE_FLAG} "$$@"
 
     desktop:
       file: |
@@ -236,23 +237,23 @@ x-launchers:
         Name=Open calendar
         Exec=outlook --app-launch-url-for-shortcuts-menu-item=https://outlook.office.com/calendar
 
-      wmclass-file: install/microsoft365/outlook.wmclass
+      wmclass-file: .local/share/microsoft365/outlook.wmclass
 
       icons:
         - source: outlook.png
           dest: outlook.png
 
   msforms:
-    service: run-msforms
+    service: run
     type: background
 
     script:
       - echo "MSFORMS"
-      - if [ ! -e install/microsoft365/msforms.sh ]; then
+      - if [ ! -e ~/.local/share/microsoft365/msforms.sh ]; then
           echo "Forms is not installed, please re-run installation.";
           exit 0;
         fi
-      - exec install/microsoft365/msforms.sh $${CDC_OZONE_FLAG} "$$@"
+      - exec ~/.local/share/microsoft365/msforms.sh $${CDC_OZONE_FLAG} "$$@"
 
     desktop:
       file: |
@@ -267,7 +268,7 @@ x-launchers:
         Categories=Network;
         Path=/usr/bin
 
-      wmclass-file: install/microsoft365/msforms.wmclass
+      wmclass-file: .local/share/microsoft365/forms.wmclass
 
       icons:
         - source: msforms.png
@@ -275,7 +276,7 @@ x-launchers:
 
 
   interactive:
-    service: run-msteams
+    service: run
     console: true
     script:
       - echo "INTERACTIVE"
@@ -324,13 +325,11 @@ services:
     devices:
       - "/dev/dri:/dev/dri"
 
-    volumes:
-
   setup:
     <<: *common
 
     network_mode: bridge
-    features:
+    x-features:
       - wayland-fallback-x11
 
   setup-nonet:
@@ -338,7 +337,7 @@ services:
 
     network_mode: none
 
-  run-msteams:
+  run:
     <<: *common
 
     network_mode: bridge
@@ -348,26 +347,3 @@ services:
       - sound
       - x11
 
-  run-onedrive:
-    <<: *common
-
-    network_mode: bridge
-
-    x-features:
-      - x11
-
-  run-outlook:
-    <<: *common
-
-    network_mode: bridge
-
-    x-features:
-      - x11
-
-  run-forms:
-    <<: *common
-
-    network_mode: bridge
-
-    x-features:
-      - x11
