@@ -17,56 +17,11 @@ x-application:
   env-default: |
     # This container has no configurable options
 
-services:
-
-  ## COMMON PART ##
-
-  common: &common
-
-    image: "cdc-u24"
-
-    working_dir: /home/${USER}
-    user: "${USER}"
-
-    environment: &common-env
-      LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
-      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
-
-    cap_drop:
-      - ALL
-
-    security_opt:
-      - no-new-privileges
-
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /run
-
-    shm_size: "1G"
-
-    volumes: &common-volumes
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-
-    devices:
-      - "/dev/dri:/dev/dri"
-
-    security_opt:
-      - "label=no-new-privileges"
-
-    userns_mode: "keep-id"
-
-    network_mode: none
-
-  ## INSTALL ##
-
-  download: &download
-    <<: *common
-
-    network_mode: bridge
-
-    command:
+x-launchers:
+  download:
+    service: setup
+    type: setup
+    script: &download_script
       - echo "DOWNLOAD"
       - mkdir -p Downloads
       - THANKSURL="$$(curl -L 'https://www.blender.org/download/' | cat | sed -n '\|^.*"\(https://www.blender.org/download/release/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz[^\"]*\)".*$$|{s||\1|p;q}')"
@@ -78,18 +33,19 @@ services:
         fi;
       - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/blender-latest-linux-x64.tar.xz
 
-  download-clean:
-    <<: *common
-
-    command:
-      - echo "DOWNLOAD CLEAN"
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
       - rm -f "$$(readlink -f Downloads/blender-latest-linux-x64.tar.xz)"
       - rm -f Downloads/blender-latest-linux-x64.tar.xz
+      - *download_script
 
-  install: &install
-    <<: *common
-
-    command:
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
       - VERSION="$${1:-blender-latest-linux-x64.tar.xz}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/.local/share/blender &&
@@ -101,19 +57,19 @@ services:
         cp blender/blender.desktop ~/.local/share/applications/blender.desktop &&
         sed -i 's%^Exec=.*$$%Exec=/home/$${USER}/install/blender/blender%'  ~/.local/share/applications/blender.desktop
 
-  install-clean:
-
-    command:
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - VERSION="$${1:-blender-latest-linux-x64.tar.xz}";
+      - echo "REINSTALL $$VERSION"
       - rm -rf ~/.local/share/blender
+      - *install_script
 
-  ## UPDATE ##
-
-  update-check: &update-check
-    <<: *common
-
-    network_mode: bridge
-
-    command:
+  update-check:
+    service: setup
+    type: setup
+    script:
       - echo "UPDATE CHECK"
       - THANKSURL="$$(curl -L -N 'https://www.blender.org/download/' | cat | sed -n '\|^.*"\(https://www.blender.org/download/release/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz[^\"]*\)".*$$|{s||\1|p;q}')"
       - LATESTURL="$$(curl -L -N "$$THANKSURL" | sed -n '\|^.*"\(https:.*/Blender[0-9.]\+/blender-[0-9.]\+-linux-x64.tar.xz\)".*$$|{s||\1|p;q}')"
@@ -130,54 +86,113 @@ services:
       - echo "File missing, or server-side file newer"
       - exit 1
 
-  update: &update
-    <<: *install
-
-
-  ## EXECUTE ###
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - *redownload_script
+      - *reinstall_script
 
   blender:
-    <<: *common
-
-    container_name: cdc_blender_blender
-
-    network_mode: bridge
-
-    x-app-features:
-      - sound
-      - wayland-fallback-x11
-
-    command:
+    service: run
+    type: background
+    script:
       - echo "BLENDER"
       - pipewire-pulse &
       - exec ~/.local/share/blender/blender/blender "$$@"
 
-    x-launcher:
-      desktop:
-        file: |
-          [Desktop Entry]
-          Name=Blender (container)
-          StartupWMClass=Blender
-          PrefersNonDefaultGPU=true
-          GenericName=3D modeler
-          Comment=3D modeling, animation, rendering and post-production
-          Exec=blender %f
-          Terminal=false
-          Type=Application
-          Icon=blender
-          Categories=Graphics;3DGraphics;
-          MimeType=application/x-blender;
-          Keywords=3d;cg;modeling;animation;painting;sculpting;texturing;video editing;video tracking;rendering;render engine;cycles;python;
+    desktop:
+      file: |
+        [Desktop Entry]
+        Name=Blender (container)
+        StartupWMClass=Blender
+        PrefersNonDefaultGPU=true
+        GenericName=3D modeler
+        Comment=3D modeling, animation, rendering and post-production
+        Exec=blender %f
+        Terminal=false
+        Type=Application
+        Icon=blender
+        Categories=Graphics;3DGraphics;
+        MimeType=application/x-blender;
+        Keywords=3d;cg;modeling;animation;painting;sculpting;texturing;video editing;video tracking;rendering;render engine;cycles;python;
 
-        icons:
-          - source: blender.svg
-            dest: blender.svg
-
-  ## INTERACTIVE ##
+      icons:
+        - source: blender.svg
+          dest: blender.svg
 
   interactive:
+    service: run
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+
+    network: none
+
+    working_dir: /home/${USER}
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+    network_node: none
+
+
+  setup:
     <<: *common
 
-    command:
-      - echo "INTERACTIVE"
-      - bash "$$@"
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
+  run:
+    <<: *common
+
+    network_node: bridge
+    read_only: false
+
+    user:
+      root
+
+    x-features:
+      - wayland-fallback-x11

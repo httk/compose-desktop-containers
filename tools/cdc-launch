@@ -93,8 +93,9 @@ fi
 if yq -e ".\"x-launchers\".\"$LAUNCHER\".console == true" > /dev/null <<< "$PODMAN_CONFIG"; then
     export CDC_HOSTNAME="cdc_${APP}_${LAUNCHER}"
 else
-    export CDC_HOSTNAME=$(hostname)
+    export CDC_HOSTNAME="$(hostname)"
 fi
+PODMAN_UP_ARGS+=( "--hostname" "$CDC_HOSTNAME" )
 
 ADJUSTMENT_FILE=$(mktemp /tmp/desktop-containers-override.XXXXXX.yaml)
 trap "rm -f '$ADJUSTMENT_FILE'" EXIT
