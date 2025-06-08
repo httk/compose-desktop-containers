@@ -52,7 +52,6 @@ function POST_PROCESS_LAUNCHER() {
 	    ICON_DEST=${ICON_DEST//[^[:ascii:]]}
 	    ICON_DEST=${ICON_DEST//../}
 	    ICON_PLACE=$(yq -r "${YQPATH}.desktop.icons[$ICON_IDX].dest" <<< "$PODMAN_CONFIG")
-	    echo "HERE" "${ICON_DEST}"
 	    if [ "${ICON_DEST}" == "${ICON_DEST#$APP/}" ]; then
 		for ICON_SIZE in "scalable" "512x512" "256x256" "192x192" "128x128" "96x96" "72x72" "64x64" "48x48" "36x36" "32x32" "24x24" "22x22" "16x16" "8x8"; do
 		    ICON_SRC_PATH="home/.local/share/icons/hicolor/$ICON_SIZE/apps/${ICON_SRC}"

@@ -8,77 +8,21 @@ x-application:
   override-default: |
     version: "3.8"
 
-    # Comment out as desired below to give spotify access to dbus session and/or system bus
-    #
-    #services:
-    #  spotify:
-    #    volumes:
-    #      - "${CDC_DBUS_PATH}:/tmp/${USER}/run/bus:rw"
-    #      - "${CDC_DBUS_SYSTEM_BUS_PATH}:/run/dbus/system_bus_socket:rw"
-    #    environment:
-    #      DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/${USER}/run/bus"
-    #      DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/run/dbus/system_bus_socket"
-    #    x-launcher:
-    #      dbus-proxy: --filter
-    #      dbus-system-proxy: --filter
-    #
+    services:
+      slack:
+         volumes:
+           - "${HOME}/Documents/containers/music:/home/${USER}/Documents/containers/music"
+         working_dir: "/home/${USER}/Documents/containers/music"
 
   env-default: |
     # No configurable options
 
+x-launchers:
+  download:
+    service: setup
+    type: setup
 
-services:
-
-  ## COMMON PART ##
-
-  common: &common
-
-    image: "cdc-u24"
-
-    working_dir: /home/$USER
-    user: "${USER}"
-
-    environment: &common-env
-      LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
-      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
-
-    cap_drop:
-      - ALL
-    cap_add:
-      - SYS_CHROOT
-
-    security_opt:
-      - no-new-privileges
-
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /run
-
-    shm_size: "1G"
-
-    volumes: &common-volumes
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-
-    devices:
-      - "/dev/dri:/dev/dri"
-
-    security_opt:
-      - no-new-privileges
-
-    userns_mode: "keep-id"
-
-    network_mode: none
-
-  ## INSTALL ##
-
-  download: &download
-    <<: *common
-
-    network_mode: bridge
-
-    command:
+    script: &download_script
       - echo "DOWNLOAD"
       - mkdir -p Downloads
       - LATESTURL="http://repository.spotify.com/pool/non-free/s/spotify-client/$(curl -L 'http://repository.spotify.com/pool/non-free/s/spotify-client/' | sed -n 's|^.*"\(spotify-client_.\+_amd64\.deb\)".*$|\1|p' | sort --version-sort | tail -n 1)"
@@ -89,20 +33,19 @@ services:
         fi;
       - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/spotify-client_latest_amd64.deb
 
-  download-clean:
-    <<: *common
-
-    command:
-      - echo "DOWNLOAD CLEAN"
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
       - rm -f "$$(readlink -f Downloads/spotify-client_latest_amd64.deb)"
       - rm -f Downloads/spotify-client_latest_amd64.deb
+      - *download_script
 
-  install: &install
-    <<: *common
-
-    # Note: the spotify install MUST be under ~/.local/share/spotify for the handling of icons to work
-    # because sometimes icon file names are sent from container to host
-    command:
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
       - VERSION="$${1:-spotify-client_latest_amd64.deb}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/.local/share/spotify
@@ -114,31 +57,29 @@ services:
         cp ~/.local/share/spotify/spotify.desktop ~/.local/share/applications/spotify.desktop &&
         sed -i 's%/usr/bin/spotify%/home/${USER}/Installation/spotify/usr/bin/spotify%' ~/.local/share/applications/spotify.desktop &&
         for ICON in ~/.local/share/spotify/icons/spotify-linux-*.png; do
-          SIZE=$${ICON#spotify/usr/share/spotify/icons/spotify-linux-};
+          SIZE=$${ICON#*/spotify/icons/spotify-linux-};
           SIZE=$${SIZE%.png};
           mkdir -p ~/.local/share/icons/hicolor/"$${SIZE}x$${SIZE}"/apps;
-          cp $$ICON ~/.local/share/icons/hicolor/"$${SIZE}x$${SIZE}"/apps;
+          cp $$ICON ~/.local/share/icons/hicolor/"$${SIZE}x$${SIZE}"/apps/spotify-linux.png;
         done &&
-        cp ~/.local/share/spotify/icons/spotify-linux-256.png ~/.local/share/icons/hicolor/256x256/apps/spotify-client.png &&
-        cp ~/.local/share/spotify/icons/spotify-linux-256.png ~/.local/share/icons/hicolor/256x256/apps/spotify.png &&
         gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor &&
         update-desktop-database ~/.local/share/applications/ &&
         rm -rf ~/.local/share/spotify/tmp
 
-  install-clean:
-    <<: *common
 
-    command:
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - VERSION="$${1:-spotify-client_latest_amd64.deb}";
+      - echo "REINSTALL $$VERSION"
       - rm -rf ~/.local/share/spotify
+      - *install_script
 
-  ## UPDATE ##
-
-  update-check: &update-check
-    <<: *common
-
-    network_mode: bridge
-
-    command:
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
       - echo "UPDATE CHECK"
       - LATESTURL="http://repository.spotify.com/pool/non-free/s/spotify-client/$(curl -L 'http://repository.spotify.com/pool/non-free/s/spotify-client/' | sed -n 's|^.*"\(spotify-client_.\+_amd64\.deb\)".*$|\1|p')"
       - LATESTFILENAME="$${LATESTURL##*/}";
@@ -154,105 +95,135 @@ services:
       - echo "File missing, or server-side file newer"
       - exit 1
 
-  update: &update
-    <<: *install
-
-
-  ## EXECUTE ###
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - *redownload_script
+      - *reinstall_script
 
   spotify:
+    service: run
+    type: background
+    script:
+      - echo "SPOTIFY"
+      - pipewire-pulse &
+      - exec ~/.local/share/spotify/spotify $${CDC_OZONE_FLAGS} "$$@"
+
+    desktop:
+
+      file: |
+        [Desktop Entry]
+        Type=Application
+        Name=Spotify (container)
+        StartupWMClass=spotify
+        GenericName=Music Player
+        Icon=spotify-linux
+        Exec=spotify %U
+        Terminal=false
+        MimeType=x-scheme-handler/spotify;
+        Categories=Audio;Music;Player;AudioVideo;
+
+      icons:
+        - source: spotify-linux.png
+          dest: spotify-linux.png
+
+#  spotify-force-wayland:
+#    service: run-wayland
+#    type: background
+#    script:
+#      - echo "SPOTIFY"
+#      - pipewire-pulse &
+#      - |
+#        if [ -n "$WAYLAND_DISPLAY" ]; then
+#          export TMPDIR="$$CDC_HOSTTMP_PATH" # this ugly workaround allows appindicator icons to be accessed by the host system
+#        fi
+#      - exec ~/.local/share/spotify/spotify $${CDC_OZONE_FLAGS} "$$@"
+
+  interactive:
+    service: run
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash
+
+
+services:
+
+  common: &common
+
+    image: "cdc-u24"
+
+    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    network_mode: none
+
+    working_dir: /home/$USER
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
+
+    cap_drop:
+      - ALL
+
+    cap_add:
+      - SYS_CHROOT
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+  setup:
     <<: *common
 
     network_mode: bridge
 
-    container_name: cdc_spotify_spotify
-
-    x-app-features:
-      - sound
-      - x11
-      - dbus-proxy: --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher
-
-    command:
-      - echo "SPOTIFY"
-      - pipewire-pulse &
-      - exec ~/.local/share/spotify/spotify "$$@"
-
-    x-launcher:
-
-      dbus-proxy: --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher
-
-      devices:
-        - video
-
-      desktop:
-
-        file: |
-          [Desktop Entry]
-          Type=Application
-          Name=Spotify (container)
-          StartupWMClass=spotify
-          GenericName=Music Player
-          Icon=spotify-linux-256
-          Exec=spotify %U
-          Terminal=false
-          MimeType=x-scheme-handler/spotify;
-          Categories=Audio;Music;Player;AudioVideo;
-
-        icons:
-          - source: .local/share/icons/hicolor/256x256/apps/spotify-linux-256.png
-            size: 256
-            dest: spotify-linux-256.png
-          - source: .local/share/icons/hicolor/256x256/apps/spotify-linux-256.png
-            size: 256
-            dest: spotify-client.png
-          - source: .local/share/icons/hicolor/256x256/apps/spotify-linux-256.png
-            size: 256
-            dest: spotify.png
-          - source: .local/share/icons/hicolor/512x512/apps/spotify-linux-512.png
-            size: 512
-            dest: spotify-linux-512.png
-          - source: .local/share/icons/hicolor/128x128/apps/spotify-linux-128.png
-            size: 128
-            dest: spotify-linux-128.png
-          - source: .local/share/icons/hicolor/16x16/apps/spotify-linux-16.png
-            size: 16
-            dest: spotify-linux-16.png
-          - source: .local/share/icons/hicolor/22x22/apps/spotify-linux-22.png
-            size: 22
-            dest: spotify-linux-22.png
-          - source: .local/share/icons/hicolor/24x24/apps/spotify-linux-24.png
-            size: 24
-            dest: spotify-linux-24.png
-          - source: .local/share/icons/hicolor/32x32/apps/spotify-linux-32.png
-            size: 32
-            dest: spotify-linux-32.png
-          - source: .local/share/icons/hicolor/48x48/apps/spotify-linux-48.png
-            size: 48
-            dest: spotify-linux-48.png
-          - source: .local/share/icons/hicolor/64x64/apps/spotify-linux-64.png
-            size: 64
-            dest: spotify-linux-64.png
-          - source: .local/share/icons/hicolor/512x512/apps/spotify-linux-512.png
-            size: 512
-            dest: spotify-linux-512.png
-          - source: .local/share/icons/hicolor/32x32/apps/spotify-linux-32.png
-            dest: icons/spotify-linux-32.png
-          - source: .local/share/icons/hicolor/256x256/apps/spotify-linux-256.png
-            dest: icons/spotify-linux-256.png
-          - source: .local/share/icons/hicolor/64x64/apps/spotify-linux-64.png
-            dest: icons/spotify-linux-64.png
-
-
-  ## INTERACTIVE ##
-
-  interactive:
+  setup-nonet:
     <<: *common
 
-    x-app-features:
+    network_mode: none
+
+  run:
+    <<: *common
+
+    network_mode: bridge
+
+    x-features:
+      - video
       - sound
-      - x11
+      - wayland-fallback-x11
       - dbus-proxy: --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher
 
-    command:
-      - echo "INTERACTIVE"
-      - bash
+
+#  run-wayland:
+#    <<: *common
+#
+#    network_mode: bridge
+#
+#    x-features:
+#      - video
+#      - sound
+#      - wayland
+#      - wayland-host-tmp-mount
+#      - dbus-proxy: --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher

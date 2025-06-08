@@ -184,8 +184,9 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 
 	if [ "$FEATURE" = "mount-host-tmp" ]; then
 	    ADJUSTMENT_VOLS+=( "/tmp/cdc/$APP:/tmp/cdc/$APP:rw" )
-	fi	
-	
+	    ADJUSTMENT_ENVS+=( "CDC_HOSTTMP_PATH: /tmp/cdc/$APP" )
+	fi
+
 	if [ "$FEATURE" = "wayland-fallback-x11" ]; then
 	    if [ -n "$WAYLAND_DISPLAY" ]; then
 		FEATURE="wayland"
@@ -214,7 +215,6 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 	elif [ "$FEATURE" = "wayland" ]; then
 	    ADJUSTMENT_ENVS+=( "WAYLAND_DISPLAY: ${WAYLAND_DISPLAY}" )
 	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro" )
-	    #ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAGS: --ozone-platform=wayland --ozone-platform-hint=auto --enable-features=UseOzonePlatform")
 	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAGS: --ozone-platform=wayland --enable-features=WaylandWindowDecorations,UseOzonePlatform")
             ADJUSTMENT_ENVS+=( "QT_QPA_PLATFORM: wayland")
             ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: wayland")
@@ -414,7 +414,7 @@ if [ -z "$CONTAINER_ID" -a -n "$SERVICE" ]; then
 	DBUS_PROXY_PID=$?
 	trap "kill $DBUS_PROXY_PID" EXIT
     fi
-	
+
     if [ -n "$DBUS_SYSTEM_PROXY" ]; then
 	echo "Launching:" xdg-dbus-proxy "$DBUS_SYSTEM_BUS_ADDRESS" "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER" "${DBUS_SYSTEM_PROXY_ARGS[@]}"
 	# Workaround: sometimes xdb-dbus-proxy fails and leaves an empty directory behind, which stops further attmepts with "address in use"

@@ -126,8 +126,6 @@ x-launchers:
       icons:
         - source: slack.png
           dest: slack.png
-        - source: slack/slack/usr/share/pixmaps/slack.png
-          dest: slack/slack/usr/share/pixmaps/slack.png
 
   slack-wayland:
     service: run-wayland
@@ -137,7 +135,7 @@ x-launchers:
       - pipewire-pulse &
       - |
         if [ -n "$WAYLAND_DISPLAY" ]; then
-          export TMPDIR=/tmp/cdc/slack # this ugly workaround allows appindicator icons to be accessed by the host system
+          export TMPDIR="$$CDC_HOSTTMP_PATH" # this ugly workaround allows appindicator icons to be accessed by the host system
         fi
       - exec ~/.local/share/slack/slack/usr/bin/slack $${CDC_OZONE_FLAGS} "$$@"
     # Setting TMPDIR is a workaround to share 
