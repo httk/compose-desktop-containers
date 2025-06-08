@@ -35,7 +35,7 @@ function POST_PROCESS_LAUNCHER() {
 	echo "$PODMAN_CONFIG" | yq -r "${YQPATH}.desktop.file" > ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
 	sed -i "s|^Exec=$LAUNCHER|Exec=\"${DEST_ABSPATH}/$LAUNCHER\"|" ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
 	WMCLASS_FILE="$(yq -r "${YQPATH}.desktop.\"wmclass-file\"" <<< "$PODMAN_CONFIG")"
-	if [ -n "$WMCLASS_FILE" -a "$WMCLASS_FILE" != "null" ]; then
+	if [ -n "$WMCLASS_FILE" -a "$WMCLASS_FILE" != "null" -a -e "home/$WMCLASS_FILE" ]; then
 	    WMCLASS=$(cat "home/$WMCLASS_FILE")
 	    sed -i "s|^StartupWMClass=.*\$|StartupWMClass=$WMCLASS|" ~/.local/share/applications/"${LAUNCHER}_cdc.desktop"
 	fi

@@ -8,6 +8,13 @@
 
 set -e
 
+# Fix formatting of CDC_DEBUG so it always is a positive integer
+if [ -z "$CDC_DEBUG" ]; then
+    CDC_DEBUG=0
+elif ! [[ "$CDC_DEBUG" =~ ^[0-9]+$ ]]; then
+    CDC_DEBUG=1
+fi
+
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 LAUNCHPATH="$(cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)"
 TOOLPATH="$(dirname -- "$(realpath -- "$0")")"
@@ -136,7 +143,7 @@ if [ "$TYPE" != "tray" -a -z "$LAUNCH_SCRIPT" -o "$LAUNCH_SCRIPT" == "null" ]; t
     echo "No launch command defined for $APP $LAUNCHER"
     exit 1
 fi
-if [ -n "$CDC_DEBUG" ]; then
+if [ "$CDC_DEBUG" -ge "2" ]; then
   echo "==== LAUNCH SCRIPT ===="
   printf "%s\n" "$LAUNCH_SCRIPT"
   echo "======================="
@@ -202,7 +209,7 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 	elif [ "$FEATURE" = "x11" ]; then
 	    ADJUSTMENT_ENVS+=( "DISPLAY: \"${DISPLAY}\"" "XAUTHORITY: \"${XAUTHORITY}\"" )
 	    ADJUSTMENT_VOLS+=( "/tmp/.X11-unix:/tmp/.X11-unix:rw" "${XAUTHORITY}:${XAUTHORITY}:rw" )
-	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAG: --ozone-platform=x11")
+	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAGS: --ozone-platform=x11")
             ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: x11")
 
         elif [ "$FEATURE" = "dri-full" ]; then
@@ -319,7 +326,7 @@ if [ "$OVERRIDE_ALLOW_READ" == "yes" ]; then
 EOF
 fi
 
-if [ -n "$CDC_DEBUG" ]; then
+if [ "$CDC_DEBUG" -ge "2" ]; then
   echo "==== ADJUSTMENT FILE ===="
   cat "$ADJUSTMENT_FILE"
   echo "======================="
@@ -346,7 +353,7 @@ fi
 #    PRELAUNCHER=""
 #fi
 
-if [ -n "$CDC_DEBUG" ]; then
+if [ "$CDC_DEBUG" -ge "3" ]; then
     echo "=== CONFIG ==="
     podman-compose -f compose.yaml -f "$ADJUSTMENT_FILE" "${CONFIG_FILE[@]}" config
     echo "=============="
@@ -398,7 +405,7 @@ fi
 
 if [ -z "$CONTAINER_ID" -a -n "$SERVICE" ]; then
     trap 'podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" down "${SERVICE}" > /dev/null; rm -f "$ADJUSTMENT_FILE"' exit
-    if [ -n "$CDC_DEBUG" ]; then
+    if [ "$CDC_DEBUG" -ge "1" ]; then
 	echo podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up -d "${SERVICE}"
     fi
     CONTAINER_ID=$(podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up -d "${SERVICE}")
@@ -407,7 +414,7 @@ else
     echo "Note: service already running with CONTAINER_ID: $CONTAINER_ID"
 fi
 
-if [ "$CDC_DEBUG" == 1 ]; then
+if [ "$CDC_DEBUG" -ge "1" ]; then
     echo ${PRELAUNCHER} podman-compose -p "$APP" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_EXEC_ARGS[@]}" exec "${PODMAN_COMPOSE_EXEC_POST_ARGS[@]}" --user "${USER}" "${SERVICE}" bash -c "${LAUNCH_SCRIPT}" bash "$@"
 fi
 

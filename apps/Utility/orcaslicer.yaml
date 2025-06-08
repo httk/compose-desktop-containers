@@ -9,13 +9,123 @@ x-application:
     version: "3.8"
 
     services:
-      orcaslicer:
+      run:
         volumes:
-          - "${HOME}/Documents/containers/3d-projects:${HOME}/Documents/containers/3d-projects"
+          - "${HOME}/Documents/containers/3d-projects:/home/${USER}/Documents/containers/3d-projects"
         working_dir: "/home/${USER}/Documents/containers/3d-projects"
 
   env-default: |
     # This container has no configurable options
+
+x-launchers:
+  download:
+    service: setup
+    type: setup
+    script: &download_script
+      - echo "DOWNLOAD"
+      - mkdir -p ~/Downloads
+      - LATESTURL="$$(curl -s https://api.github.com/repos/SoftFever/OrcaSlicer/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep 'OrcaSlicer_.*_Ubuntu2404.*\.AppImage')"
+      - |
+        if [ "$LATESTURL" ]; then
+          echo "Could not automatically determine latest version to download."
+          echo "Download manually into home/Downloads, and then execute:"
+          echo "  setup/download/<filename>"
+          exit 1
+        fi
+      - LATESTFILENAME="$${LATESTURL##*/}"
+      - VERSION="$${LATESTFILENAME#OrcaSlicer_Linux_Ubuntu2404_}"
+      - VERSION="$${VERSION%.AppImage}"
+      - curl -L -o ~/Downloads/"$$LATESTFILENAME" "$$LATESTURL"
+      - chmod +x ~/Downloads/"$$LATESTFILENAME"
+      - ln -sf "$$LATESTFILENAME" ~/Downloads/OrcaSlicer_Linux_Ubuntu2404_latest.AppImage
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
+      - rm -f "$$(readlink -f ~/Downloads/OrcaSlicer_Linux_Ubuntu2404_latest.AppImage)"
+      - rm -f ~/Downloads/OrcaSlicer_Linux_Ubuntu2404_latest.AppImage
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - VERSION="$${1:-OrcaSlicer_Linux_Ubuntu2404_latest.AppImage}";
+      - echo "INSTALL $$VERSION";
+      - rm -rf ~/.local/share/orcaslicer &&
+        mkdir -p ~/.local/share/orcaslicer ~/.local/share/icons/hicolor/192x192/apps  ~/.local/share/applications ~/.config/OrcaSlicer &&
+        cd ~/.local/share/orcaslicer &&
+        ~/Downloads/"$$VERSION" --appimage-extract &&
+        cp squashfs-root/OrcaSlicer.png ~/.local/share/icons/hicolor/192x192/apps/. &&
+        cp squashfs-root/OrcaSlicer.desktop ~/.local/share/applications/OrcaSlicer.desktop &&
+        rm -rf ~/.local/share/orcaslicer/tmp
+
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - VERSION="$${1:-OrcaSlicer_Linux_Ubuntu2404_latest.AppImage}"
+      - echo "REINSTALL $$VERSION"
+      - rm -rf ~/.local/share/orcaslicer
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE CHECK"
+      - LATESTURL="$$(curl -s https://api.github.com/repos/SoftFever/OrcaSlicer/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep OrcaSlicer_Linux_Ubuntu2404)"
+      - LATESTFILENAME="$${LATESTURL##*/OrcaSlicer_Linux_Ubuntu2404_}"
+      - mkdir -p ~/Downloads
+      - if [ -e ~/Downloads/"$$LATESTFILENAME" ]; then
+          echo "No new version";
+          exit 0;
+        fi
+      - echo "File missing, or server-side file newer"
+      - exit 1
+
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - *redownload_script
+      - *reinstall_script
+
+  orcaslicer:
+    service: run
+    type: background
+    script:
+      - echo "ORCASLICER"
+      - ~/.local/share/orcaslicer/squashfs-root/bin/orca-slicer "$$@"
+
+    desktop:
+      file: |
+        [Desktop Entry]
+        GenericName=OrcaSlicer
+        Name=OrcaSlicer (container)
+        StartupWMClass=OrcaSlicer
+        MimeType=text/plain;
+        Exec=orcaslicer
+        Icon=OrcaSlicer
+        Type=Application
+        Terminal=false
+        Categories=Utility;
+
+      icons:
+        - source: OrcaSlicer.png
+          dest: OrcaSlicer.png
+
+  interactive:
+    service: run
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash
+
+
 
 services:
 
@@ -25,6 +135,10 @@ services:
 
     image: "cdc-u24"
 
+    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+
+    network: none
+
     working_dir: /home/${USER}
     user: "${USER}"
 
@@ -32,6 +146,7 @@ services:
       LANG: "${LANG}"
       XDG_RUNTIME_DIR: "/tmp/${USER}/run"
       XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
 
     cap_drop:
       - ALL
@@ -47,7 +162,7 @@ services:
     shm_size: "1G"
 
     volumes: &common-volumes
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
 
     devices:
       - "/dev/dri:/dev/dri"
@@ -59,119 +174,27 @@ services:
 
     network_node: none
 
-  ## INSTALL ##
 
-  download: &download
+  setup:
+    <<: *common
+
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
+  run:
     <<: *common
 
     network_node: bridge
-
-    command:
-      - echo "DOWNLOAD"
-      - mkdir -p Downloads
-      - LATESTURL="$$(curl -s https://api.github.com/repos/SoftFever/OrcaSlicer/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep OrcaSlicer_Linux_Ubuntu2404)"
-      - LATESTFILENAME="$${LATESTURL##*/}"
-      - VERSION="$${LATESTFILENAME#OrcaSlicer_Linux_Ubuntu2404_}"
-      - VERSION="$${VERSION%.AppImage}"
-      - curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL"
-      - chmod +x "Downloads/$$LATESTFILENAME"
-      - ln -sf "$$LATESTFILENAME" Downloads/OrcaSlicer_Linux_Ubuntu2404_latest.AppImage
-
-  download-clean:
-    <<: *common
-
-    command:
-      - echo "DOWNLOAD CLEAN"
-      - rm -f "$$(readlink -f Downloads/OrcaSlicer_Linux_Ubuntu2404_latest.AppImage)"
-      - rm -f Downloads/OrcaSlicer_Linux_Ubuntu2404_latest.AppImage
-
-  install: &install
-    <<: *common
-
-    command:
-      - VERSION="$${1:-OrcaSlicer_Linux_Ubuntu2404_latest.AppImage}";
-      - echo "INSTALL $$VERSION";
-      - rm -rf ~/.local/share/orcaslicer &&
-        mkdir -p ~/.local/share/orcaslicer ~/.local/share/icons/hicolor/192x192/apps  ~/.local/share/applications ~/.config/OrcaSlicer &&
-        cd ~/.local/share/orcaslicer &&
-        ~/Downloads/"$$VERSION" --appimage-extract &&
-        cp squashfs-root/OrcaSlicer.png ~/.local/share/icons/hicolor/192x192/apps/. &&
-        cp squashfs-root/OrcaSlicer.desktop ~/.local/share/applications/OrcaSlicer.desktop &&
-        rm -rf ~/.local/share/orcaslicer/tmp
-
-  install-clean:
-    <<: *common
-
-    command:
-      - rm -rf ~/.local/share/orcaslicer  
-
-  ## UPDATE ##
-
-  update-check: &update-check
-    <<: *common
-
-    network_node: bridge
-
-    command:
-      - echo "UPDATE CHECK"
-      - LATESTURL="$$(curl -s https://api.github.com/repos/SoftFever/OrcaSlicer/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep OrcaSlicer_Linux_Ubuntu2404)"
-      - LATESTFILENAME="$${LATESTURL##*/OrcaSlicer_Linux_Ubuntu2404_}"
-      - mkdir -p Downloads
-      - if [ -e "Downloads/$$LATESTFILENAME" ]; then
-          echo "No new version";
-          exit 0;
-        fi
-      - echo "File missing, or server-side file newer"
-      - exit 1
-
-  update: &update
-    <<: *install
-
-
-  ## EXECUTE ###
-
-  orcaslicer:
-    <<: *common
-
-    network_node: bridge
-
     read_only: false
 
-    command:
-      - echo "ORCASLICER"
-      - ~/.local/share/orcaslicer/squashfs-root/bin/orca-slicer "$$@"
-
-    x-application:
-
-      init:
-        - ln -sf /usr/lib/x86_64-linux-gnu/libjavascriptcoregtk-4.1.so.0 /usr/lib/x86_64-linux-gnu/libjavascriptcoregtk-4.0.so.18
-        - ln -sf /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0 /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.0.so.37
-
-      features:
-        - x11
-
-      desktop:
-        file: |
-          [Desktop Entry]
-          GenericName=OrcaSlicer
-          Name=OrcaSlicer (container)
-          StartupWMClass=OrcaSlicer
-          MimeType=text/plain;
-          Exec=orcaslicer
-          Icon=OrcaSlicer
-          Type=Application
-          Terminal=false
-          Categories=Utility;
-
-        icons:
-          - source: OrcaSlicer.png
-            dest: OrcaSlicer.png
-
-  ## INTERACTIVE ##
-
-  interactive:
-    <<: *common
+    user:
+      root
 
     command:
-      - echo "INTERACTIVE"
-      - bash "$$@"
+      - ln -sf /usr/lib/x86_64-linux-gnu/libjavascriptcoregtk-4.1.so.0 /usr/lib/x86_64-linux-gnu/libjavascriptcoregtk-4.0.so.18
+      - ln -sf /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0 /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.0.so.37
+
+    x-features:
+      - x11

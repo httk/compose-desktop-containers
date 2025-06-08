@@ -40,8 +40,8 @@ x-launchers:
       - echo "***********************************************************"
 
       - yad --width=600 --text-width=600 --on-top --center --button=Close --title "Download Microsoft 365 apps" --info --text "We need to \"download\" the Microsoft 365 progressive web applications (PWA).\n\nGoogle Chrome will now start, please use the browser window to navigate to the respective Microsoft 365 app (preferably using the \"9-dots-menu\"). When viewing the app, there should appear an 'install' icon in the browser navigator field. Click on this icon to download the PWA.\n\nPlease follow the above instuctions to download/install:\n\n- OneDrive\n- Microsoft Teams\n- Outlook\n- Forms"
-      - echo google-chrome $${CDC_OZONE_FLAG} 'https://www.microsoft365.com/'
-      - google-chrome $${CDC_OZONE_FLAG} 'https://www.microsoft365.com/'
+      - echo google-chrome $${CDC_OZONE_FLAGS} 'https://www.microsoft365.com/'
+      - google-chrome $${CDC_OZONE_FLAGS} 'https://www.microsoft365.com/'
 
   redownload:
     service: setup
@@ -70,7 +70,7 @@ x-launchers:
             echo -n "crx_$$CHROMIUM_APP_ID" > ~/.local/share/microsoft365/$${APPNAME#*|}.wmclass;
             cp ~/.local/share/icons/hicolor/256x256/apps/"chrome-$${CHROMIUM_APP_ID}-Default.png" ~/.local/share/icons/hicolor/256x256/apps/$${APPNAME#*|}.png;
           else
-            echo "Warning, $${APPNAME_FULL_NAME} does not seem to be downloaded and will thus not be installed, re-run the download step and retry.";
+            echo "Warning, $${APP_FULL_NAME} does not seem to be downloaded and will thus not be installed, re-run the download step and retry.";
           fi;
         done
 
