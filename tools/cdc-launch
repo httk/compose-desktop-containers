@@ -175,6 +175,17 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 
 	echo "Enabling feature: $FEATURE"
 
+	# Enable host-tmp-mount ONLY if using Wayland, used for appindicator workarounds
+	if [ "$FEATURE" = "wayland-mount-host-tmp" ]; then
+	    if [ -n "$WAYLAND_DISPLAY" ]; then
+		FEATURE="mount-host-tmp"
+	    fi
+	fi
+
+	if [ "$FEATURE" = "mount-host-tmp" ]; then
+	    ADJUSTMENT_VOLS+=( "/tmp/cdc/$APP:/tmp/cdc/$APP:rw" )
+	fi	
+	
 	if [ "$FEATURE" = "wayland-fallback-x11" ]; then
 	    if [ -n "$WAYLAND_DISPLAY" ]; then
 		FEATURE="wayland"
@@ -203,7 +214,8 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 	elif [ "$FEATURE" = "wayland" ]; then
 	    ADJUSTMENT_ENVS+=( "WAYLAND_DISPLAY: ${WAYLAND_DISPLAY}" )
 	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro" )
-	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAGS: --ozone-platform=wayland --ozone-platform-hint=auto --enable-features=UseOzonePlatform,WaylandWindowDecorations")
+	    #ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAGS: --ozone-platform=wayland --ozone-platform-hint=auto --enable-features=UseOzonePlatform")
+	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAGS: --ozone-platform=wayland --enable-features=WaylandWindowDecorations,UseOzonePlatform")
             ADJUSTMENT_ENVS+=( "QT_QPA_PLATFORM: wayland")
             ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: wayland")
 
@@ -244,29 +256,15 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 	    ADJUSTMENT_DEVS+=( "/dev/snd:/dev/snd" )
 
 	elif [ "$FEATURE" == "dbus-proxy" ]; then
-	    ARGUMENTS=( $(GET_FEATURE_ARG dbus-proxy) )
-	    echo "Launching:" "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER" "${ARGUMENTS[@]}"
-	    # Workaround: sometimes xdb-dbus-proxy fails and leaves an empty directory behind, which stops further attmepts with "address in use"
-	    if [ -d "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER" ]; then
-		rmdir "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER"
-	    fi
-	    xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER" "${ARGUMENTS[@]}" &
-	    DBUS_PROXY_PID=$?
-	    trap "kill $DBUS_PROXY_PID" EXIT
+	    DBUS_PROXY=1
+	    DBUS_PROXY_ARGS=( $(GET_FEATURE_ARG dbus-proxy) )
 	    CDC_DBUS_PATH="$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER"
             ADJUSTMENT_VOLS+=( "${CDC_DBUS_PATH}:/run/user/${UID}/bus:rw" )
 	    ADJUSTMENT_ENVS+=( "DBUS_SESSION_BUS_ADDRESS: \"unix:path=/run/user/${UID}/bus\"" )
 
 	elif [ "$FEATURE" == "dbus-system-proxy" ]; then
-	    ARGUMENTS=( $(GET_FEATURE_ARG dbus-system-proxy) )
-	    echo "Launching:" xdg-dbus-proxy "$DBUS_SYSTEM_BUS_ADDRESS" "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER" "${ARGUMENTS[@]}"
-	    # Workaround: sometimes xdb-dbus-proxy fails and leaves an empty directory behind, which stops further attmepts with "address in use"
-	    if [ -d "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER" ]; then
-		rmdir "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER"
-	    fi
-	    xdg-dbus-proxy "$DBUS_SYSTEM_BUS_ADDRESS" "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER" "${ARGUMENTS[@]}" &
-	    DBUS_SYSTEM_PROXY_PID=$?
-	    trap "kill $DBUS_SYSTEM_PROXY_PID" EXIT
+	    DBUS_SYSTEM_PROXY=1
+	    DBUS_SYSTEM_PROXY_ARGS=( $(GET_FEATURE_ARG dbus-system-proxy) )
 	    CDC_DBUS_SYSTEM_PATH="$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER"
 	    ADJUSTMENT_VOLS+=( "${CDC_DBUS_SYSTEM_PATH}:/run/dbus/system_bus_socket:rw" )
 	    ADJUSTMENT_ENVS+=( "DBUS_SYSTEM_BUS_ADDRESS: \"unix:path=/run/dbus/system_bus_socket\"" )
@@ -405,6 +403,29 @@ if [ -n "$CONTAINER_ID" ]; then
 fi
 
 if [ -z "$CONTAINER_ID" -a -n "$SERVICE" ]; then
+
+    if [ -n "$DBUS_PROXY" ]; then
+	echo "Launching:" "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER" "${DBUS_PROXY_ARGS[@]}"
+	# Workaround: sometimes xdb-dbus-proxy fails and leaves an empty directory behind, which stops further attmepts with "address in use"
+	if [ -d "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER" ]; then
+	    rmdir "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER"
+	fi
+	xdg-dbus-proxy "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER" "${DBUS_PROXY_ARGS[@]}" &
+	DBUS_PROXY_PID=$?
+	trap "kill $DBUS_PROXY_PID" EXIT
+    fi
+	
+    if [ -n "$DBUS_SYSTEM_PROXY" ]; then
+	echo "Launching:" xdg-dbus-proxy "$DBUS_SYSTEM_BUS_ADDRESS" "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER" "${DBUS_SYSTEM_PROXY_ARGS[@]}"
+	# Workaround: sometimes xdb-dbus-proxy fails and leaves an empty directory behind, which stops further attmepts with "address in use"
+	if [ -d "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER" ]; then
+	    rmdir "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER"
+	fi
+	xdg-dbus-proxy "$DBUS_SYSTEM_BUS_ADDRESS" "$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER" "${DBUS_SYSTEM_PROXY_ARGS[@]}" &
+	DBUS_SYSTEM_PROXY_PID=$?
+	trap "kill $DBUS_SYSTEM_PROXY_PID" EXIT
+    fi
+
     trap 'podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" down "${SERVICE}" > /dev/null; rm -f "$ADJUSTMENT_FILE"' exit
     if [ "$CDC_DEBUG" -ge "1" ]; then
 	echo podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up -d "${SERVICE}"

@@ -21,13 +21,143 @@ x-application:
     # No configurable options
 
 
-services:
+x-launchers:
+  download:
+    service: setup
+    type: setup
 
-  ## COMMON PART ##
+    script: &download_script
+      - echo "DOWNLOAD"
+      - mkdir -p Downloads
+      - LATESTURL="$$(curl -L 'https://slack.com/downloads/instructions/linux?ddl=1&build=deb' | sed -n 's|^.*src="\(https://downloads.slack-edge.com/desktop-releases/linux/x64/[^/]*/[^/]*-amd64.deb\).*$$|\1|p')"
+      - LATESTFILENAME="$${LATESTURL##*/}"
+      - if [ -z "$$LATESTFILENAME" ]; then
+          echo "Failed to determine latest version.";
+          exit 1;
+        fi;
+      - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/slack-latest-amd64.deb
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
+      - rm -f "$$(readlink -f Downloads/slack-latest-amd64.deb)"
+      - rm -f Downloads/slack-latest-amd64.deb
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - VERSION="$${1:-slack-latest-amd64.deb}";
+      - echo "INSTALL $$VERSION";
+      - rm -rf ~/.local/share/slack &&
+        mkdir ~/.local/share/slack &&
+        cd ~/.local/share/slack &&
+        dpkg-deb -x ~/Downloads/"$$VERSION" slack &&
+        mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps &&
+        cp slack/usr/share/applications/slack.desktop ~/.local/share/applications/slack.desktop &&
+        sed -i 's%/usr/bin/slack%/home/$USER/Installation/slack/usr/bin/slack%' ~/.local/share/applications/slack.desktop &&
+        cp "slack/usr/share/pixmaps/slack.png" ~/.local/share/icons/hicolor/256x256/apps/slack.png &&
+        gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor &&
+        update-desktop-database ~/.local/share/applications/
+
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - VERSION="$${1:-slack-latest-amd64.deb}";
+      - echo "REINSTALL $$VERSION"
+      - rm -rf ~/.local/share/slack
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
+      - echo "UPDATE CHECK"
+      - LATESTURL="$$(curl -L 'https://slack.com/downloads/instructions/linux?ddl=1&build=deb' | sed -n 's|^.*src="\(https://downloads.slack-edge.com/desktop-releases/linux/x64/[^/]*/[^/]*-amd64.deb\).*$$|\1|p')"
+      - LATESTFILENAME="$${LATESTURL##*/}";
+      - if [ -z "$$LATESTFILENAME" ]; then
+          echo "Failed to determine latest version.";
+          exit 1;
+      - fi
+      - mkdir -p Downloads
+      - if [ -e "Downloads/$$LATESTFILENAME" ]; then
+          echo "No new version";
+          exit 0;
+        fi
+      - echo "File missing, or server-side file newer"
+      - exit 1
+
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - *redownload_script
+      - *reinstall_script
+
+  slack:
+    service: run
+    type: background
+    auto-update: true
+    script:
+      - echo "SLACK"
+      - pipewire-pulse &
+      - exec ~/.local/share/slack/slack/usr/bin/slack $${CDC_OZONE_FLAGS} "$$@"
+
+    desktop:
+
+      file: |
+        [Desktop Entry]
+        Name=Slack (container)
+        StartupWMClass=Slack
+        Comment=Slack Desktop
+        GenericName=Slack Client for Linux
+        Exec=slack
+        Icon=slack
+        Type=Application
+        StartupNotify=true
+        Categories=Network;InstantMessaging;
+        MimeType=x-scheme-handler/slack;
+
+      icons:
+        - source: slack.png
+          dest: slack.png
+        - source: slack/slack/usr/share/pixmaps/slack.png
+          dest: slack/slack/usr/share/pixmaps/slack.png
+
+  slack-wayland:
+    service: run-wayland
+    type: background
+    script:
+      - echo "SLACK"
+      - pipewire-pulse &
+      - |
+        if [ -n "$WAYLAND_DISPLAY" ]; then
+          export TMPDIR=/tmp/cdc/slack # this ugly workaround allows appindicator icons to be accessed by the host system
+        fi
+      - exec ~/.local/share/slack/slack/usr/bin/slack $${CDC_OZONE_FLAGS} "$$@"
+    # Setting TMPDIR is a workaround to share 
+
+  interactive:
+    service: run-wayland
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash
+
+
+services:
 
   common: &common
 
     image: "cdc-u24"
+
+    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    network_mode: none
 
     working_dir: /home/$USER
     user: "${USER}"
@@ -36,6 +166,7 @@ services:
       LANG: "${LANG}"
       XDG_RUNTIME_DIR: "/tmp/${USER}/run"
       XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
 
     cap_drop:
       - ALL
@@ -53,144 +184,47 @@ services:
 
     shm_size: "1G"
 
-    volumes: &common-volumes
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
 
-    devices: &common-devices
-      - /dev/dri:/dev/dri
+    devices:
+      - "/dev/dri:/dev/dri"
 
     security_opt:
       - no-new-privileges
 
     userns_mode: "keep-id"
 
+  setup:
+    <<: *common
+
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
     network_mode: none
 
-  ## INSTALL ##
-
-  download: &download
+  run:
     <<: *common
 
     network_mode: bridge
 
-    command:
-      - echo "DOWNLOAD"
-      - mkdir -p Downloads
-      - LATESTURL="$$(curl -L 'https://slack.com/downloads/instructions/linux?ddl=1&build=deb' | sed -n 's|^.*src="\(https://downloads.slack-edge.com/desktop-releases/linux/x64/[^/]*/[^/]*-amd64.deb\).*$$|\1|p')"
-      - LATESTFILENAME="$${LATESTURL##*/}"
-      - if [ -z "$$LATESTFILENAME" ]; then
-          echo "Failed to determine latest version.";
-          exit 1;
-        fi;
-      - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" && ln -sf $$LATESTFILENAME Downloads/slack-latest-amd64.deb
-
-  download-clean:
-    <<: *common
-
-    command:
-      - echo "DOWNLOAD CLEAN"
-      - rm -f "$$(readlink -f Downloads/slack-latest-amd64.deb)"
-      - rm -f Downloads/slack-latest-amd64.deb
-
-  install: &install
-    <<: *common
-
-    command:
-      - VERSION="$${1:-slack-latest-amd64.deb}";
-      - echo "INSTALL $$VERSION";
-      - rm -rf ~/.local/share/slack &&
-        mkdir ~/.local/share/slack &&
-        cd ~/.local/share/slack &&
-        dpkg-deb -x ~/Downloads/"$$VERSION" slack &&
-        mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps &&
-        cp slack/usr/share/applications/slack.desktop ~/.local/share/applications/slack.desktop &&
-        sed -i 's%/usr/bin/slack%/home/$USER/Installation/slack/usr/bin/slack%' ~/.local/share/applications/slack.desktop &&
-        cp "slack/usr/share/pixmaps/slack.png" ~/.local/share/icons/hicolor/256x256/apps/slack.png &&
-        gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor &&
-        update-desktop-database ~/.local/share/applications/
-
-  install-clean:
-    <<: *common
-
-    command:
-      - rm -rf ~/.local/share/slack
-
-
-  ## UPDATE ##
-
-  update-check: &update-check
-    <<: *common
-
-    network_mode: bridge
-
-    command:
-      - echo "UPDATE CHECK"
-      - LATESTURL="$$(curl -L 'https://slack.com/downloads/instructions/linux?ddl=1&build=deb' | sed -n 's|^.*src="\(https://downloads.slack-edge.com/desktop-releases/linux/x64/[^/]*/[^/]*-amd64.deb\).*$$|\1|p')"
-      - LATESTFILENAME="$${LATESTURL##*/}";
-      - if [ -z "$$LATESTFILENAME" ]; then
-          echo "Failed to determine latest version.";
-          exit 1;
-      - fi
-      - mkdir -p Downloads
-      - if [ -e "Downloads/$$LATESTFILENAME" ]; then
-          echo "No new version";
-          exit 0;
-        fi
-      - echo "File missing, or server-side file newer"
-      - exit 1
-
-  update: &update
-    <<: *install
-
-
-  ## EXECUTE ###
-
-  slack:
-    <<: *common
-
-    network_mode: bridge
-
-    container_name: cdc_slack_slack
-
-    command:
-      - echo "SLACK"
-      - pipewire-pulse &
-      - exec ~/.local/share/slack/slack/usr/bin/slack "$$@"
-
-    x-app-launcher:
-
-      features:
+    x-features:
       - video
       - sound
       - x11
 
-      desktop:
-
-        file: |
-          [Desktop Entry]
-          Name=Slack (container)
-          StartupWMClass=Slack
-          Comment=Slack Desktop
-          GenericName=Slack Client for Linux
-          Exec=slack
-          Icon=slack
-          Type=Application
-          StartupNotify=true
-          Categories=Network;InstantMessaging;
-          MimeType=x-scheme-handler/slack;
-
-        icons:
-          - source: slack.png
-            dest: slack.png
-
-
-  ## INTERACTIVE ##
-
-  interactive:
+  # wayland support works quite well, but at least in Gnome generates some weird visual artifacts around the window
+  # for what seems to be intended as a drop shadow. I have not found a way to get rid of it.
+  run-wayland:
     <<: *common
 
     network_mode: bridge
 
-    command:
-      - echo "INTERACTIVE"
-      - bash
+    x-features:
+      - video
+      - sound
+      - wayland
+      - wayland-host-tmp-mount
+      - dbus-proxy: --filter --call="org.freedesktop.portal.*=*" --talk=org.kde.StatusNotifierWatcher
