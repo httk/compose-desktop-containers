@@ -18,7 +18,7 @@ APP="$(basename -- "$(pwd -P)")"
 if ! "$SCRIPTPATH/cdc-launch" update-check; then
     "$SCRIPTPATH/cdc-launch" download
     "$SCRIPTPATH/cdc-launch" update
-    "$SCRIPTPATH/cdc-post-install"
+    "$SCRIPTPATH/cdc-host-integration"
 else
     echo "Update not needed. Use 'reinstall' to force reinstall)."
 fi

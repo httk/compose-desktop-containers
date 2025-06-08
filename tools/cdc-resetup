@@ -64,4 +64,4 @@ else
     )
 fi
 
-"$SCRIPTPATH/cdc-post-install"
+"$SCRIPTPATH/cdc-host-integration"
