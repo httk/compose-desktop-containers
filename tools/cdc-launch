@@ -382,7 +382,7 @@ fi
 # Run auto-update if we are supposed to do that before launching
 AUTO_UPDATE="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".\"auto-update\"" <<< "$PODMAN_CONFIG")"
 if [ -z "$CDC_NO_RECURSE" -a -n "$AUTO_UPDATE" -a "$AUTO_UPDATE" != "null" -a "$LAUNCHER" != "update-check" -a "$LAUNCHER" != "download" -a "$LAUNCHER" != "update" ]; then
-    CDC_NO_RECURSE=1 "${SCRIPTPATH}/cdc-update"
+    CDC_NO_RECURSE=1 "${SCRIPTPATH}/cdc-update-if-needed"
 fi
 
 # If the service is already running, get its CONTAINER_ID

@@ -8,31 +8,31 @@ The tools create both command line and desktop launchers for installed applicati
 
 ## Quickstart
 
-Clone the repository and initialize submodule dependecies in, for example, `~/Containers`:
+Clone the repository and initialize submodule dependecies in, for example, `~/Containers/cdc`:
 ```
-git clone --recurse-submodules 'https://github.com/httk/compose-desktop-containers.git' ~/Containers 
+mkdir ~/Containers
+cd ~/Containers
+git clone --recurse-submodules 'https://github.com/httk/compose-desktop-containers.git' cdc
 ```
 
 Install dependencies (replace `<your host system>` with the name of the OS you are installing the containers on):
 ```
-cd dependencies/installers/<your host system>
-./install.sh
-cd ../../..
+cdc/dependencies/installers/<your host system>/install.sh
 ```
 
 Build the container image:
 ```
-cd images/image-u24
+cd cdc/images/image-u24
 ./build-gamescope.sh
 ./build.sh
-cd ../..
+cd ../../..
 ```
 This first builds some dependencies, which is helper software we need for the image, and then builds the `cdc-u24` image.
 
 ### Install and run an app
 ```
 cd ~/Containers
-../tools/cdc-setup apps/Networking/discord.yaml discord
+cdc/tools/cdc-setup cdc/apps/Networking/discord.yaml discord
 ```
 Now try to start discord from your system launcher, or run `./discord` in the application directory.
 
@@ -47,13 +47,13 @@ Other files inside `/home/<username>/` are mapped to a subdirectory `home` in th
 ### Update an app
 ```
 cd <app directory>
-~/Containers/tools/cdc-update
+~/Containers/cdc/tools/cdc-update
 ```
 Now try to start discord from your system launcher.
 
 ### Update the application definition files to the latest ones in this repository
 ```
-cd ~/Containers
+cd ~/Containers/cdc
 git pull
 ```
 (Installed compose.yaml files are symbolic links to the ones under `apps`, so they get updated automatically.
@@ -64,7 +64,7 @@ If you do not want this feature, you can remove the symbolic link and copy the f
 The first thing to try if you have trouble with a specific app is to just re-initialize it:
 ```
 cd <app directory>
-~/Containers/tools/cdc-resetup
+~/Containers/cdc/tools/cdc-resetup
 ```
 This keeps your files in the `home` subdirectory, but redownloads, rebuilds, and reinstalls the app.
 
