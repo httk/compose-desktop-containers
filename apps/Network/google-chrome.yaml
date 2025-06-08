@@ -20,22 +20,118 @@ x-application:
   env-default: |
     # This container has no configurable options
 
-services:
+x-launchers:
 
-  ## COMMON PART ##
+  download:
+    service: setup
+    type: setup
+
+    # Zoom doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
+    script: &download_script
+      - echo "DOWNLOAD"
+      - echo "(Nothing to download, google-chrome is part of the system image.)"
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - echo "INSTALL";
+      - mkdir -p ~/.local/share/icons/hicolor/16x16/apps ~/.local/share/icons/hicolor/24x24/apps ~/.local/share/icons/hicolor/32x32/apps ~/.local/share/icons/hicolor/48x48/apps ~/.local/share/icons/hicolor/64x64/apps ~/.local/share/icons/hicolor/128x128/apps ~/.local/share/icons/hicolor/256x256/apps
+      - cp /usr/share/icons/hicolor/16x16/apps/google-chrome.png ~/.local/share/icons/hicolor/16x16/apps/.
+      - cp /usr/share/icons/hicolor/24x24/apps/google-chrome.png ~/.local/share/icons/hicolor/24x24/apps/.
+      - cp /usr/share/icons/hicolor/32x32/apps/google-chrome.png ~/.local/share/icons/hicolor/32x32/apps/.
+      - cp /usr/share/icons/hicolor/48x48/apps/google-chrome.png ~/.local/share/icons/hicolor/48x48/apps/.
+      - cp /usr/share/icons/hicolor/64x64/apps/google-chrome.png ~/.local/share/icons/hicolor/64x64/apps/.
+      - cp /usr/share/icons/hicolor/128x128/apps/google-chrome.png ~/.local/share/icons/hicolor/128x128/apps/.
+      - cp /usr/share/icons/hicolor/256x256/apps/google-chrome.png ~/.local/share/icons/hicolor/256x256/apps/.
+
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
+      - echo "UPDATE CHECK"
+      - echo "Part of system image; updates that way"
+      - exit 0
+
+  update:
+    service: setup
+    type: setup
+    prelaunchers:
+      - redownload
+      - reinstall
+    script:
+      - echo "UPDATE"
+
+  google-chrome:
+    service: run
+    type: background
+
+    script:
+      - echo "GOOGLE_CHROME"
+      - pipewire-pulse &
+      - exec google-chrome $${CDC_OZONE_FLAGS} "$$@"
+
+    desktop:
+      file: |
+        [Desktop Entry]
+        Name=Google Chrome (container)
+        Comment=Access the Internet
+        Exec=google-chrome %U
+        StartupNotify=true
+        StartupWMClass=google-chrome
+        Terminal=false
+        Icon=google-chrome
+        Type=Application
+        Categories=Network;WebBrowser;
+        MimeType=application/pdf;application/rdf+xml;application/rss+xml;application/xhtml+xml;application/xhtml_xml;application/xml;image/gif;image/jpeg;image/png;image/webp;text/html;text/xml;x-scheme-handler/http;x-scheme-handler/https;
+        Actions=new-window;new-private-window;
+
+        [Desktop Action new-window]
+        Name=New Window
+        Exec=/usr/bin/google-chrome
+
+        [Desktop Action new-private-window]
+        Name=New Incognito Window
+        Exec=/usr/bin/google-chrome --incognito
+
+      icons:
+        - source: google-chrome.png
+          dest: google-chrome.png
+
+  interactive:
+    service: run
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash "$$@"
+
+services:
 
   common: &common
 
     image: "cdc-u24"
+    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
 
     working_dir: /home/$USER
     user: "${USER}"
 
     environment: &common-env
       LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
       XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
 
     cap_drop:
       - ALL
@@ -53,114 +149,32 @@ services:
 
     shm_size: "1G"
 
-    volumes: &common-volumes
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-
-    devices:
-      - /dev/dri:/dev/dri
-
-    security_opt:
-      - "label=no-new-privileges"
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
 
     userns_mode: "keep-id"
 
     network_mode: none
 
+    devices:
+      - "/dev/dri:/dev/dri"
 
-  ## INSTALL ##
-
-  download: &download
+  setup:
     <<: *common
 
     network_mode: bridge
 
-    command:
-      - echo "DOWNLOAD"
-      - echo "(Nothing to download, google-chrome is part of the system image.)"
-
-  install: &install
+  setup-nonet:
     <<: *common
 
-    # This install just makes the icons available to the outer parts of the installer
-    command:
-      - echo "INSTALL";
-      - mkdir -p ~/.local/share/icons/hicolor/16x16/apps ~/.local/share/icons/hicolor/24x24/apps ~/.local/share/icons/hicolor/32x32/apps ~/.local/share/icons/hicolor/48x48/apps ~/.local/share/icons/hicolor/64x64/apps ~/.local/share/icons/hicolor/128x128/apps ~/.local/share/icons/hicolor/256x256/apps
-      - cp /usr/share/icons/hicolor/16x16/apps/google-chrome.png ~/.local/share/icons/hicolor/16x16/apps/.
-      - cp /usr/share/icons/hicolor/24x24/apps/google-chrome.png ~/.local/share/icons/hicolor/24x24/apps/.
-      - cp /usr/share/icons/hicolor/32x32/apps/google-chrome.png ~/.local/share/icons/hicolor/32x32/apps/.
-      - cp /usr/share/icons/hicolor/48x48/apps/google-chrome.png ~/.local/share/icons/hicolor/48x48/apps/.
-      - cp /usr/share/icons/hicolor/64x64/apps/google-chrome.png ~/.local/share/icons/hicolor/64x64/apps/.
-      - cp /usr/share/icons/hicolor/128x128/apps/google-chrome.png ~/.local/share/icons/hicolor/128x128/apps/.
-      - cp /usr/share/icons/hicolor/256x256/apps/google-chrome.png ~/.local/share/icons/hicolor/256x256/apps/.
+    network_mode: none
 
-  ## UPDATE ##
-
-  update-check: &update-check
+  run:
     <<: *common
-
-    command:
-      - echo "UPDATE CHECK"
-      - echo "No new version"
-      - exit 0
-
-  update: &update
-    <<: *install
-
-
-  ## EXECUTE ###
-
-  google-chrome:
-    <<: *common
-
-    container_name: cdc_google_chrome_google_chrome
 
     network_mode: bridge
 
     x-features:
       - video
       - sound
-      - dri
       - wayland-fallback-x11
-      - ozone
-      
-    command:
-      - echo "GOOGLE_CHROME"
-      - pipewire-pulse &
-      - exec google-chrome $${OZONE_FLAG} "$$@"
-
-    x-launcher:
-      desktop:
-        file: |
-          [Desktop Entry]
-          Name=Google Chrome (container)
-          Comment=Access the Internet
-          Exec=google-chrome %U
-          StartupNotify=true
-          StartupWMClass=google-chrome
-          Terminal=false
-          Icon=google-chrome
-          Type=Application
-          Categories=Network;WebBrowser;
-          MimeType=application/pdf;application/rdf+xml;application/rss+xml;application/xhtml+xml;application/xhtml_xml;application/xml;image/gif;image/jpeg;image/png;image/webp;text/html;text/xml;x-scheme-handler/http;x-scheme-handler/https;
-          Actions=new-window;new-private-window;
-
-          [Desktop Action new-window]
-          Name=New Window
-          Exec=/usr/bin/google-chrome
-
-          [Desktop Action new-private-window]
-          Name=New Incognito Window
-          Exec=/usr/bin/google-chrome --incognito
-
-        icons:
-          - source: google-chrome.png
-            dest: google-chrome.png
-
-  ## INTERACTIVE ##
-
-  interactive:
-    <<: *common
-
-    command:
-      - echo "INTERACTIVE"
-      - bash "$$@"

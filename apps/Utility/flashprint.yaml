@@ -20,56 +20,11 @@ x-application:
   env-default: |
     # This container has no configurable options
 
-services:
-
-  ## COMMON PART ##
-
-  common: &common
-
-    image: "cdc-u24"
-
-    working_dir: /home/${USER}
-    user: "${USER}"
-
-    environment: &common-env
-      LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
-      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
-
-    cap_drop:
-      - ALL
-
-    security_opt:
-      - no-new-privileges
-
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /run
-
-    shm_size: "1G"
-
-    volumes: &common-volumes
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-
-    devices:
-      - "/dev/dri:/dev/dri"
-
-    security_opt:
-      - no-new-privileges
-
-    userns_mode: "keep-id"
-
-    network_node: none
-
-  ## INSTALL ##
-
-  download: &download
-    <<: *common
-
-    network_node: bridge
-
-    command:
+x-launchers:
+  download:
+    service: setup
+    type: setup
+    script: &download_script
       - echo "DOWNLOAD"
       - mkdir -p Downloads
       - LATESTURL="$$(curl -L -N 'https://flashforge.com/blogs/download-software/software' | sed -n '\|^.*"\(https://[^/]\+/FlashPrint_[0-9.]\+/flashprint5_[0-9.]\+_amd64.deb\)".*$$|{s||\1|p;q}')"
@@ -81,19 +36,19 @@ services:
       - curl -L -o Downloads/$$LATESTFILENAME "$$LATESTURL" &&
         ln -sf $$LATESTFILENAME Downloads/flashprint5_latest_amd64.deb
 
-  download-clean:
-    <<: *common
-
-    command:
-      - echo "DOWNLOAD CLEAN"
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
       - rm -f "$$(readlink -f Downloads/flashprint5_latest_amd64.deb)"
       - rm -f Downloads/flashprint5_latest_amd64.deb
+      - *download_script
 
-
-  install: &install
-    <<: *common
-
-    command:
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
       - VERSION="$${1:-flashprint5_latest_amd64.deb}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/.local/share/flashprint &&
@@ -104,21 +59,19 @@ services:
         cp flashprint/usr/share/applications/FlashPrint5.desktop ~/.local/share/applications/FlashPrint5.desktop &&
         sed -i 's%^Exec=/usr/share/FlashPrint5$$%Exec=/home/$${USER}/install/flashprint/usr/share/FlashPrint5/%' ~/.local/share/applications/FlashPrint5.desktop
 
-  install-clean:
-    <<: *common
-
-    command:
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - VERSION="$${1:-flashprint5_latest_amd64.deb}";
+      - echo "INSTALL $$VERSION";
       - rm -rf ~/.local/share/flashprint
+      - *install_script
 
-
-  ## UPDATE ##
-
-  update-check: &update-check
-    <<: *common
-
-    network_node: bridge
-
-    command:
+  update-check:
+    service: setup
+    type: setup
+    script:
       - echo "UPDATE CHECK"
       - LATESTURL="$$(curl -L -N 'https://flashforge.com/blogs/download-software/software' | sed -n '\|^.*"\(https:[^/]\+/FlashPrint_[0-9.]\+/flashprint5_[0-9.]\+-amd64.deb\)".*$$|{s||\1|p;q}')"
       - LATESTFILENAME="$${LATESTURL##*/}"
@@ -134,67 +87,125 @@ services:
       - echo "File missing, or server-side file newer"
       - exit 1
 
-  update: &update
-    <<: *install
-
-
-  ## EXECUTE ###
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - *redownload_script
+      - *reinstall_script
 
   flashprint:
-    <<: *common
-
-    container_name: cdc_flashprint_flashprint
-
-    network_node: bridge
-
-    x-app-features:
-      - x11
-
-    command:
+    service: run
+    type: background
+    script:
       - echo "FLASHPRINT"
       - LD_LIBRARY_PATH=~/.local/share/flashprint/flashprint/usr/lib exec ~/.local/share/flashprint/flashprint/usr/share/FlashPrint5/FlashPrint "$$@"
 
-    x-launcher:
-      desktop:
-        file: |
-          [Desktop Entry]
-          GenericName=FlashPrint5
-          Name=FlashForge 3D Printer Control Software v5 (container)
-          StartupWMClass=FlashPrint
-          MimeType=text/plain;
-          Exec=flashprint
-          Icon=flashforge5
-          Type=Application
-          Terminal=false
-          Categories=Utility;
+    desktop:
+      file: |
+        [Desktop Entry]
+        GenericName=FlashPrint5
+        Name=FlashForge 3D Printer Control Software v5 (container)
+        StartupWMClass=FlashPrint
+        MimeType=text/plain;
+        Exec=flashprint
+        Icon=flashforge5
+        Type=Application
+        Terminal=false
+        Categories=Utility;
 
-        icons:
-          - source: flashforge5.png
-            dest: flashforge5.png
+      icons:
+        - source: flashforge5.png
+          dest: flashforge5.png
+
 
   flashprint-wayland:
-    <<: *common
-
-    container_name: cdc_flashprint_flashprint
-
-    network_node: bridge
-
-    x-app-features:
-      - wayland
-
-    command:
-      - echo "FLASHPRINT-WAYLAND -- WARNING, this currently does not seem to work"
-      - QT_QPA_PLATFORM=wayland LD_LIBRARY_PATH=~/.local/share/flashprint/flashprint/usr/lib exec ~/.local/share/flashprint/flashprint/usr/share/FlashPrint5/FlashPrint "$$@"
-
-    x-launcher:
-        desktop:
-
-
-  ## INTERACTIVE ##
+    service: run-wayland
+    type: background
+    script:
+      - echo "FLASHPRINT"
+      - LD_LIBRARY_PATH=~/.local/share/flashprint/flashprint/usr/lib exec ~/.local/share/flashprint/flashprint/usr/share/FlashPrint5/FlashPrint "$$@"
 
   interactive:
+    service: run
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+
+    network: none
+
+    working_dir: /home/${USER}
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+    network_node: none
+
+
+  setup:
     <<: *common
 
-    command:
-      - echo "INTERACTIVE"
-      - bash "$$@"
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
+    network_mode: none
+
+  run:
+    <<: *common
+
+    network_node: bridge
+    read_only: false
+
+    x-features:
+      - x11
+
+  run-wayland:
+    <<: *common
+
+    network_node: bridge
+    read_only: false
+
+    x-features:
+      - wayland

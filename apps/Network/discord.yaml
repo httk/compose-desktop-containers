@@ -23,80 +23,29 @@ x-application:
   env-default: |
     # This container has no configurable options
 
-services:
-
-  ## COMMON PART ##
-
-  common: &common
-
-    image: "cdc-u24"
-
-    working_dir: /home/$USER
-    user: "${USER}"
-
-    environment: &common-env
-      LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
-      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
-
-    cap_drop:
-      - ALL
-    cap_add:
-      - SYS_CHROOT
-      - CAP_SETUID
-      - CAP_SETGID
-
-    security_opt:
-      - no-new-privileges
-
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /run
-
-    shm_size: "512m"
-
-    volumes: &common-volumes
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
-
-    security_opt:
-      - no-new-privileges
-
-    userns_mode: "keep-id"
-
-    network_mode: none
-
-    devices:
-      - "/dev/dri:/dev/dri"
-
-  ## INSTALL ##
-
-  download: &download
-    <<: *common
-
-    network_mode: bridge
-
-    environment:
-      <<: *common-env
+x-launchers:
+  download:
+    service: setup
+    type: setup
 
     # Discord doesn't keep track of versions via filenames. TODO: implement handling of this so old versions are kept.
-    command:
+    script: &download_script
       - echo "DOWNLOAD"
       - mkdir -p Downloads
       - curl -L -o Downloads/discord.tar.gz "https://discordapp.com/api/download?platform=linux&format=tar.gz"
 
-  download-clean:
-    <<: *common
-
-    command:
-      - echo "DOWNLOAD CLEAN"
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
       - rm -f Downloads/discord.tar.gz
+      - *download_script
 
-
-  install: &install
-    <<: *common
-
-    command:
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
       - VERSION="$${1:-discord.tar.gz}";
       - echo "INSTALL $$VERSION";
       - rm -rf ~/.local/share/discord &&
@@ -107,20 +56,19 @@ services:
         cp Discord/discord.desktop ~/.local/share/applications/discord.desktop &&
         sed -i 's%/usr/share/discord/Discord%/home/$${USER}/discord/Discord/Discord%' ~/.local/share/applications/discord.desktop
 
-  install-clean:
-    <<: *common
-
-    command:
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - VERSION="$${1:-discord.tar.gz}";
+      - echo "REINSTALL $$VERSION"
       - rm -rf ~/.local/share/discord
+      - *install_script
 
-  ## UPDATE ##
-
-  update-check: &update-check
-    <<: *common
-
-    network_mode: bridge
-
-    command:
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
       - echo "UPDATE CHECK"
       - mkdir -p Downloads
       - if [ -e Downloads/discord.tar.gz ]; then
@@ -139,57 +87,142 @@ services:
       - echo "File missing, or server-side file newer"
       - exit 1
 
-  update: &update
-    <<: *install
-
-
-  ## EXECUTE ###
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - *redownload_script
+      - *reinstall_script
 
   discord:
+    service: run
+    type: background
+    auto-update: true
+    script:
+      - echo "DISCORD"
+      - pipewire-pulse &
+      - exec ~/.local/share/discord/Discord/Discord $${CDC_OZONE_FLAGS} "$$@"
+
+    desktop:
+
+      file: |
+        [Desktop Entry]
+        Name=Discord (container)
+        StartupWMClass=discord
+        Comment=Internet Messenger
+        Exec=discord %U
+        Terminal=false
+        Type=Application
+        Icon=discord
+        Categories=Network;InstantMessaging;
+        MimeType=x-scheme-handler/discord;
+
+      icons:
+        - source: Installation/Discord/discord.png
+          size: 256
+          dest: discord.png
+
+  discord-force-wayland:
+    service: run-wayland
+    type: background
+    script:
+      - echo "DISCORD"
+      - pipewire-pulse &
+      - exec ~/.local/share/discord/Discord/Discord $${CDC_OZONE_FLAGS} "$$@"
+
+
+  interactive:
+    service: run
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash
+
+
+services:
+
+  common: &common
+
+    image: "cdc-u24"
+
+    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    network_mode: none
+
+    working_dir: /home/$USER
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
+
+    cap_drop:
+      - ALL
+
+    cap_add:
+      - SYS_CHROOT
+      - CAP_SETUID
+      - CAP_SETGID
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+  setup:
     <<: *common
 
     network_mode: bridge
 
-    command:
-      - echo "DISCORD"
-      - pipewire-pulse &
-      - exec ~/.local/share/discord/Discord/Discord "$$@"
-
-    x-app-launcher:
-
-      container_name: cdc_discord_discord
-
-      features:
-        - video
-        - sound
-        - x11
-
-      auto-update: true
-
-      desktop:
-
-        file: |
-          [Desktop Entry]
-          Name=Discord (container)
-          StartupWMClass=discord
-          Comment=Internet Messenger
-          Exec=discord %U
-          Terminal=false
-          Type=Application
-          Icon=discord
-          Categories=Network;InstantMessaging;
-          MimeType=x-scheme-handler/discord;
-
-        icons:
-          - source: Installation/Discord/discord.png
-            size: 256
-            dest: discord.png
-
-  ## INTERACTIVE ##
-
-  interactive:
+  setup-nonet:
     <<: *common
 
-    command:
-      - echo "INTERACTIVE"
-      - bash "$$@"
+    network_mode: none
+
+  run:
+    <<: *common
+
+    network_mode: bridge
+
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+      - "${CDC_APP_PATH}/home/.local/share/zoom/zoom:/opt/zoom:ro"
+
+    x-features:
+      - video
+      - sound
+      - x11
+
+# I'm not getting this to run on Wayland, it dies with 'render-process-gone { reason: 'crashed', exitCode: 139 }'
+
+  run-wayland:
+    <<: *common
+
+    network_mode: bridge
+
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+      - "${CDC_APP_PATH}/home/.local/share/zoom/zoom:/opt/zoom:ro"
+
+    x-features:
+      - video
+      - sound
+      - wayland
