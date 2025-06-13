@@ -53,9 +53,12 @@ x-launchers:
       - rm -rf ~/.local/share/uv
       - ln -s "$$(pwd -P)/uv/home" ~/.local/share/uv
       - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
-      - python3 -m venv httk.venvs/system
-      - source httk.venvs/system/bin/activate
+      - python3 -m venv httk.venvs/bootstrap
+      - source httk.venvs/bootstrap/bin/activate
       - python -m pip install uv # needs to be installed now so we can use uv to download necessary packages
+      - uv tool install --force uv
+      - deactivate
+      - rm -rf httk.venvs/bootstrap
       - uv tool install --force tox --with tox-uv
       - uv python install 3.9 3.12
       - mkdir -p ~/Downloads
@@ -75,6 +78,34 @@ x-launchers:
           curl -o ~/Downloads/iso.zip --clobber -J -L "https://iso.byu.edu/iso/iso.zip"
           ln -sf iso.zip ~/Downloads/iso-latest.zip
         fi
+      - echo "Download Miniforge"
+      - LATESTURL="$$(curl -s https://api.github.com/repos/conda-forge/miniforge/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep 'Miniforge3-.*-Linux-x86_64.sh$$')"
+      - |
+        if [ ! -e ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -o ! -e ~/Downloads/"${LATESTURL##*/}" ]; then
+          curl -L -O "$$LATESTURL"
+          LATEST=$$(ls -t Miniforge3-*-Linux-x86_64.sh | head -1)
+          ln -sf "$$LATEST" ~/Downloads/Miniforge3-latest-Linux-x86_64.sh
+        fi
+      - mkdir -p ~/.local/share
+      - mkdir -p "$$DEVDIR/conda/wheelhouse"
+      - mkdir -p "$$DEVDIR/httk.venvs/conda"
+      - |
+        if [ ! -e ~/.local/share/miniforge ]; then
+          echo "Install miniforge (needed to complete the downloads)"
+          bash ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -b -s -p ~/.local/share/miniforge
+          source ~/.local/share/miniforge/etc/profile.d/conda.sh
+          mkdir -p "$$DEVDIR/conda"
+          conda config --add envs_dirs "$$DEVDIR/conda/envs"
+          conda config --add pkgs_dirs "$$DEVDIR/conda/pkgs"
+          conda config --set auto_activate_base false
+        else
+          source ~/.local/share/miniforge/etc/profile.d/conda.sh
+        fi
+      - conda update -n base -c conda-forge conda -y
+      - export CONDA_PKGS_DIRS="$$DEVDIR/conda/pkgs"
+      - export CONDA_ENVS_PATH="$$DEVDIR/conda/envs"
+      - conda list --name py27 > /dev/null || conda create -n py27 -c conda-forge python=2.7 virtualenv -y
+      - (conda activate py27 && virtualenv "$$DEVDIR/httk.venvs/conda/py27" && source httk.venvs/conda/py27/bin/activate && python -m pip download -r "$$DEVDIR/httk/requirements.txt" --dest "$$DEVDIR/conda/wheelhouse")
 
   redownload:
     service: setup
@@ -83,8 +114,7 @@ x-launchers:
       - echo "REDOWNLOAD"
       - |
         if [ -e httk ]; then
-          echo "httk develop directory already exist; will not remove possibly edited files automatically. Please remove or rename this directory manually."
-          exit 1
+          echo "httk develop directory already exist; will not remove possibly edited files automatically. Please remove or rename this directory manually if you want to replace it."
         fi
       - rm -f httk.venvs/system
       - rm -f "$$(readlink -f Downloads/Jmol-latest-binary.zip)"
@@ -110,7 +140,6 @@ x-launchers:
       - export PATH="/home/${USER}/.local/bin:$${PATH}"
       - export UV_CACHE_DIR="$$(pwd -P)/httk.venvs/uv-cache"
       - mkdir -p ~/.local/share
-      - source httk.venvs/system/bin/activate
       - uv venv --python 3.9 httk.venvs/py39
       - uv pip install --python httk.venvs/py39/bin/python -r httk/requirements.txt
       - uv venv --python 3.12 httk.venvs/py312
@@ -167,7 +196,10 @@ x-launchers:
       - export UV_CACHE_DIR="$$(pwd -P)/httk.venvs/uv-cache"
       - export ISODATA=~/.local/share/isotropy/
       - cd httk
-      - bash --init-file <(echo "uv() { ( source \"$$(pwd -P)/.venvs/system/bin/activate\"; command uv \"\$$@\" )}; source .venvs/py39/bin/activate; source init.shell")
+      - bash --init-file <(echo "source .venvs/py39/bin/activate; source init.shell")
+
+# No longer needed with the uv tool install uv workaround:
+#  - bash --init-file <(echo "uv() { ( source \"$$(pwd -P)/.venvs/system/bin/activate\"; command uv \"\$$@\" )}; source .venvs/py39/bin/activate; source init.shell")
 
     desktop:
 
