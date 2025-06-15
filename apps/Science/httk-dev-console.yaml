@@ -55,12 +55,15 @@ x-launchers:
       - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
       - python3 -m venv httk.venvs/bootstrap
       - source httk.venvs/bootstrap/bin/activate
-      - python -m pip install uv # needs to be installed now so we can use uv to download necessary packages
+      - python -m pip install uv
       - uv tool install --force uv
       - deactivate
       - rm -rf httk.venvs/bootstrap
       - uv tool install --force tox --with tox-uv
-      - uv python install 3.9 3.12
+      - uv python install 3.9
+      - mkdir -p "httk.venvs/uv/venvs"
+      - ln -nsf ../httk.venvs httk/.venvs
+      - (cd httk; tox --notest -e py39)
       - mkdir -p ~/Downloads
       - cd ~/Downloads
       - echo "Download jmol"
@@ -87,25 +90,21 @@ x-launchers:
           ln -sf "$$LATEST" ~/Downloads/Miniforge3-latest-Linux-x86_64.sh
         fi
       - mkdir -p ~/.local/share
-      - mkdir -p "$$DEVDIR/conda/wheelhouse"
-      - mkdir -p "$$DEVDIR/httk.venvs/conda"
+      - mkdir -p "httk.venvs/conda"
       - |
         if [ ! -e ~/.local/share/miniforge ]; then
           echo "Install miniforge (needed to complete the downloads)"
           bash ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -b -s -p ~/.local/share/miniforge
-          source ~/.local/share/miniforge/etc/profile.d/conda.sh
-          mkdir -p "$$DEVDIR/conda"
-          conda config --add envs_dirs "$$DEVDIR/conda/envs"
-          conda config --add pkgs_dirs "$$DEVDIR/conda/pkgs"
-          conda config --set auto_activate_base false
-        else
-          source ~/.local/share/miniforge/etc/profile.d/conda.sh
         fi
+      - source ~/.local/share/miniforge/etc/profile.d/conda.sh
+      - conda config --add envs_dirs "conda/venvs"
+      - conda config --add pkgs_dirs "conda/pkgs"
       - conda update -n base -c conda-forge conda -y
-      - export CONDA_PKGS_DIRS="$$DEVDIR/conda/pkgs"
-      - export CONDA_ENVS_PATH="$$DEVDIR/conda/envs"
-      - conda list --name py27 > /dev/null || conda create -n py27 -c conda-forge python=2.7 virtualenv -y
-      - (conda activate py27 && virtualenv "$$DEVDIR/httk.venvs/conda/py27" && source httk.venvs/conda/py27/bin/activate && python -m pip download -r "$$DEVDIR/httk/requirements.txt" --dest "$$DEVDIR/conda/wheelhouse")
+      - conda config --remove-key auto_activate_base 2>/dev/null || true
+      - conda config --set auto_activate false
+      - |
+        conda config --set env_prompt '(conda: {name}) '
+      - conda install -y tox
 
   redownload:
     service: setup
@@ -116,35 +115,34 @@ x-launchers:
         if [ -e httk ]; then
           echo "httk develop directory already exist; will not remove possibly edited files automatically. Please remove or rename this directory manually if you want to replace it."
         fi
-      - rm -f httk.venvs/system
+      - rm -f httk.venvs/bootstrap
       - rm -f "$$(readlink -f Downloads/Jmol-latest-binary.zip)"
       - rm -f Downloads/Jmol-latest-binary.zip
       - rm -f "$$(readlink -f Downloads/iso-latest.zip)"
       - rm -f Downloads/iso-latest.zip
       - *download_script
 
-    #  - (conda activate py27 && virtualenv httk.venvs/py27 && source httk.venvs/py27/bin/activate && python -m pip install --find-links=httk.venvs/wheelhouse -r httk/requirements.txt)
-    #  - (conda activate py39 && python -m venv httk.venvs/py39 && source httk.venvs/py39/bin/activate && python -m pip install --find-links=httk.venvs/wheelhouse -r httk/requirements.txt)
+    #  - (conda activate py27 && virtualenv httk.venvs/py27 && source httk.venvs/py27/bin/activate && python -m pip install -r httk/requirements.txt)
+    #  - (conda activate py39 && python -m venv httk.venvs/py39 && source httk.venvs/py39/bin/activate && python -m pip install -r httk/requirements.txt)
 
 #      - uv venv --python 2.7 httk.venvs/py27
 #      - (source httk.venvs/py27/bin/activate; uv pip install -r httk/requirements.txt)
 
+#      - uv venv --python 3.9 httk.venvs/py39
+#      - uv pip install --python httk.venvs/py39/bin/python -r httk/requirements.txt
+#      - uv venv --python 3.12 httk.venvs/py312
+#      - uv pip install --python httk.venvs/py312/bin/python -r httk/requirements.txt
+
+
   install:
-    #service: setup-nonet
-    # There is a chicken-or-egg problem with the installation of miniforge/conda needed to download everything needed for the install
-    # reinstall will simply reinstall miniforge/conda even though it is installed also as part of download
     service: setup-nonet
     type: setup
     script: &install_script
       - echo "INSTALL";
       - export PATH="/home/${USER}/.local/bin:$${PATH}"
-      - export UV_CACHE_DIR="$$(pwd -P)/httk.venvs/uv-cache"
+      - export UV_CACHE_DIR="$$(pwd -P)/httk.venvs/uv/uv-cache"
       - mkdir -p ~/.local/share
-      - uv venv --python 3.9 httk.venvs/py39
-      - uv pip install --python httk.venvs/py39/bin/python -r httk/requirements.txt
-      - uv venv --python 3.12 httk.venvs/py312
-      - uv pip install --python httk.venvs/py312/bin/python -r httk/requirements.txt
-      - ln -sf ../httk.venvs httk/.venvs
+      - ln -nsf ../httk.venvs httk/.venvs
       - |
         if [ ! -e ~/.local/share/jmol ]; then
           mkdir ~/.local/share/jmol
@@ -169,7 +167,6 @@ x-launchers:
       - echo "REINSTALL"
       - rm -rf ~/.local/share/jmol
       - rm -rf ~/.local/share/isotropy
-      - rm -rf httk.venvs/py*
       - *install_script
 
   update-check:
@@ -192,12 +189,17 @@ x-launchers:
     type: console
     script:
       - echo "httk-devel"
+      - export DEV_DIR="$$(pwd -P)"
+      - export HTTK_DIR="$$DEV_DIR/httk"
       - export PATH=~/.local/bin:~/.local/share/jmol/latest:~/.local/share/isotropy:"$$PATH"
-      - export UV_CACHE_DIR="$$(pwd -P)/httk.venvs/uv-cache"
+      - export UV_CACHE_DIR="$$(pwd -P)/uv/uv-cache"
       - export ISODATA=~/.local/share/isotropy/
+      - export CONDA_PKGS_DIRS="$$(pwd -P)/conda/pkgs"
+      - export CONDA_ENVS_PATH="$$(pwd -P)/conda/venvs"
       - cd httk
-      - bash --init-file <(echo "source .venvs/py39/bin/activate; source init.shell")
+      - bash --init-file <(echo "setup_py27() { type -t deactivate 1>/dev/null && deactivate; test ! -e \"$$HTTK_DIR/.venvs/conda/venvs/py27\" && conda create -p \"$$HTTK_DIR/.venvs/conda/venvs/py27\" -y python=2.7 tox; conda activate \"$$HTTK_DIR/.venvs/conda/venvs/py27\"; python -m pip -q install -r \"$$HTTK_DIR/py27requirements.txt\"; }; source ~/.local/share/miniforge/etc/profile.d/conda.sh; source .venvs/uv/venvs/py39/bin/activate; source init.shell")
 
+# (conda activate py27 && virtualenv "httk.venvs/conda/py27" && source httk.venvs/conda/py27/bin/activate && python -m pip download -r "httk/requirements.txt" --dest "conda/wheelhouse")
 # No longer needed with the uv tool install uv workaround:
 #  - bash --init-file <(echo "uv() { ( source \"$$(pwd -P)/.venvs/system/bin/activate\"; command uv \"\$$@\" )}; source .venvs/py39/bin/activate; source init.shell")
 
