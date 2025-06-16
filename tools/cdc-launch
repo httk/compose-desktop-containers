@@ -5,6 +5,8 @@
 #   CDC_APP_PATH: the application directory of the compose app
 #   CDC_DBUS_PATH: the path to the unix socket used by dbus or dbus-proxy
 #   CDC_DBUS_SYSTEM_PATH: the path to the unix socket used by dbus or dbus-proxy
+#   CDC_PWD: the path of the working dir on the host system where the app was launched
+#            (useful for console scripts that run on files in that working directory, *if* it is also mounted inside the container)
 
 set -e
 
@@ -15,6 +17,7 @@ elif ! [[ "$CDC_DEBUG" =~ ^[0-9]+$ ]]; then
     CDC_DEBUG=1
 fi
 
+export CDC_PWD="$(pwd -P)"
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 LAUNCHPATH="$(cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)"
 TOOLPATH="$(dirname -- "$(realpath -- "$0")")"

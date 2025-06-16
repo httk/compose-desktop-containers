@@ -1,0 +1,179 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    ffmpeg-normalize
+
+  override-default: |
+    version: "3.8"
+
+    services:
+      run:
+         volumes:
+           - "${HOME}/Documents/containers/music:/home/${USER}/Documents/containers/music"
+         working_dir: "/home/${USER}/Documents/containers/music"
+
+      setup:
+         volumes:
+           - "${HOME}/Documents/containers/music:/home/${USER}/Documents/containers/music"
+         working_dir: "/home/${USER}/Documents/containers/music"
+
+      setup-nonet:
+         volumes:
+           - "${HOME}/Documents/containers/music:/home/${USER}/Documents/containers/music"
+         working_dir: "/home/${USER}/Documents/containers/music"
+
+
+  env-default: |
+    # This container has no configurable options
+
+
+x-launchers:
+  download:
+    service: setup
+    type: setup
+
+    script: &download_script
+      - echo "DOWNLOAD"
+      - mkdir -p ~/Downloads
+      - VERSION="$$(curl -s https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest | jq --raw-output '.name' | tr ' ()' '_')"
+      - LATESTURL="$$(curl -s https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep ffmpeg-master-latest-linux64-gpl.tar.xz)"
+      - LATESTFILENAME="ffmpeg-master-$$VERSION-linux64-gpl.tar.xz"
+      - |
+        if [ ! -e ~/Downloads/"$$LATESTFILENAME" ]; then
+          curl -L -o ~/Downloads/"$$LATESTFILENAME" "$$LATESTURL"
+        fi
+      - ln -sf "$$LATESTFILENAME" ~/Downloads/link-ffmpeg-master-latest-linux64-gpl.tar.xz
+
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
+      - rm -f "$$(readlink -f Downloads/link-ffmpeg-master-latest-linux64-gpl.tar.xz)"
+      - rm -f Downloads/link-ffmpeg-master-latest-linux64-gpl.tar.xz   
+      - *download_script
+
+  install:
+    service: setup
+    type: setup
+    script: &install_script
+      - echo "INSTALL";
+      - mkdir -p ~/.local/share/ffmpeg-normalize
+      - python3 -m venv ~/.local/share/ffmpeg-normalize/venv
+      - source ~/.local/share/ffmpeg-normalize/venv/bin/activate
+      - python3 -m pip install ffmpeg-normalize
+      - mkdir ~/.local/share/ffmpeg
+      - cd ~/.local/share/ffmpeg
+      - tar -xvf ~/Downloads/link-ffmpeg-master-latest-linux64-gpl.tar.xz 
+ 
+  reinstall:
+    #service: setup-nonet
+    service: setup
+    type: setup
+    script: &reinstall_script
+      - echo "REINSTALL"
+      - rm -rf ~/.local/share/ffmpeg-normalize
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
+      - echo "UPDATE CHECK"
+      - echo "Development environment: update manually with git pull"
+      - exit 0
+
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - source ~/.local/share/ffmpeg-normalize/venv/bin/activate      
+      - python3 -m pip install ffmpeg-normalize --upgrade
+
+  ffmpeg-normalize:
+    service: run
+    type: console
+    script:
+      - echo "ffmpeg-normalize"
+      - export PATH=$$PATH:~/.local/share/ffmpeg/ffmpeg-master-latest-linux64-gpl/bin/
+      - source ~/.local/share/ffmpeg-normalize/venv/bin/activate
+      - ffmpeg-normalize "$@"
+
+  normalize-all-for-spotify:
+    service: run
+    type: console
+    script:
+      - echo "normalize-all-for-spotify"
+      - export PATH=$$PATH:~/.local/share/ffmpeg/ffmpeg-master-latest-linux64-gpl/bin/
+      - source ~/.local/share/ffmpeg-normalize/venv/bin/activate
+      - cd "$CDC_PWD"
+      - ffmpeg-normalize -v -p *.wav -t -14 -lrt 11 -tp -1 -ext wav "$@" -of normalized/
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    network_mode: none
+
+    working_dir: /home/$USER
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
+      XDG_DATA_DIRS: "${XDG_DATA_DIRS}"
+      XDG_CURRENT_DESKTOP: "GNOME"
+      BROWSER: "falkon"
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+
+  setup:
+    <<: *common
+
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
+    network_mode: none
+
+  run:
+    <<: *common
+
+    network_mode: bridge
+
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
