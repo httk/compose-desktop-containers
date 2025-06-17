@@ -43,6 +43,7 @@ x-launchers:
     script: &download_script
       - echo "DOWNLOAD"
       - export PATH="/home/${USER}/.local/bin:$${PATH}"
+      - export DEV_DIR="$$(pwd -P)"
       - mkdir -p ~/.local/share/icons/hicolor/scalable
       - curl -L -o ~/.local/share/icons/hicolor/scalable/httk.svg https://httk.org/img/httk-logo-curves.svg
       - |
@@ -60,10 +61,12 @@ x-launchers:
       - deactivate
       - rm -rf httk.venvs/bootstrap
       - uv tool install --force tox --with tox-uv
-      - uv python install 3.9
-      - mkdir -p "httk.venvs/uv/venvs"
-      - ln -nsf ../httk.venvs httk/.venvs
-      - (cd httk; tox --notest -e py39)
+      - uv python install 3.10
+      - mkdir -p "httk.venvs/uv"
+      - ln -nsf ../httk.venvs httk.venvs
+      - uv venv --python 3.10 httk.venvs/uv/default
+      - uv pip install --python "httk.venvs/uv/default/bin/python" -r httk/requirements.txt
+      - ln -nsf .venvs/uv/default httk/.venv
       - mkdir -p ~/Downloads
       - cd ~/Downloads
       - echo "Download jmol"
@@ -97,8 +100,8 @@ x-launchers:
           bash ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -b -s -p ~/.local/share/miniforge
         fi
       - source ~/.local/share/miniforge/etc/profile.d/conda.sh
-      - conda config --add envs_dirs "conda/venvs"
-      - conda config --add pkgs_dirs "conda/pkgs"
+      - conda config --add envs_dirs "$$DEV_DIR/conda/venvs"
+      - conda config --add pkgs_dirs "$$DEV_DIR/conda/pkgs"
       - conda update -n base -c conda-forge conda -y
       - conda config --remove-key auto_activate_base 2>/dev/null || true
       - conda config --set auto_activate false
@@ -123,12 +126,12 @@ x-launchers:
       - *download_script
 
     #  - (conda activate py27 && virtualenv httk.venvs/py27 && source httk.venvs/py27/bin/activate && python -m pip install -r httk/requirements.txt)
-    #  - (conda activate py39 && python -m venv httk.venvs/py39 && source httk.venvs/py39/bin/activate && python -m pip install -r httk/requirements.txt)
+    #  - (conda activate py310 && python -m venv httk.venvs/py310 && source httk.venvs/py310/bin/activate && python -m pip install -r httk/requirements.txt)
 
 #      - uv venv --python 2.7 httk.venvs/py27
 #      - (source httk.venvs/py27/bin/activate; uv pip install -r httk/requirements.txt)
 
-#      - uv venv --python 3.9 httk.venvs/py39
+#      - uv venv --python 3.10 httk.venvs/py310
 #      - uv pip install --python httk.venvs/py39/bin/python -r httk/requirements.txt
 #      - uv venv --python 3.12 httk.venvs/py312
 #      - uv pip install --python httk.venvs/py312/bin/python -r httk/requirements.txt
@@ -140,7 +143,7 @@ x-launchers:
     script: &install_script
       - echo "INSTALL";
       - export PATH="/home/${USER}/.local/bin:$${PATH}"
-      - export UV_CACHE_DIR="$$(pwd -P)/httk.venvs/uv/uv-cache"
+      - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
       - mkdir -p ~/.local/share
       - ln -nsf ../httk.venvs httk/.venvs
       - |
@@ -192,13 +195,22 @@ x-launchers:
       - export DEV_DIR="$$(pwd -P)"
       - export HTTK_DIR="$$DEV_DIR/httk"
       - export PATH=~/.local/bin:~/.local/share/jmol/latest:~/.local/share/isotropy:"$$PATH"
-      - export UV_CACHE_DIR="$$(pwd -P)/uv/uv-cache"
+      - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
       - export ISODATA=~/.local/share/isotropy/
       - export CONDA_PKGS_DIRS="$$(pwd -P)/conda/pkgs"
-      - export CONDA_ENVS_PATH="$$(pwd -P)/conda/venvs"
+      - export CONDA_ENVS_PATH="$$(pwd -P)/httk/.venvs/conda"
       - cd httk
-      - bash --init-file <(echo "setup_py27() { type -t deactivate 1>/dev/null && deactivate; test ! -e \"$$HTTK_DIR/.venvs/conda/venvs/py27\" && conda create -p \"$$HTTK_DIR/.venvs/conda/venvs/py27\" -y python=2.7 tox; conda activate \"$$HTTK_DIR/.venvs/conda/venvs/py27\"; python -m pip -q install -r \"$$HTTK_DIR/py27requirements.txt\"; }; source ~/.local/share/miniforge/etc/profile.d/conda.sh; source .venvs/uv/venvs/py39/bin/activate; source init.shell")
+      - echo "===================================================================================================="
+      - echo ""
+      - echo "The project default venv in .venv is now active (.venv is a symlink you can change)"
+      - echo "Initialize other venvs by, e.g., 'make init_uv_venv venv=py312' or 'make init_conda_venv venv=py312'"
+      - echo "And activate them by '.venvs/uv/py312/bin/activate' and 'conda activate py312' respectively."
+      - echo ""
+      - echo "===================================================================================================="
+      - bash --init-file <(echo "source ~/.local/share/miniforge/etc/profile.d/conda.sh; source .venv/bin/activate; source init.shell")
 
+# Old initalizations no longer needed:
+# - bash --init-file <(echo "setup_py27() { type -t deactivate 1>/dev/null && deactivate; test ! -e \"$$HTTK_DIR/.venvs/conda/venvs/py27\" && conda create -p \"$$HTTK_DIR/.venvs/conda/venvs/py27\" -y python=2.7 tox; conda activate \"$$HTTK_DIR/.venvs/conda/venvs/py27\"; python -m pip -q install -r \"$$HTTK_DIR/py27requirements.txt\"; }; source ~/.local/share/miniforge/etc/profile.d/conda.sh; source .venvs/uv/venvs/py39/bin/activate; source init.shell")
 # (conda activate py27 && virtualenv "httk.venvs/conda/py27" && source httk.venvs/conda/py27/bin/activate && python -m pip download -r "httk/requirements.txt" --dest "conda/wheelhouse")
 # No longer needed with the uv tool install uv workaround:
 #  - bash --init-file <(echo "uv() { ( source \"$$(pwd -P)/.venvs/system/bin/activate\"; command uv \"\$$@\" )}; source .venvs/py39/bin/activate; source init.shell")
@@ -239,6 +251,7 @@ services:
       XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
       XDG_CURRENT_DESKTOP: "GNOME"
       BROWSER: "falkon"
+      NO_AT_BRIDGE: 1
 
     cap_drop:
       - ALL
