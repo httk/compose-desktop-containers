@@ -205,8 +205,8 @@ x-launchers:
       - echo "The project default venv in .venv is now active (.venv is a symlink you can change)"
       - echo "Initialize other venvs by, e.g., 'make init_uv_venv venv=py312' or 'make init_conda_venv venv=py312'"
       - echo "And activate them by '.venvs/uv/py312/bin/activate' and 'conda activate py312' respectively."
-      - echo
-      - echo "If the dependencies may have changed, run `make init_default_venv` to update.
+      - echo ""
+      - echo "If the dependencies may have changed, run `make init_default_venv` to update."
       - echo ""
       - echo "===================================================================================================="
       - bash --init-file <(echo "source ~/.local/share/miniforge/etc/profile.d/conda.sh; source .venv/bin/activate; source init.shell")
