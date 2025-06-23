@@ -65,7 +65,7 @@ x-launchers:
       - mkdir -p "httk.venvs/uv"
       - ln -nsf ../httk.venvs httk.venvs
       - uv venv --python 3.10 httk.venvs/uv/default
-      - uv pip install --python "httk.venvs/uv/default/bin/python" -r httk/requirements.txt
+      - uv pip install --python "httk.venvs/uv/default/bin/python" -r httk/requirements.txt -r httk/requirements-dev.txt pyside6
       - ln -nsf .venvs/uv/default httk/.venv
       - mkdir -p ~/Downloads
       - cd ~/Downloads
@@ -205,15 +205,11 @@ x-launchers:
       - echo "The project default venv in .venv is now active (.venv is a symlink you can change)"
       - echo "Initialize other venvs by, e.g., 'make init_uv_venv venv=py312' or 'make init_conda_venv venv=py312'"
       - echo "And activate them by '.venvs/uv/py312/bin/activate' and 'conda activate py312' respectively."
+      - echo
+      - echo "If the dependencies may have changed, run `make init_default_venv` to update.
       - echo ""
       - echo "===================================================================================================="
       - bash --init-file <(echo "source ~/.local/share/miniforge/etc/profile.d/conda.sh; source .venv/bin/activate; source init.shell")
-
-# Old initalizations no longer needed:
-# - bash --init-file <(echo "setup_py27() { type -t deactivate 1>/dev/null && deactivate; test ! -e \"$$HTTK_DIR/.venvs/conda/venvs/py27\" && conda create -p \"$$HTTK_DIR/.venvs/conda/venvs/py27\" -y python=2.7 tox; conda activate \"$$HTTK_DIR/.venvs/conda/venvs/py27\"; python -m pip -q install -r \"$$HTTK_DIR/py27requirements.txt\"; }; source ~/.local/share/miniforge/etc/profile.d/conda.sh; source .venvs/uv/venvs/py39/bin/activate; source init.shell")
-# (conda activate py27 && virtualenv "httk.venvs/conda/py27" && source httk.venvs/conda/py27/bin/activate && python -m pip download -r "httk/requirements.txt" --dest "conda/wheelhouse")
-# No longer needed with the uv tool install uv workaround:
-#  - bash --init-file <(echo "uv() { ( source \"$$(pwd -P)/.venvs/system/bin/activate\"; command uv \"\$$@\" )}; source .venvs/py39/bin/activate; source init.shell")
 
     desktop:
 
