@@ -20,33 +20,33 @@ PRECOMMANDS_FILES=""
 CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
 mkdir -p "$CDC_CONFIG_DIR/image-u24/build/files" "$CDC_CONFIG_DIR/image-u24/build/tools"
 mkdir -p "$CDC_CONFIG_DIR/image-u24/installed"
-mkdir -p "$CDC_CONFIG_DIR/image-u24/requested"
+mkdir -p "$CDC_CONFIG_DIR/image-u24/requested/default"
 
 (
     cd "$SCRIPTPATH"/requested-default
     for FILE in *; do
-        if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/${FILE}.disabled" ]; then
-            cp "$FILE" "$CDC_CONFIG_DIR/image-u24/requested/."
+        if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/default/${FILE}.disabled" -a "${FILE%\~}" = "${FILE}" ]; then
+            cp "$FILE" "$CDC_CONFIG_DIR/image-u24/requested/default/."
         fi
     done
 )
 
-if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/50-default-commands-time.disabled" ]; then
+if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/default/50-commands-time.disabled" ]; then
   LOCALTIME=$(readlink /etc/localtime)
   if [ -n "$LOCALTIME" ]; then
       TZ_LOCATION="${LOCALTIME##*/}"
       TZ_AREA="${LOCALTIME%/*}"
       TZ_AREA="${TZ_AREA##*/}"
-      echo "RUN ln -sf \"/usr/share/zoneinfo/${TZ_AREA}/${TZ_LOCATION}\" /etc/localtime" > "$CDC_CONFIG_DIR/image-u24/requested/50-default-commands-time"
+      echo "RUN ln -sf \"/usr/share/zoneinfo/${TZ_AREA}/${TZ_LOCATION}\" /etc/localtime" > "$CDC_CONFIG_DIR/image-u24/requested/default/50-commands-time"
   else
       cp /etc/localtime files/localtime
-      echo "RUN rm -f /etc/localtime" > "$CDC_CONFIG_DIR/image-u24/requested/50-default-commands-time"
-      echo "COPY files/localtime /etc/localtime" >> "$CDC_CONFIG_DIR/image-u24/requested/50-default-commands-time"
+      echo "RUN rm -f /etc/localtime" > "$CDC_CONFIG_DIR/image-u24/requested/default/50-commands-time"
+      echo "COPY files/localtime /etc/localtime" >> "$CDC_CONFIG_DIR/image-u24/requested/default/50-commands-time"
   fi
 fi
 
-if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/51-default-commands-locale.disabled" ]; then
-  cat >> "$CDC_CONFIG_DIR/image-u24/requested/51-default-commands-locale" <<EOF
+if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/default/51-commands-locale.disabled" ]; then
+  cat > "$CDC_CONFIG_DIR/image-u24/requested/default/51-commands-locale" <<EOF
 COPY ./tools/en_SE.locale /tmp/en_SE.locale
 RUN test ! -e /usr/share/i18n/locales/en_SE && cp /tmp/en_SE.locale /usr/share/i18n/locales/en_SE && localedef -i en_SE -f UTF-8 en_SE.UTF-8 && echo "# en_SE.UTF-8 UTF-8" >> "/etc/locale.gen" && echo "en_SE.UTF-8 UTF-8" >> "/usr/share/i18n/SUPPORTED"
 RUN locale-gen ${LOCALES} && update-locale "LANG=$LANG"
@@ -57,22 +57,22 @@ fi
 
 FULLNAME="$(getent passwd rar | awk -F':' '{print $5}')"
 
-if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/52-default-commands-user.disabled" ]; then
+if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/default/52-commands-user.disabled" ]; then
   # We need to handle the user part differently depnding on if it overlaps the default 1000 user or not.
   if [ "$UID" == "1000" ]; then
 
-    cat >> "$CDC_CONFIG_DIR/image-u24/requested/52-default-commands-user" <<EOF
+    cat > "$CDC_CONFIG_DIR/image-u24/requested/default/52-commands-user" <<EOF
 RUN usermod -l "$USER" ubuntu && groupmod -n "$USER" ubuntu && usermod -d "/home/$USER" -m "$USER" && usermod -c "$FULLNAME" "$USER" && mkdir /tmp/$USER && chown "$USER:$USER" "/tmp/$USER" && chmod 0700 "/tmp/$USER" && mkdir "/tmp/$USER/run" && chown "$USER:$USER" "/tmp/$USER/run" && chmod 0700 "/tmp/$USER/run"
 EOF
 
   else
 
-    cat >> "$CDC_CONFIG_DIR/image-u24/requested/52-default-commands-user" <<EOF
+    cat > "$CDC_CONFIG_DIR/image-u24/requested/default/52-commands-user" <<EOF
 RUN groupadd -r -g "$UID" "$USER" && useradd -m -u "$UID" -g "$UID" -c "$FULLNAME" "$USER" && mkdir /tmp/$USER && chown "$USER:$USER" "/tmp/$USER" && chmod 0700 "/tmp/$USER" && mkdir "/tmp/$USER/run" && chown "$USER:$USER" "/tmp/$USER/run" && chmod 0700 "/tmp/$USER/run"
 EOF
 
   fi
-  cat >> "$CDC_CONFIG_DIR/image-u24/requested/52-default-commands-user" <<EOF
+  cat >> "$CDC_CONFIG_DIR/image-u24/requested/default/52-commands-user" <<EOF
 RUN mkdir -p /run/user && ln -s "/tmp/$USER/run" "/run/user/${UID}"
 EOF
 fi
@@ -97,10 +97,10 @@ PRECOMMANDS=()
 #fi
 
 IFS=$'\n'
-PKGS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*-pkgs* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
-PKGS_ONLY+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*-pkgs-only* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
-COMMANDS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*-commands* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
-PRECOMMANDS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*-precommands* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+PKGS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*/*-pkgs* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+PKGS_ONLY+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*/*-pkgs-only* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+COMMANDS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*/*-commands* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+PRECOMMANDS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*/*-precommands* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
 IFS=' '
 
 if [ -n "${PKGS}" ]; then
@@ -122,7 +122,7 @@ cp /etc/timezone "$CDC_CONFIG_DIR/image-u24/build/files"
 cp -rp "$SCRIPTPATH"/tools/* "$CDC_CONFIG_DIR"/image-u24/build/tools/.
 
 ## Create containerfile
-cat >> "$CDC_CONFIG_DIR/image-u24/build/Containerfile" <<EOF
+cat > "$CDC_CONFIG_DIR/image-u24/build/Containerfile" <<EOF
 $PRECOMMANDS_LINES
 $PKGS_ONLY_LINES
 $PKGS_LINES
@@ -133,5 +133,9 @@ cd "$CDC_CONFIG_DIR/image-u24/build/"
 podman build -t cdc-u24 --label=wrap .
 podman image prune -f --filter label=wrap
 
+rm -rf "$CDC_CONFIG_DIR/image-u24/installed"
+cp -rp "$CDC_CONFIG_DIR/image-u24/requested" "$CDC_CONFIG_DIR/image-u24/installed"
+
 # After a container has been created, it may take a significant time to instansitate it the first time
+echo "Testing container"
 podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."

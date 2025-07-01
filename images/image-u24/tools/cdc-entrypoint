@@ -213,45 +213,50 @@ def main():
         tinit_args = []
         child_args = args
 
-    if not child_args:
-        print(f"Usage: {sys.argv[0]} [TINIT_OPTIONS] -- PROGRAM [ARGS...]")
-        print(f"   or: {sys.argv[0]} PROGRAM [ARGS...]")
-        sys.exit(1)
+    #if not child_args:
+    #    print(f"Usage: {sys.argv[0]} [TINIT_OPTIONS] -- PROGRAM [ARGS...]")
+    #    print(f"   or: {sys.argv[0]} PROGRAM [ARGS...]")
+    #    sys.exit(1)
 
     # Fork process
-    child_pid = os.fork()
-    if child_pid == 0:
-        # In child
-        os.setsid()
-        try:
-            os.tcsetpgrp(0, os.getpgrp())
-        except OSError:
-            pass
-        os.execvp(child_args[0], child_args)
-    else:
-        # In parent
-        for sig in signal_set:
+
+    if child_args:
+
+        child_pid = os.fork()
+        if child_pid == 0:
+            # In child
+            os.setsid()
             try:
-                signal.signal(sig, forward_signal)
-            except (OSError, RuntimeError, ValueError):
-                continue
+                os.tcsetpgrp(0, os.getpgrp())
+            except OSError:
+                pass
+            os.execvp(child_args[0], child_args)
+        else:
+            # In parent
+            for sig in signal_set:
+                try:
+                    signal.signal(sig, forward_signal)
+                except (OSError, RuntimeError, ValueError):
+                    continue
 
-        # Start filesystem monitoring thread
-        fs_observer = start_filesystem_monitor()
+            # Start filesystem monitoring thread
+            fs_observer = start_filesystem_monitor()
 
-        try:
-            wait_for_child()
-        finally:
-            fs_observer.stop()
-            fs_observer.join()
+            try:
+                wait_for_child()
+            finally:
+                fs_observer.stop()
+                fs_observer.join()
 
-        HANG_AFTER_EXIT = os.getenv("TINI_HANG_AFTER_EXIT", "1") != "0"
-        print(f"[INFO] Child exited with code {exit_status}.", file=sys.stderr)
-        if HANG_AFTER_EXIT:
-            wait_forever()
+            print(f"[INFO] Child exited with code {exit_status}.", file=sys.stderr)
 
-        sys.exit(exit_status if exit_status is not None else 1)
+    HANG_AFTER_EXIT = os.getenv("TINI_HANG_AFTER_EXIT", "1") != "0"
 
+    if HANG_AFTER_EXIT:
+        wait_forever()
+        sys.exit(0)
+
+    sys.exit(exit_status if exit_status is not None else 1)
 
 if __name__ == "__main__":
     main()

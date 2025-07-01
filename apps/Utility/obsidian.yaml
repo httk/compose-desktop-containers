@@ -2,6 +2,10 @@ version: "3.8"
 
 x-application:
 
+  name: Obsidian
+
+  label: obsidian
+
   readme: |
     Obsidian: personal knowledge base and note-taking software application.
 
