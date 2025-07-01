@@ -1,1 +1,2 @@
+# Google Chrome is necessary to support installation of progressive-web-apps (PWA)
 RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt -y install ./google-chrome-stable_current_amd64.deb && rm -f google-chrome-stable_current_amd64.deb

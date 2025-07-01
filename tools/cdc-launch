@@ -228,7 +228,7 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAGS: --ozone-platform=x11")
             ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: x11")
 
-        elif [ "$FEATURE" = "dri-full" ]; then
+        elif [ "$FEATURE" = "gpu_dri" ]; then
             GLXINFO=$(glxinfo || true)
             if grep -q 'direct rendering: Yes' <<< "$GLXINFO" && grep -q 'OpenGL vendor string: NVIDIA' <<< "$GLXINFO"; then
                 if [ ! -e /etc/cdi/nvidia.yaml -a ! -e /var/run/cdi/nvidia.yaml ]; then
@@ -239,10 +239,17 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
                 fi
                 PODMAN_UP_ARGS+=( "--device nvidia.com/gpu=all" )
                 OVERRIDE_ALLOW_READ="yes"
+	    elif [ "0" = "1" ]; then
+		# INTEL
+		DUMMY=""
+	    elif [ "0" = "1" ]; then
+		# AMD
+		DUMMY=""
 	    else
+                echo "Warning: gpu_dri feature specified, but no installed gpu accelerator recognized."
 		ADJUSTMENT_VOLS+=( "/dev/dri:/dev/dri" )
             fi
-	elif [ "$FEATURE" = "gpu" ]; then
+	elif [ "$FEATURE" = "gpu_compute" ]; then
 	    if command -v nvidia-smi 2>/dev/null; then
 		# NVIDIA
                 PODMAN_UP_ARGS+=( "--device nvidia.com/gpu=all" )
@@ -253,6 +260,8 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 	    elif [ "0" = "1" ]; then
 		# AMD
 		DUMMY=""
+            else
+                echo "Warning: gpu_compute feature specified, but no installed gpu accelerator recognized."
 	    fi
 	elif [ "$FEATURE" = "sound" ]; then
 	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw" )
@@ -271,7 +280,10 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 	    CDC_DBUS_SYSTEM_PATH="$XDG_RUNTIME_DIR/system-bus-proxy-$APP-$LAUNCHER"
 	    ADJUSTMENT_VOLS+=( "${CDC_DBUS_SYSTEM_PATH}:/run/dbus/system_bus_socket:rw" )
 	    ADJUSTMENT_ENVS+=( "DBUS_SYSTEM_BUS_ADDRESS: \"unix:path=/run/dbus/system_bus_socket\"" )
-	fi
+	else
+            echo "The compose.yaml file specifies an unknown feature: $FEATURE" >&2
+            exit 1
+        fi
     done
 fi
 

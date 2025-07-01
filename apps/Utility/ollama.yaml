@@ -113,8 +113,7 @@ services:
 
     image: "cdc-u24"
 
-    #entrypoint: ["bash", "-c", "trap 'exit 0' TERM; bash -c \"$$(printf \"%s\\n\" \"$@\")\"; while true; do sleep 1; done", "--"]
-    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    entrypoint: ["/usr/bin/cdc-entrypoint"]
 
     network: none
 

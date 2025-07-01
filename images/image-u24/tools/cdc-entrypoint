@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+#
+#    Compose-desktop-containers
+#    Copyright (C) 2025 The compose-desktop-containers AUTHORS
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU Affero General Public License as
+#    published by the Free Software Foundation, either version 3 of the
+#    License, or (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU Affero General Public License for more details.
+#
+#    You should have received a copy of the GNU Affero General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+import os
+import sys
+import time
+import threading
+import signal
+import selectors
+
+WATCHED_DIRS = ['/dev/video']
+LINK_DIR = '/dev'
+POLL_INTERVAL = 2  # seconds
+FORWARD_TO_GROUP = True
+HANG_AFTER_EXIT = os.getenv("CDC_INIT_HANG_AFTER_EXIT","1") != "1"
+TERMINATE_SIGNALS = {signal.SIGHUP, signal.SIGINT, signal.SIGTERM}
+
+signal_set = set(range(1, signal.NSIG))
+signal_set -= {signal.SIGTTIN, signal.SIGTTOU}
+
+try:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+except ImportError:
+    print("[WARN] watchdog not available, using fallback polling watcher.", file=sys.stderr)
+
+    class FileSystemEventHandler:
+        def on_created(self, event): pass
+        def on_deleted(self, event): pass
+
+    class FileCreatedEvent:
+        def __init__(self, src_path):
+            self.src_path = src_path
+            self.is_directory = False
+
+    class FileDeletedEvent:
+        def __init__(self, src_path):
+            self.src_path = src_path
+            self.is_directory = False
+
+    class Observer:
+        def __init__(self):
+            self._watches = []
+            self._running = False
+            self._thread = None
+            self._prev_files = {}
+
+        def schedule(self, handler, path, recursive=False):
+            self._watches.append((handler, path))
+
+        def start(self):
+            self._running = True
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+
+        def _run(self):
+            while self._running:
+                for handler, path in self._watches:
+                    try:
+                        current_files = set(
+                            os.path.join(path, f)
+                            for f in os.listdir(path)
+                            if os.path.isfile(os.path.join(path, f))
+                        )
+                    except Exception as e:
+                        print(f"[WARN] Failed to scan {path}: {e}", file=sys.stderr)
+                        continue
+
+                    prev = self._prev_files.get(path, set())
+
+                    for added in current_files - prev:
+                        handler.on_created(FileCreatedEvent(added))
+                    for removed in prev - current_files:
+                        handler.on_deleted(FileDeletedEvent(removed))
+
+                    self._prev_files[path] = current_files
+
+                time.sleep(POLL_INTERVAL)
+
+        def stop(self):
+            self._running = False
+
+        def join(self):
+            if self._thread:
+                self._thread.join()
+
+class DevLinkHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        if not event.is_directory:
+            create_symlink(event.src_path)
+
+    def on_deleted(self, event):
+        if not event.is_directory:
+            remove_symlink(event.src_path)
+
+def wait_for_directory(path, handler, observer, poll_interval=2):
+    def monitor():
+        while True:
+            if os.path.isdir(path):
+                try:
+                    observer.schedule(handler, path, recursive=False)
+                    print(f"[INFO] Watching directory: {path}")
+                    break
+                except Exception as e:
+                    print(f"[WARN] Failed to schedule watcher for {path}: {e}", file=sys.stderr)
+            time.sleep(poll_interval)
+    thread = threading.Thread(target=monitor, daemon=True)
+    thread.start()
+
+def forward_signal(signum, frame):
+    global child_pid
+    try:
+        target = -child_pid if FORWARD_TO_GROUP else child_pid
+        os.kill(target, signum)
+    except ProcessLookupError:
+        pass
+
+def start_filesystem_monitor():
+    observer = Observer()
+    handler = DevLinkHandler()
+    for directory in WATCHED_DIRS:
+        wait_for_directory(directory, handler, observer)
+    observer.start()
+    return observer
+
+def create_symlink(src):
+    dst = os.path.join(LINK_DIR, os.path.basename(src))
+    try:
+        if not os.path.exists(dst):
+            os.symlink(src, dst)
+    except Exception as e:
+        print(f"[ERROR] Failed to create symlink {dst} -> {src}: {e}", file=sys.stderr)
+
+def remove_symlink(src):
+    dst = os.path.join(LINK_DIR, os.path.basename(src))
+    try:
+        if os.path.islink(dst) and os.readlink(dst) == src:
+            os.remove(dst)
+    except Exception as e:
+        print(f"[ERROR] Failed to remove symlink {dst}: {e}", file=sys.stderr)
+
+
+def wait_for_child():
+    global child_pid, exit_status
+    while True:
+        try:
+            pid, status = os.waitpid(child_pid, 0)
+            if pid == child_pid:
+                if os.WIFEXITED(status):
+                    exit_status = os.WEXITSTATUS(status)
+                elif os.WIFSIGNALED(status):
+                    exit_status = 128 + os.WTERMSIG(status)
+                else:
+                    exit_status = 1
+                break
+        except InterruptedError:
+            continue
+
+def wait_forever():
+
+    should_exit = False
+
+    def handler(signum, frame):
+        nonlocal should_exit
+        if signum in TERMINATE_SIGNALS:
+            print(f"[INFO] Received {signal.Signals(signum).name}, exiting hang loop.", file=sys.stderr)
+            should_exit = True
+        else:
+            print(f"[DEBUG] Ignoring signal {signal.Signals(signum).name}", file=sys.stderr)
+
+    for sig in set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}:
+        try:
+            signal.signal(sig, handler)
+        except (OSError, RuntimeError, ValueError):
+            continue
+
+    print("[INFO] Entering infinite wait. Press Ctrl+C or send SIGINT/SIGHUP/SIGTERM to exit.", file=sys.stderr)
+
+    while not should_exit:
+        try:
+            signal.pause()  # blocks until a signal is received
+        except InterruptedError:
+            continue
+
+
+def main():
+    global child_pid, exit_status
+
+    args = sys.argv[1:]
+
+    # Separate tinit options and child args
+    if "--" in args:
+        sep_index = args.index("--")
+        tinit_args = args[:sep_index]
+        child_args = args[sep_index + 1:]
+    else:
+        tinit_args = []
+        child_args = args
+
+    if not child_args:
+        print(f"Usage: {sys.argv[0]} [TINIT_OPTIONS] -- PROGRAM [ARGS...]")
+        print(f"   or: {sys.argv[0]} PROGRAM [ARGS...]")
+        sys.exit(1)
+
+    # Fork process
+    child_pid = os.fork()
+    if child_pid == 0:
+        # In child
+        os.setsid()
+        try:
+            os.tcsetpgrp(0, os.getpgrp())
+        except OSError:
+            pass
+        os.execvp(child_args[0], child_args)
+    else:
+        # In parent
+        for sig in signal_set:
+            try:
+                signal.signal(sig, forward_signal)
+            except (OSError, RuntimeError, ValueError):
+                continue
+
+        # Start filesystem monitoring thread
+        fs_observer = start_filesystem_monitor()
+
+        try:
+            wait_for_child()
+        finally:
+            fs_observer.stop()
+            fs_observer.join()
+
+        HANG_AFTER_EXIT = os.getenv("TINI_HANG_AFTER_EXIT", "1") != "0"
+        print(f"[INFO] Child exited with code {exit_status}.", file=sys.stderr)
+        if HANG_AFTER_EXIT:
+            wait_forever()
+
+        sys.exit(exit_status if exit_status is not None else 1)
+
+
+if __name__ == "__main__":
+    main()
