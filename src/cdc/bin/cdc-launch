@@ -443,7 +443,7 @@ if [ -z "$CONTAINER_ID" -a -n "$SERVICE" ]; then
     if [ "$CDC_DEBUG" -ge "1" ]; then
 	echo podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up -d "${SERVICE}"
     fi
-    CONTAINER_ID=$(podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up "${SERVICE}")
+    CONTAINER_ID=$(podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up -d "${SERVICE}")
     podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" logs "${SERVICE}"
 else
     echo "Note: service already running with CONTAINER_ID: $CONTAINER_ID"

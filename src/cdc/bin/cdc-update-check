@@ -5,20 +5,21 @@ set -e
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 
 if [ "$1" == "-h" ]; then
-    echo "Usage: $0 [<app dir>]"
+    echo "Usage: ${CDC_CLI_NAME:-$0} [<app dir>]"
     exit 0
 fi
 
-DEST="$1"
-if [ "$DEST" == "" ]; then
-    APP=$(basename -- "$(pwd)")
-    DEST="."
-else
-    APP=$(basename -- "$DEST")
+DEST="."
+if [ "$#" -gt 0 ]; then
+    DEST="$1"
+    if [ "$DEST" != "" ]; then
+        APP=$(basename -- "$DEST")
+    fi
+    shift 1
 fi
-shift 1
+APP=$(basename -- "$(pwd)")
 
 DEST_ABSPATH="$(cd -- "$DEST"; pwd -P)"
 cd "$DEST_ABSPATH"
 
-"$SCRIPTPATH/cdc-launch" update-check
+"$SCRIPTPATH/cdc-launch" update-check "$@"

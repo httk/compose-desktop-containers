@@ -17,7 +17,7 @@ package-dir = { "" = "src" }
 packages = ["cdc"]
 
 [tool.setuptools.package-data]
-"cdc.scripts" = ["cdc-*.sh"]
+"cdc" = ["bin/*", "apps/**/*"]
 
 [tool.cdc.system-requirements]
-packages = ["bash", "curl", "yq"]
+packages = ["bash", "curl", "yq", "podman", "podman-compose"]
