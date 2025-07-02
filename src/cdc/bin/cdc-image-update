@@ -2,8 +2,67 @@
 
 set -e
 
+IMAGE="u24"
+
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
+IMAGE_DIR="$(realpath -- "$SCRIPTPATH/../images")"
 CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
 
-echo "Not implemented yet"
-exit 1
+CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
+mkdir -p "$CDC_CONFIG_DIR/image-u24/build/files" "$CDC_CONFIG_DIR/image-u24/build/tools"
+mkdir -p "$CDC_CONFIG_DIR/image-u24/installed"
+mkdir -p "$CDC_CONFIG_DIR/image-u24/requested/default"
+
+(
+    cd "$IMAGE_DIR"/image-"$IMAGE"/requested
+    for FILE in *; do
+        if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/default/${FILE}.disabled" -a "${FILE%\~}" = "${FILE}" ]; then
+            cp "$FILE" "$CDC_CONFIG_DIR/image-u24/requested/default/."
+        fi
+    done
+)
+
+INSTALLED_PKGS=()
+INSTALLED_PKGS_NODEPS=()
+REQUESTED_PKGS=()
+REQUESTED_PKGS_NODEPS=()
+
+IFS=$'\n'
+INSTALLED_PKGS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/installed/*/*-pkgs* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+INSTALLED_PKGS_NODEPS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/installed/*/*-pkgs-nodeps* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+IFS=' '
+
+IFS=$'\n'
+REQUESTED_PKGS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*/*-pkgs* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+REQUESTED_PKGS_NODEPS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*/*-pkgs-nodeps* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+IFS=' '
+
+PKGS_LINES=""
+PKGS_NODEPS_LINES=""
+DRY_PKGS_LINES=""
+DRY_PKGS_NODEPS_LINES=""
+
+if [ "${INSTALLED_PKGS[*]}" != "${REQUESTED_PKGS[*]}" ]; then
+    echo "## Package changes!"
+    PKGS_LINES="apt-get -y install $(printf "%s\n" "${REQUESTED_PKGS[@]}" | sort -u | tr '\n' ' ');"
+    DRY_PKGS_LINES="apt-get --dry-run -y install $(printf "%s\n" "${REQUESTED_PKGS[@]}" | sort -u | tr '\n' ' ');"
+fi
+if [ "${INSTALLED_PKGS_NODEPS[*]}" != "${REQUESTED_PKGS_NODEPS[*]}" ]; then
+    echo "## Package nodep changes!"
+    PKGS_NODEPS_LINES="apt-get -y install $(printf "%s\n" "${REQUESTED_PKGS_NODEPS[@]}" | sort -u | tr '\n' ' ');"
+    DRY_PKGS_NODEPS_LINES="apt-get --dry-run -y install $(printf "%s\n" "${REQUESTED_PKGS_NODEPS[@]}" | sort -u | tr '\n' ' ');"
+fi
+
+UPDATE_LINE="apt-get update && apt-get -y dist-upgrade;"
+DRY_UPDATE_LINE="apt-get update && apt-get --dry-run -y dist-upgrade;"
+FINISH_LINE="apt-get clean autoclean -y && apt-get autoremove -y && rm -rf /var/tmp/* && rm -rf /tmp/*;"
+
+echo "Checking if the update will actually change the image."
+if [ -n "$("${SCRIPTPATH}/cdc-image-modify" "${DRY_UPDATE_LINE}${DRY_PKGS_LINES}${DRY_PKGS_NODEPS_LINES}exit 1" | grep -E '^(Inst|Remv|Conf)\b')" ]; then
+    echo "Running update and installations."
+    "${SCRIPTPATH}/cdc-image-modify" "${UPDATE_LINE}${PKGS_LINES}${PKGS_NODEPS_LINES}${FINISH_LINE}"
+    rm -rf "$CDC_CONFIG_DIR/image-$IMAGE/installed"
+    cp -rp "$CDC_CONFIG_DIR/image-$IMAGE/requested" "$CDC_CONFIG_DIR/image-$IMAGE/installed"
+else
+    echo "The update will not lead to any changes of the image."
+fi

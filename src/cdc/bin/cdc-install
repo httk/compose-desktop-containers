@@ -1,9 +1,0 @@
-#!/bin/bash
-
-set -e
-
-SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
-CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
-
-echo "Not implemented yet"
-exit 1

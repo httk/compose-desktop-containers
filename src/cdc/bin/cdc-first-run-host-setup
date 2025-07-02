@@ -1,0 +1,86 @@
+#!/bin/bash
+
+set -e
+
+SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
+CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
+
+OS_ID=$(awk -F= '$1=="ID" {print $2}' /etc/os-release | tr -d '"')
+VERSION_CODENAME=$(awk -F= '$1=="VERSION_CODENAME" {print $2}' /etc/os-release | tr -d '"')
+
+echo "Detected OS: ${OS_ID} ${VERSION_CODENAME}"
+echo
+
+if [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "plucky" ]; then
+    cat <<EEOOFF
+#####################################################
+## You need to install a number of system packages ##
+#####################################################
+
+## Run this command:
+
+sudo apt-get install -y crun podman podman-compose curl wmctrl xdotool python3-pip python3-venv python3-setuptools python3-tk python3-gi python3-gst-1.0 gstreamer1.0-pipewire gir1.2-appindicator3-0.1 yq mesa-utils
+
+EEOOFF
+elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "oracular" ]; then    
+    cat <<EEOOFF
+#####################################################
+## You need to install a number of system packages ##
+#####################################################
+
+## Run this command:
+
+sudo apt-get install -y crun podman podman-compose curl wmctrl xdotool python3-pip python3-venv python3-setuptools python3-tk python3-gi python3-gst-1.0 gstreamer1.0-pipewire gir1.2-appindicator3-0.1 yq mesa-utils
+
+EEOOFF
+elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "nobel" ]; then
+    cat <<EEOOFF
+#####################################################
+## You need to install a number of system packages ##
+#####################################################
+
+## Run this command:
+
+sudo apt-get install -y crun podman podman-compose curl wmctrl xdotool python3-pip python3-venv python3-setuptools python3-tk python3-gi python3-gst-1.0 gstreamer1.0-pipewire gir1.2-appindicator3-0.1 yq mesa-utils
+
+EEOOFF
+else
+
+    cat <<EEOOFF
+##########################################################################################
+## Your OS type and version is not recognized, hence only general advice can be given. ##
+#########################################################################################
+
+## You need system packages for: 
+
+- podman podman-compose yq mesa-utils crun curl wmctrl xdotool python3 (with pip, venv, tk, gi, and gst), gstreamer with pipewire support, appindicator3
+
+===========================
+
+EEOOFF
+fi
+
+cat <<EEOOFF
+## OPTIONAL: if you want support for hot-plugging devices into your containers, you need this type of config for udev:
+
+sudo tee /etc/udev/rules.d/99-cdc.rules <<EOF
+KERNEL=="video*", SUBSYSTEM=="video4linux", ACTION=="add", RUN+="/bin/bash -c '/bin/mkdir -p -m 0755 /dev/container-hotplug/video; MAJOR=\$\$(stat -c %%t /dev/%k | xargs printf \"%%d\"); MINOR=\$\$(stat -c %%T /dev/%k | xargs printf \"%%d\"); mknod /dev/container-hotplug/video/%k c \$\$MAJOR \$\$MINOR; chown root:video /dev/container-hotplug/video/%k; chmod 0660 /dev/container-hotplug/video/%k'"
+KERNEL=="video*", SUBSYSTEM=="video4linux", ACTION=="remove", RUN+="/bin/rm -f /dev/container-hotplug/video/%k"
+EOF
+sudo udevadm control --reload-rules && sudo udevadm trigger
+
+EEOOFF
+
+if grep -q 'direct rendering: Yes' <<< "$GLXINFO" && grep -q 'OpenGL vendor string: NVIDIA' <<< "$GLXINFO"; then
+    if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
+        echo "## WARNING: xwayland on NVIDIA driver accelerated desktops currently do not work well: you will get flicker from applications that are routed to wayland via xwayland (not just containerized applications...)."
+        echo "## There are workarounds (xorg-xwayland-explicit-sync), but the only simple full fix seems to be to switch your desktop to x11, or to change to run desktop graphics on your iGPU."
+    fi
+fi
+
+if command -v nvidia-smi 2>/dev/null; then
+    echo "## For GPU feature support, you need to install the NVIDIA Container Toolkit:"
+    echo
+    echo 'curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg   && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list |     sed "s#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g" | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list'
+    echo 'sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml'
+fi

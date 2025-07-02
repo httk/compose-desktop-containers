@@ -156,7 +156,7 @@ services:
 
     image: "cdc-u24"
 
-    entrypoint: ["/home/rar/cdc-entrypoint"]
+    entrypoint: ["/usr/bin/cdc-entrypoint"]
     network_mode: none
 
     working_dir: /home/$USER

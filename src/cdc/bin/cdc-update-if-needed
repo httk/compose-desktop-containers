@@ -15,9 +15,8 @@ if [ -n "$DEST" ]; then
 fi
 APP="$(basename -- "$(pwd -P)")"
 
-if ! "$SCRIPTPATH/cdc-launch" update-check; then
-    "$SCRIPTPATH/cdc-launch" download
-    "$SCRIPTPATH/cdc-launch" update
+if ! "$SCRIPTPATH/cdc-launch" update-check < /dev/null; then
+    "$SCRIPTPATH/cdc-launch" update < /dev/null
     "$SCRIPTPATH/cdc-host-integration"
 else
     echo "Update not needed. Use 'reinstall' to force reinstall)."

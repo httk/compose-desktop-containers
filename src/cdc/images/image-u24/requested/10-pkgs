@@ -24,6 +24,12 @@ python3
 python3-pip
 python3-setuptools
 python3-venv
+python3-pip
+python3-tk
+python3-gi
+python3-gst-1.0
+python3-xlib
+python3-watchdog
 libx11-data
 x11-utils
 gpg
@@ -60,10 +66,6 @@ libxcb-xtest0
 qterminal
 wmctrl
 xdotool
-python3-tk
-python3-gi
-python3-gst-1.0
-python3-xlib
 gstreamer1.0-pipewire
 gir1.2-appindicator3-0.1
 libglu1-mesa
@@ -80,3 +82,4 @@ icoutils
 imagemagick
 ocl-icd-libopencl1
 tox
+tmux

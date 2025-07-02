@@ -69,7 +69,7 @@ def main():
     if exit_code != 0 or not args.command:
         print("Available commands:\n")
         for order, command, desc in list_available_commands(script_dir):
-            print(f"  {command:<20} {desc}")
+            print(f"  {command:<25} {desc}")
         print("\nUse `cdc <command> -h` for command-specific help.\n")
         print(f"When you 'setup' an app, a directory with launcher links is created, and maintenance tasks under setup/.")
         print(f"Start the app by executing one of the launchers.\n")

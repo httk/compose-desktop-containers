@@ -69,4 +69,4 @@ podman commit wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=$USER" "$
 podman rm -fi wrap-upgrade-tmp
 podman image prune -f
 
-podman run --rm -w "/home/$USER" --user="$USER" --shm-size=512M --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc-test-upgrade" "$IMAGE_NAME" echo "Updated image complete."
+podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc-test-upgrade" "$IMAGE_NAME" echo "Updated image complete."
