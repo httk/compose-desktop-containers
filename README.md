@@ -1,81 +1,122 @@
 # Compose-Desktop-Containers (CDC)
 
-*Note: for anyone finding this: this software is currently in an early work-in-progress state. Once the design reaches a bit more maturity, we will track proper releases.*
+Helpers to handle launcher and desktop integration for containers using docker/podman compose declaration files.
 
-Scripts and tools to describe containerized desktop applications using the industry standard docker/podman-compose yaml files.
-Containerized apps, here implemented using podman non-root containers, provide a security layer to reduce the risks of running less trusted software.
-The tools create both command line and desktop launchers for installed applications.
+Containerized apps -- here implemented via podman non-root containers -- provide a security layer to reduce the risks when running less trusted software.
+The CDC helpers enable easy creation of both command line and XDG desktop launchers for installed applications.
 
-## Quickstart
+The compose format is extended with an `x-launchers` stanza that specify a set of launchers. Launching an app via these launchers is a convinient way to
+execute a `podman-compose up` (setting up the container), a `podman-compose exec` (running the software), and a `podman-compose down` (to close down the container).
+Furthermore, a number of maintenance tasks are provided that allows `download`, `build`, and `install` steps for those apps where this makes sense,
+allowing a complete containerized build recepie to distributed as a single compose yaml file.
 
-Clone the repository and initialize submodule dependecies in, for example, `~/Containers/cdc`:
-```
-mkdir ~/Containers
-cd ~/Containers
-git clone --recurse-submodules 'https://github.com/httk/compose-desktop-containers.git' cdc
-```
+## Quickstart for users
 
-Install dependencies (replace `<your host system>` with the name of the OS you are installing the containers on):
-```
-cdc/dependencies/installers/<your host system>/install.sh
-```
+1. The absolutely easiest way to install this app is via `pipx`:
+   ```
+   pipx install https://github.com/httk/compose-desktop-containers
+   ```
+   (In contrast to `pip`, `pipx` installs pypi-packaged software into your home directory in a way where it does not get tied to a specific venv.
+   This is the right choice for "tools" that you want to have access to across your interactions with different venvs.)
 
-Build the container image:
-```
-cd cdc/images/image-u24
-./build-gamescope.sh
-./build.sh
-cd ../../..
-```
-This first builds some dependencies, which is helper software we need for the image, and then builds the `cdc-u24` image.
+2. CDC needs some software and configuration of your system. Run the following command:
+   ```
+   cdc install
+   ```
+   This will type out a set of instructions to execute on your system to install necessary system dependencies and to build the CDC standard container image.
 
-### Install and run an app
-```
-cd ~/Containers
-cdc/tools/cdc-setup cdc/apps/Networking/discord.yaml discord
-```
-Now try to start discord from your system launcher, or run `./discord` in the application directory.
+3. Create a directory for holding your installed containerized apps, e.g., `~/Containers/cdc`:
+   ```
+   mkdir ~/Containers
+   cd ~/Containers
+   ```
 
-### Exchanging files between the container, host system, and other containers
+4. List the apps provided alongside CDC:
+   ```
+   cdc apps
+   ```
+   (You can also just obtain a CDC-compatible yaml file from somewhere else)
 
-The `cdc-setup` script set up a standard `override.yaml` file.
-Commonly the standard override file sets up a mapping between the host and container system for an appropriate directory under `~/Documents/containers`.
+5. Install one of the apps
+   ```
+   cdc setup Networking/discord.yaml
+   ```
+
+6. You should now find `Discord` in your desktop system launcher. Or, you can run it in the terminal:
+   ```
+   cd discord
+   ./discord
+   ```
+
+7. If you for some reason want to force a re-install of discord, you can do so via the maintenance tasks under `setup/`:
+   ```
+   ./setup/reinstall
+   ```
+
+## Exchanging files between the container, host system, and other containers
+
+The command `cdc setup` set up a standard `override.yaml` file that is used for customization of the app's `compose.yaml` file.
+The standard override file usually comes with a directory binding between the container system and the host for a shared subdirectory under `~/Documents/containers`.
 Edit the `override.yaml` file to configure this to your liking.
 
-Other files inside `/home/<username>/` are mapped to a subdirectory `home` in the container directory.
+Other files inside the user's home directory in the container `/home/<username>/` are mapped to the subdirectory `home` in the apps directory.
 
-### Update an app
+## Update one app
+
+Update if needed:
 ```
 cd <app directory>
-~/Containers/cdc/tools/cdc-update
+cdc update-if-needed
 ```
-Now try to start discord from your system launcher.
-
-### Update the application definition files to the latest ones in this repository
+Force an update:
 ```
-cd ~/Containers/cdc
-git pull
+./setup/update
 ```
-(Installed compose.yaml files are symbolic links to the ones under `apps`, so they get updated automatically.
-If you do not want this feature, you can remove the symbolic link and copy the file instead.)
 
-### Troubleshooting
+## Other types of updates
 
-The first thing to try if you have trouble with a specific app is to just re-initialize it:
+For security reasons, you should want to update the CDC container image frequently.
+You can do this by
+```
+cdc image-update
+```
+
+However, there is a convinience helper to just "update everything":
+```
+cd ~/Containers
+cdc update-all
+```
+
+## Update the application definition files
+
+When running `cdc setup`, the application definition files provided by the repository are not copied, they are created as symbolic links.
+Hence, simply running `pipx upgrade https://github.com/httk/compose-desktop-containers` will automatically upgrade the application definition files for apps installed this way.
+
+If you have obtained a compose yaml file from some other source, simply replace `compose.yaml` in the apps directory with the new one.
+
+## Troubleshooting
+
+The very first thing to try if you have trouble with a specific app is to troubleshoot by checking the files in the `home` subdirectory either directly
+(it is a subdirectory to the app directory) or by entering the apps file system with the `interactive` launcher many of the apps provide.
+(This is similar to what you would typically try with an app installed directly on your host system.)
+
+The second thing to try is to completely re-initialize it:
 ```
 cd <app directory>
-~/Containers/cdc/tools/cdc-resetup
+cdc resetup
 ```
-This keeps your files in the `home` subdirectory, but redownloads, rebuilds, and reinstalls the app.
+This leaves the `home` subdirectory intact, but redownloads, rebuilds, and reinstalls the app.
 
-The second thing to try is to remove the whole state of the app, i.e., the `home` subdirectory, and then run `cdc-resetup`.
-IMPORTANT: make sure to move out any files you want to keep from there first.
+A third thing to try is to remove the whole state of the app, i.e., the `home` subdirectory, and then run `cdc-resetup`.
 
-The third thing to try is to rebuild the podman image. 
-The deepest reset you can do is to run `podman system reset`, which completely purges all internal podman configuration (including any other podman images you may have, outside of CDC...)
-After that, re-do the "Build the image" step above, and then try to start your app again.
+**IMPORTANT:** You are not *meant* to keep any important files in the app-specific `home` directory. They are meant to go, e.g., under `~/Document/containers` on the host system via the directory linking configured in `override.yaml`. However, since this directory is available to write in when running the app, you may stil have ended up with something you like to keep there. *Make sure to copy/move out any files you want to keep from there before removing this directory!*
 
-### Uninstalling applications
+The third thing to try is to rebuild the CDC podman image. You can do so with `cdc image-create`.
+
+The final troubleshooting step is to completely purge your podman config. **IMPORTANT:** this will including erasing any other podman images you may have, outside of CDC!
+To do this: run `podman system reset`. After that, re-do `cdc image-create`, and then try to start your app again.
+
+## Uninstalling applications
 
 Before removing an application you likely want to look into the application `home` subdirectory and copy any files you want to preserve.
 
@@ -91,75 +132,114 @@ If you anyway want to make sure to clean out an installation as much as possible
   Icons are installed using the normal name of the application (e.g., `blender.png`) to allow for themeing to work as expected.
   (But it is also difficult to imagine that leaving application icons here would cause any trouble.)
 
+There is one final thing: CDC keeps some configuration related to requests from apps to install system packages into the standard container.
+To purge these, check, and possibly remove, the directories:
 
-## Details
+* `~/.config/cdc/image-*/requested/<application>`
 
-cdc extends the compose system by providing:
+## Installation for developers
 
-- A clear interace to compose files that assigns specific meaning to the following services:
+Those who want to work with the cdc source code are recommened to:
 
-  * `download`: download the files needed to build/install the application.
-  * `download-clean`: clean up downloads so that next invokation of download will redownload the necessary files.
-  * `build`: conduct non-networked build steps necessary between downloading and installation.
-  * `build-clean`: clean up previous builds so that next invokation of `build` rebuilds the app.
-  * `install`: installs the application.
-  * `install-clean`: clean up previous installations so that next invokation of `install` reinstalls the app.
-  * `update-check`: returns exit code 0 if the app is at its latest version (or this cannot be determined).
-  * `update`: attempt to update the app.
+Clone the repository somewhere in your home directory:
+```
+cd ~/Containers
+git clone https://github.com/httk/compose-desktop-containers cdc --recurse-submodules
+cd cdc
+```
 
-- A definition of some specific 'x-*' keys in the compose.yaml configuration that enable features relevant for desktop applications:
+Create a virtualenv in which `cdc` can be pip-installed "editable":
+```
+make venv
+source .venv/bin/activate
+pip install -e .
+```
 
-  * The top-level `x-application` key defines a `README.md`, and default contents for an `override.yaml` and a `.env` to help create configurable containers.
-  * Under specific services one can define an `x-launcher` key to mark them as launchable as application entry points, with their own `.desktop` files, icons, etc.
-  * The `x-application` section allows definition of an app-global `.desktop file`, icons, and dependencies on packages that are needed in the container image.
-  * The `x-launcher` key may furthermore list services, e.g., `video` that are set up when launching to give access to the video devices on the host system, etc.
-  * The `x-app-init` allows for initialization steps executed as root, before `command` is executed as the user.
+Now, anytime you activate this venv, you will have access to the version of cdc represented by the source code in that repo.
 
-- A new "launch" mode for running services with somewhat different semantics than "run" and "start" activated via the command `cdc-launch <service name>`
+If you are surfficiently happy with a development version to want to have access to it even without activating the venv, you do:
+```
+pipx install --force .
+```
+(The force make sure to replace an existing copy if there is one). However, this will install *a copy* of your development version of CDC as a tool in your home directory. Changes you make from this point will not be reflected in that version (you need to activate the venv) until you re-run the `pipx` command.
 
-  * Executes the commands under the `command` key as if the `run` mode was invoked, without starting a compose service.
 
-- Helper scripts to setup and interface in various ways with the app services.
+## Design details
 
-  * When running `cdc-setup` on a defintion yaml file, a directory is created for the application containing `compose.yaml`, `override.yaml`, `.env`, symlinks for the launchable application entry points, and a `home` directory to isolate filesystem access for the application when run.
+CDC extends the compose system by:
+
+- CDC defines specific extensions to the compose yaml format via 'x-*' keys that enable declaring features relevant for desktop applications:
+
+  * The top-level `x-application` key defines a label, a name, a `README.md`, and default contents for an `override.yaml` and a `.env` to help create configurable containers.
+  * A top-level `x-launchers` key under which the app declare its various launchers with all meta-data that goes along (e.g., `.desktop` files, icons, etc.)
+
+- A convinient way to "install" compose applications.
+
+  * When running `cdc setup` on a defintion yaml file, a directory is created for the application containing `compose.yaml`, `override.yaml`, `.env`, symlinks for the launchable application entry points, and a `home` directory to isolate filesystem access for the application when run.
 
   * Apart from the symlink launchers (e.g. `./blender`), `cdc-setup` also makes applications available in the host desktop system via `.desktop` files in `~/.local/share/applications`. 
 
-Using this extended compose framework, "applications" are distributed as single yaml files on the extended compose.yaml format.
-These yaml files only contain instructions for downloading and installing the application.
+- Via the `x-launchers` key, CDC declares an interface for specific maintence tasks. The main ones are:
 
-## Some notes on the design choices
+  * `download`: download any files needed to build/install the application.
+  * `build`: conduct the (usually non-networked) build steps necessary between downloading and installation.
+  * `install`: install the application.
+  * `update`: attempt to update the app.
+  * `update-check`: returns exit code 1 if the app thinks running `update` would be meaningful. (Some apps cannot update, in which case they will always exit with code 0).
 
-The usual design model of containerized applications in, e.g., flatpack, snap, etc., is that applications are delivered as separate self-contained containers that can be installed and run independently.
-In CDC, the model is rather that there is a single "parallel" container system (i.e., ideally one image) that lives inside your host system.
-This parallel system can be independently upgraded, be extended with new dependency libraries, etc.
-We then run a range of installed applications inside this parallel containerized system. This shift in design model has both benefits and drawbacks.
+  The app is allowed (but not required) to skip the step if it has already been done.
+  To force the operation in these cases, use the "re-" versions:
 
-Benefits:
+  * `redownload`
+  * `rebuild`
+  * `reinstall`
 
-* Allows keeping the container system software up to date independently from application software updates, so that, e.g., apps don't rely on outdated, possibly vulnerable, version of security-sensitive system software (e.g., libssl, gnutls).
+- CDC invents a new compose "launch mode" for running services with somewhat different semantics than the standard ones: "up", "run", and "exec".
+  It is implemented as: first brining the service container `up`. Then executing the launcher's script with `exec`. And finally the container is usually shut down with `down`.
+  Users do not usually need to execute this manually, as it is automated via the launcher symlinks.
+  However, the manual hidden command is: `cdc launch <launcher>`.
 
-* Existing application definition files will (try to) install new versions directly as they get released, instead of waiting for a new release of an updated container.
+- A `cdc-entrypoint` program is provided which "does the right thing" when using compose containers to run interactive software. On brining `up` a container, it executes the `command`
+  (possibly as root, if that is what `user` is set to) and then stalls, waiting for the container to be shut down again.
+  While it waits, it monitors the container's `/dev/container-hotplug/<subsystem>` and symlinks any devices that appear in these directories into `/dev`.
+  This allows for hotplugging of devices into running containers (e.g., video devices for teleconferencing software).
 
-* Arguably, the model allows better scaling of storage use to many installed applications since they are meant to share a single image (or in the worst case, a few).
+Using this extended compose framework, "applications" can be distributed as single yaml files.
 
-Drawbacks:
+### Further notes on design choices
 
-* Future changes of applications may unexpectedly break the update process (which shouldn't happen in other container formats where updates are done via tested new definition files).
+A common model for containerized applications is that an application is delivered as its own 'image', along with all its dependencies.
+This seems very attractive at first, but comes with limitations:
 
-* All apps must be made to run on the image(s) provided. Right now, the standard is: Ubuntu LTS 24.04; going forward the idea will likely be to handle images for all maintained LTS releases.
+* If the container actually contains all the data itself: the application binary, and binaries for all dependencies, they will be very big.
+* Installing applications this way leads to a lot of duplication.
+* Upgrading and otherwise maintaining the dependencies is tricky.
 
-* Apps will be able to access to system software (e.g., libraries) installed in the image for use by other apps, which arguably reduces the security barrier somewhat.
+In practice, most container systems have evolved into not cleanly implementing this approach, and instead started to add dependencies between containers, which also leads to complications.
+
+CDC uses the exteme opposite of this model. All software runs in containers instantiated from one and the same image.
+If system software is missing in this container, the image is updated to include it.
+This design model has both benefits and drawbacks.
+
+*Benefits:*
+
+* It simplifies keeping the container system software up to date independently from application software updates, so that, e.g., apps don't rely on outdated, possibly vulnerable, versions of security-sensitive system software (e.g., libssl, gnutls).
+
+* Existing application definition files are set up to be able to install new versions directly as they get released. There is no need to wait for a new release of an updated container.
+
+* It makes it fairly simple to keep a resonable scaling of storage use from many installed applications.
+
+*Drawbacks:*
+
+* Future changes of system software, or applications, may unexpectedly break the installation/update process.
+  This means: there is a risk that `cdc setup <app>` fails because of an inompability between the version the yaml file was created for, and the latest version of the software.
+  This should not be possible with "curated images" tailored to each software release.
+
+* All apps must be made to run on the specific image(s) provided. Right now, the standard is: Ubuntu LTS 24.04.
+  (We may expand this to images for all maintained LTS releases.)
+
+* Apps will be able to access to all system software (e.g., libraries) installed in the image for use by other apps, which arguably reduces the security barrier somewhat.
   (On the other hand, malicious software could just embedd (or download) the same functionality.)
 
 * Changes (e.g., updates) to the master container image may affect all containerized software (e.g., in the worst case, a library update could break previous working software; this should, however, be rare).
 
-## Design notes
-
-The top level directory contains the subdirectories:
-
-* `images`: used to build the system podman image used for the containers.
-* `apps`: a hierarchy of subdirectories for yaml files defining a number of applications.
-* `tools`: scripts used to install, configure, and launch applications.
-
-The `apps` contains one subdirectory for each catogory in the XDG desktop specification meant to be the primary categorization of the app, below which there are `app.yaml` files for the provided applications.
