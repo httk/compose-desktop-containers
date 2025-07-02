@@ -72,17 +72,19 @@ except ImportError:
         def _run(self):
             while self._running:
                 for handler, path in self._watches:
+                    print(f"[INFO] scanning: {path}", file=sys.stderr)
                     try:
                         current_files = set(
                             os.path.join(path, f)
                             for f in os.listdir(path)
-                            if os.path.isfile(os.path.join(path, f))
                         )
                     except Exception as e:
                         print(f"[WARN] Failed to scan {path}: {e}", file=sys.stderr)
                         continue
 
                     prev = self._prev_files.get(path, set())
+
+                    print(f"[INFO] check:",list(current_files - prev),list(prev - current_files), file=sys.stderr)
 
                     for added in current_files - prev:
                         handler.on_created(FileCreatedEvent(added))
@@ -102,24 +104,37 @@ except ImportError:
 
 class DevLinkHandler(FileSystemEventHandler):
     def on_created(self, event):
-        if not event.is_directory:
-            create_symlink(event.src_path)
+        print(f"[INFO] on created", file=sys.stderr)
+        create_symlink(event.src_path)
 
     def on_deleted(self, event):
-        if not event.is_directory:
-            remove_symlink(event.src_path)
+        print(f"[INFO] on removed", file=sys.stderr)
+        remove_symlink(event.src_path)
 
 def wait_for_directory(path, handler, observer, poll_interval=2):
     def monitor():
         while True:
             if os.path.isdir(path):
                 try:
+                    # 1. Symlink all current files
+                    for f in os.listdir(path):
+                        full_path = os.path.join(path, f)
+                        print(f"[INFO] xxxxxxx: {full_path}", file=sys.stderr)
+                        handler.on_created(type("Event", (object,), {
+                            "src_path": full_path,
+                            "is_directory": False
+                        })())
+
+                    # 2. Start watching for future changes
                     observer.schedule(handler, path, recursive=False)
-                    print(f"[INFO] Watching directory: {path}")
+                    print(f"[INFO] Watching directory: {path}", file=sys.stderr)
                     break
                 except Exception as e:
-                    print(f"[WARN] Failed to schedule watcher for {path}: {e}", file=sys.stderr)
+                    print(f"[WARN] Failed to initialize watcher for {path}: {e}", file=sys.stderr)
+            else:
+                print(f"[DEBUG] Directory not yet available: {path}", file=sys.stderr)
             time.sleep(poll_interval)
+
     thread = threading.Thread(target=monitor, daemon=True)
     thread.start()
 
@@ -132,6 +147,7 @@ def forward_signal(signum, frame):
         pass
 
 def start_filesystem_monitor():
+
     observer = Observer()
     handler = DevLinkHandler()
     for directory in WATCHED_DIRS:
@@ -143,6 +159,7 @@ def create_symlink(src):
     dst = os.path.join(LINK_DIR, os.path.basename(src))
     try:
         if not os.path.exists(dst):
+            print(f"[INFO] symlink created: {dst} -> {src}", file=sys.stderr)
             os.symlink(src, dst)
     except Exception as e:
         print(f"[ERROR] Failed to create symlink {dst} -> {src}: {e}", file=sys.stderr)
@@ -150,7 +167,8 @@ def create_symlink(src):
 def remove_symlink(src):
     dst = os.path.join(LINK_DIR, os.path.basename(src))
     try:
-        if os.path.islink(dst) and os.readlink(dst) == src:
+        if os.path.islink(dst):
+            print(f"[INFO] symlink removed: {dst}", file=sys.stderr)
             os.remove(dst)
     except Exception as e:
         print(f"[ERROR] Failed to remove symlink {dst}: {e}", file=sys.stderr)
@@ -213,48 +231,41 @@ def main():
         tinit_args = []
         child_args = args
 
-    #if not child_args:
-    #    print(f"Usage: {sys.argv[0]} [TINIT_OPTIONS] -- PROGRAM [ARGS...]")
-    #    print(f"   or: {sys.argv[0]} PROGRAM [ARGS...]")
-    #    sys.exit(1)
+    # Start filesystem monitoring thread
+    fs_observer = start_filesystem_monitor()
 
-    # Fork process
-
-    if child_args:
-
-        child_pid = os.fork()
-        if child_pid == 0:
-            # In child
-            os.setsid()
-            try:
-                os.tcsetpgrp(0, os.getpgrp())
-            except OSError:
-                pass
-            os.execvp(child_args[0], child_args)
-        else:
-            # In parent
-            for sig in signal_set:
+    try:
+        if child_args:
+            child_pid = os.fork()
+            if child_pid == 0:
+                # In child
+                os.setsid()
                 try:
-                    signal.signal(sig, forward_signal)
-                except (OSError, RuntimeError, ValueError):
-                    continue
+                    os.tcsetpgrp(0, os.getpgrp())
+                except OSError:
+                    pass
+                os.execvp(child_args[0], child_args)
+            else:
+                # In parent
+                for sig in signal_set:
+                    try:
+                        signal.signal(sig, forward_signal)
+                    except (OSError, RuntimeError, ValueError):
+                        continue
 
-            # Start filesystem monitoring thread
-            fs_observer = start_filesystem_monitor()
-
-            try:
-                wait_for_child()
-            finally:
-                fs_observer.stop()
-                fs_observer.join()
-
+                    wait_for_child()
+        if child_args:
             print(f"[INFO] Child exited with code {exit_status}.", file=sys.stderr)
 
-    HANG_AFTER_EXIT = os.getenv("TINI_HANG_AFTER_EXIT", "1") != "0"
+        HANG_AFTER_EXIT = os.getenv("TINI_HANG_AFTER_EXIT", "1") != "0"
 
-    if HANG_AFTER_EXIT:
-        wait_forever()
-        sys.exit(0)
+        if HANG_AFTER_EXIT:
+            wait_forever()
+            sys.exit(0)
+
+    finally:
+        fs_observer.stop()
+        fs_observer.join()
 
     sys.exit(exit_status if exit_status is not None else 1)
 
