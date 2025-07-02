@@ -1,6 +1,0 @@
-COPY ./tools/en_SE.locale /tmp/en_SE.locale
-COPY ./tools/xwayland-exec /usr/bin/xwayland-exec
-COPY ./tools/xwayland-wm-exec /usr/bin/xwayland-wm-exec
-COPY ./tools/gamescope-exec /usr/local/bin/gamescope-exec
-COPY ./tools/gamescope-on-vc /usr/local/bin/gamescope-on-vc
-RUN chmod +x /usr/bin/xwayland-exec /usr/bin/xwayland-wm-exec

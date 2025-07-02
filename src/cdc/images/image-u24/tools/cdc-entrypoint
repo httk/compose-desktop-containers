@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-#    Compose-desktop-containers
+#    cdc-entrypoint
 #    Copyright (C) 2025 The compose-desktop-containers AUTHORS
 #
 #    This program is free software: you can redistribute it and/or modify
@@ -22,23 +22,25 @@ import sys
 import time
 import threading
 import signal
-import selectors
 
-WATCHED_DIRS = ['/dev/video']
+HOTPLUG_DIR = '/dev/container-hotplug'
 LINK_DIR = '/dev'
 POLL_INTERVAL = 2  # seconds
 FORWARD_TO_GROUP = True
-HANG_AFTER_EXIT = os.getenv("CDC_INIT_HANG_AFTER_EXIT","1") != "1"
+IDLE_AFTER_EXIT = os.getenv("CDC_INIT_IDLE_AFTER_EXIT","1") != "0"
 TERMINATE_SIGNALS = {signal.SIGHUP, signal.SIGINT, signal.SIGTERM}
 
 signal_set = set(range(1, signal.NSIG))
 signal_set -= {signal.SIGTTIN, signal.SIGTTOU}
+child_pid = None
+exit_status = None
 
 try:
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
 except ImportError:
-    print("[WARN] watchdog not available, using fallback polling watcher.", file=sys.stderr)
+    print("[WARN] cdc-entrypoint: watchdog not available, using fallback polling watcher.", file=sys.stderr)
+    # Note: this fallback implementation may have some race conditions at very fast hotplugging events.
 
     class FileSystemEventHandler:
         def on_created(self, event): pass
@@ -72,19 +74,17 @@ except ImportError:
         def _run(self):
             while self._running:
                 for handler, path in self._watches:
-                    print(f"[INFO] scanning: {path}", file=sys.stderr)
                     try:
-                        current_files = set(
-                            os.path.join(path, f)
-                            for f in os.listdir(path)
-                        )
+                        current_files = set()
+                        for dirpath, _, filenames in os.walk(path):
+                            for fname in filenames:
+                                current_files.add(os.path.join(dirpath, fname))
+
                     except Exception as e:
-                        print(f"[WARN] Failed to scan {path}: {e}", file=sys.stderr)
+                        print(f"[WARN] cdc-entrypoint: failed to scan {path}: {e}", file=sys.stderr)
                         continue
 
                     prev = self._prev_files.get(path, set())
-
-                    print(f"[INFO] check:",list(current_files - prev),list(prev - current_files), file=sys.stderr)
 
                     for added in current_files - prev:
                         handler.on_created(FileCreatedEvent(added))
@@ -104,39 +104,15 @@ except ImportError:
 
 class DevLinkHandler(FileSystemEventHandler):
     def on_created(self, event):
-        print(f"[INFO] on created", file=sys.stderr)
-        create_symlink(event.src_path)
+        try:
+            st = os.lstat(event.src_path)
+            create_symlink(event.src_path)
+        except FileNotFoundError:
+            pass
 
     def on_deleted(self, event):
-        print(f"[INFO] on removed", file=sys.stderr)
         remove_symlink(event.src_path)
 
-def wait_for_directory(path, handler, observer, poll_interval=2):
-    def monitor():
-        while True:
-            if os.path.isdir(path):
-                try:
-                    # 1. Symlink all current files
-                    for f in os.listdir(path):
-                        full_path = os.path.join(path, f)
-                        print(f"[INFO] xxxxxxx: {full_path}", file=sys.stderr)
-                        handler.on_created(type("Event", (object,), {
-                            "src_path": full_path,
-                            "is_directory": False
-                        })())
-
-                    # 2. Start watching for future changes
-                    observer.schedule(handler, path, recursive=False)
-                    print(f"[INFO] Watching directory: {path}", file=sys.stderr)
-                    break
-                except Exception as e:
-                    print(f"[WARN] Failed to initialize watcher for {path}: {e}", file=sys.stderr)
-            else:
-                print(f"[DEBUG] Directory not yet available: {path}", file=sys.stderr)
-            time.sleep(poll_interval)
-
-    thread = threading.Thread(target=monitor, daemon=True)
-    thread.start()
 
 def forward_signal(signum, frame):
     global child_pid
@@ -146,32 +122,23 @@ def forward_signal(signum, frame):
     except ProcessLookupError:
         pass
 
-def start_filesystem_monitor():
-
-    observer = Observer()
-    handler = DevLinkHandler()
-    for directory in WATCHED_DIRS:
-        wait_for_directory(directory, handler, observer)
-    observer.start()
-    return observer
-
 def create_symlink(src):
     dst = os.path.join(LINK_DIR, os.path.basename(src))
     try:
         if not os.path.exists(dst):
-            print(f"[INFO] symlink created: {dst} -> {src}", file=sys.stderr)
+            print(f"[INFO] cdc-entrypoint: dev hotplug symlink created: {dst} -> {src}", file=sys.stderr)
             os.symlink(src, dst)
     except Exception as e:
-        print(f"[ERROR] Failed to create symlink {dst} -> {src}: {e}", file=sys.stderr)
+        print(f"[ERROR] cdc-entrypoint: Failed to create symlink {dst} -> {src}: {e}", file=sys.stderr)
 
 def remove_symlink(src):
     dst = os.path.join(LINK_DIR, os.path.basename(src))
     try:
         if os.path.islink(dst):
-            print(f"[INFO] symlink removed: {dst}", file=sys.stderr)
+            print(f"[INFO] cdc-entrypoint: dev hotplug symlink removed: {dst}", file=sys.stderr)
             os.remove(dst)
     except Exception as e:
-        print(f"[ERROR] Failed to remove symlink {dst}: {e}", file=sys.stderr)
+        print(f"[ERROR] cdc-entrypoint: Failed to remove symlink {dst}: {e}", file=sys.stderr)
 
 
 def wait_for_child():
@@ -197,10 +164,10 @@ def wait_forever():
     def handler(signum, frame):
         nonlocal should_exit
         if signum in TERMINATE_SIGNALS:
-            print(f"[INFO] Received {signal.Signals(signum).name}, exiting hang loop.", file=sys.stderr)
+            print(f"[INFO] cdc-entrypoint: received {signal.Signals(signum).name} (exiting).", file=sys.stderr)
             should_exit = True
         else:
-            print(f"[DEBUG] Ignoring signal {signal.Signals(signum).name}", file=sys.stderr)
+            print(f"[DEBUG] cdc-entrypoint: ignoring signal {signal.Signals(signum).name}", file=sys.stderr)
 
     for sig in set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}:
         try:
@@ -208,7 +175,7 @@ def wait_forever():
         except (OSError, RuntimeError, ValueError):
             continue
 
-    print("[INFO] Entering infinite wait. Press Ctrl+C or send SIGINT/SIGHUP/SIGTERM to exit.", file=sys.stderr)
+    print("[INFO] cdc-entryponint: idling (Ctrl+C or SIGINT/SIGHUP/SIGTERM to exit).", file=sys.stderr)
 
     while not should_exit:
         try:
@@ -216,6 +183,37 @@ def wait_forever():
         except InterruptedError:
             continue
 
+def initial_symlink_scan(base_dir):
+    for dirpath, dirnames, filenames in os.walk(base_dir):
+        for fname in filenames:
+            full_path = os.path.join(dirpath, fname)
+            try:
+                create_symlink(full_path)
+            except FileNotFoundError:
+                continue
+
+def monitor_hotplug_dir(observer, handler, poll_interval=2):
+    def watcher():
+        while True:
+            if os.path.isdir(HOTPLUG_DIR):
+                print(f"[INFO] cdc-entrypoint: dev hotplug dir {HOTPLUG_DIR} is now available, starting observer.", file=sys.stderr)
+                try:
+                    initial_symlink_scan(HOTPLUG_DIR)
+                    observer.schedule(handler, HOTPLUG_DIR, recursive=True)
+                    observer.start()
+                except Exception as e:
+                    print(f"[ERROR] cdc-entrypoint: failed to start observer on {HOTPLUG_DIR}: {e}", file=sys.stderr)
+                break
+            time.sleep(poll_interval)
+
+    thread = threading.Thread(target=watcher, daemon=True)
+    thread.start()
+    return observer
+
+def start_filesystem_monitor():
+    observer = Observer()
+    handler = DevLinkHandler()
+    return monitor_hotplug_dir(observer, handler)
 
 def main():
     global child_pid, exit_status
@@ -225,10 +223,10 @@ def main():
     # Separate tinit options and child args
     if "--" in args:
         sep_index = args.index("--")
-        tinit_args = args[:sep_index]
+        args = args[:sep_index]
         child_args = args[sep_index + 1:]
     else:
-        tinit_args = []
+        args = []
         child_args = args
 
     # Start filesystem monitoring thread
@@ -253,13 +251,10 @@ def main():
                     except (OSError, RuntimeError, ValueError):
                         continue
 
-                    wait_for_child()
-        if child_args:
-            print(f"[INFO] Child exited with code {exit_status}.", file=sys.stderr)
+                wait_for_child()
+                print(f"[INFO] cdc-entrypoint: child exited with code {exit_status}.", file=sys.stderr)
 
-        HANG_AFTER_EXIT = os.getenv("TINI_HANG_AFTER_EXIT", "1") != "0"
-
-        if HANG_AFTER_EXIT:
+        if IDLE_AFTER_EXIT:
             wait_forever()
             sys.exit(0)
 

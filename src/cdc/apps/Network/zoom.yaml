@@ -156,7 +156,7 @@ services:
 
     image: "cdc-u24"
 
-    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    entrypoint: ["/home/rar/cdc-entrypoint"]
     network_mode: none
 
     working_dir: /home/$USER
@@ -210,6 +210,9 @@ services:
   run:
     <<: *common
 
+    # Needed for hotplugging of video devices to work
+    user: root
+
     network_mode: bridge
 
     volumes:
@@ -223,6 +226,9 @@ services:
 
   run-wayland:
     <<: *common
+
+    # Needed for hotplugging of video devices to work
+    user: root
 
     network_mode: bridge
 

@@ -1,12 +1,12 @@
 #!/bin/bash
 
-sudo apt-get install -y crun podman podman-compose curl wmctrl xdotool python3-tk python3-gi python3-gst-1.0 gstreamer1.0-pipewire gir1.2-appindicator3-0.1 yq mesa-utils
+sudo apt-get install -y crun podman podman-compose curl wmctrl xdotool python3-pip python3-venv python3-tk python3-gi python3-gst-1.0 gstreamer1.0-pipewire gir1.2-appindicator3-0.1 yq mesa-utils
 
 # Create a udev rule to duplicate the video device nodes inside /dev/video to allow hot-plugging of cameras into containers
 # If you skip this, everything will work except you cannot hot-plug video devices to already running software inside containers
 sudo tee /etc/udev/rules.d/99-cdc.rules <<EOF
-KERNEL=="video*", SUBSYSTEM=="video4linux", ACTION=="add", RUN+="/bin/bash -c '/bin/mkdir -p -m 0755 /dev/video; MAJOR=\$\$(stat -c %%t /dev/%k | xargs printf \"%%d\"); MINOR=\$\$(stat -c %%T /dev/%k | xargs printf \"%%d\"); mknod /dev/video/%k c \$\$MAJOR \$\$MINOR; chown root:video /dev/video/%k; chmod 0660 /dev/video/%k'"
-KERNEL=="video*", SUBSYSTEM=="video4linux", ACTION=="remove", RUN+="/bin/rm -f /dev/video/%k"
+KERNEL=="video*", SUBSYSTEM=="video4linux", ACTION=="add", RUN+="/bin/bash -c '/bin/mkdir -p -m 0755 /dev/container-hotplug/video; MAJOR=\$\$(stat -c %%t /dev/%k | xargs printf \"%%d\"); MINOR=\$\$(stat -c %%T /dev/%k | xargs printf \"%%d\"); mknod /dev/container-hotplug/video/%k c \$\$MAJOR \$\$MINOR; chown root:video /dev/container-hotplug/video/%k; chmod 0660 /dev/container-hotplug/video/%k'"
+KERNEL=="video*", SUBSYSTEM=="video4linux", ACTION=="remove", RUN+="/bin/rm -f /dev/container-hotplug/video/%k"
 EOF
 sudo udevadm control --reload-rules && sudo udevadm trigger
 

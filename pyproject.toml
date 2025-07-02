@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cdc"
+version = "0.1.0"
+description = "Compose desktop containers (cdc)"
+authors = [{name="Rickard Armiento", email="gitcommits@armiento.net"}]
+dependencies = []
+
+[project.scripts]
+cdc = "cdc.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+packages = ["cdc"]
+
+[tool.setuptools.package-data]
+"cdc.scripts" = ["cdc-*.sh"]
+
+[tool.cdc.system-requirements]
+packages = ["bash", "curl", "yq"]

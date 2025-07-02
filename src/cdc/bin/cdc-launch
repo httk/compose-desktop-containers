@@ -199,18 +199,16 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 	fi
 
 	if [ "$FEATURE" = "video" ]; then
-	    if [ -e /dev/video ]; then
-		ADJUSTMENT_VOLS+=( "/dev/video:/dev/video" )
-		#ADJUSTMENT_DEVS+=( "/dev/cameras/video0:/dev/video0" )
-		#ADJUSTMENT_DEVS+=( "/dev/cameras/video1:/dev/video1" )
-	    else
-		echo "WARNING: system appear to be missing a udev setup for /dev/video that allows easy sharing of video devices with containers."
-		echo "Hot-plugging of video devices while containers are running will not be supported."
+	    if [ -e /dev/video0 -a ! -e /dev/container-hotplug ]; then
+		echo "WARNING: system appear to be missing the udev setup to support hotplugging of video devices."
+		echo "Only video devices available at startup will be supported."
 		for DEV in /dev/video*; do
 		    if [ -c "$DEV" ]; then
 	    		ADJUSTMENT_DEVS+=( "$DEV:/dev/video/${DEV#/dev/}" )
 	    	    fi
 		done
+	    else
+		ADJUSTMENT_VOLS+=( "/dev/container-hotplug/video:/dev/container-hotplug/video" )
 	    fi
 	    INIT_COMMANDS+=( "echo -n {0..9} | xargs -d ' '  -i ln -s /dev/video/video{} /dev/video{}" )
             ADJUSTMENT_CAPS+=( "CAP_SETUID" "CAP_SETGID" )
@@ -445,7 +443,7 @@ if [ -z "$CONTAINER_ID" -a -n "$SERVICE" ]; then
     if [ "$CDC_DEBUG" -ge "1" ]; then
 	echo podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up -d "${SERVICE}"
     fi
-    CONTAINER_ID=$(podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up -d "${SERVICE}")
+    CONTAINER_ID=$(podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up "${SERVICE}")
     podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" logs "${SERVICE}"
 else
     echo "Note: service already running with CONTAINER_ID: $CONTAINER_ID"
