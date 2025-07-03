@@ -201,8 +201,6 @@ CDC extends the compose system by:
 
 - A `cdc-entrypoint` program is provided which "does the right thing" when using compose containers to run interactive software. On brining `up` a container, it executes the `command`
   (possibly as root, if that is what `user` is set to) and then stalls, waiting for the container to be shut down again.
-  While it waits, it monitors the container's `/dev/container-hotplug/<subsystem>` and symlinks any devices that appear in these directories into `/dev`.
-  This allows for hotplugging of devices into running containers (e.g., video devices for teleconferencing software).
 
 Using this extended compose framework, "applications" can be distributed as single yaml files.
 

@@ -205,7 +205,8 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 	    #    echo "Only video devices available at startup will be supported."
 		for DEV in /dev/video*; do
 		    if [ -c "$DEV" ]; then
-	    		ADJUSTMENT_DEVS+=( "$DEV:/dev/video/${DEV#/dev/}" )
+	    		ADJUSTMENT_DEVS+=( "$DEV" )			
+	    		#ADJUSTMENT_DEVS+=( "$DEV:/dev/video/${DEV#/dev/}" )
 	    	    fi
 		done
 	    #else
