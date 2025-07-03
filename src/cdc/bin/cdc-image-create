@@ -17,7 +17,7 @@ fi
 LOCALES="$(locale -a | grep -v "POSIX" | sed 's/.utf8/.UTF-8/' | tr '\n' ' ')"
 
 PKGS_FILES=""
-PKGS_NODEPS_FILES=""
+PKGS_NORECS_FILES=""
 COMMANDS_FILES=""
 PRECOMMANDS_FILES=""
 
@@ -82,7 +82,7 @@ EOF
 fi
 
 PKGS=()
-PKGS_NODEPS=()
+PKGS_NORECS=()
 COMMANDS=()
 PRECOMMANDS=()
 
@@ -91,8 +91,8 @@ PRECOMMANDS=()
 #	echo "Checking image dependencies in $APP_DIR"
 #	PKGS=( $(yq -r '."x-application".images.u24.pkgs[]? // empty' "$APP_DIR/compose.yaml") )
 #	echo "Picked up pkgs:" "${PKGS[@]}"
-#	PKGS_NODEPS=( $(yq -r '."x-application".images.u24."pkgs-nodeps[]?" // empty' "$APP_DIR/compose.yaml") )
-#	echo "Picked up pkgs to be installed without recommendeds:" "${PKGS_NODEPS[@]}"
+#	PKGS_NORECS=( $(yq -r '."x-application".images.u24."pkgs-norecs[]?" // empty' "$APP_DIR/compose.yaml") )
+#	echo "Picked up pkgs to be installed without recommendeds:" "${PKGS_NORECS[@]}"
 #	PRECOMMANDS=( $(yq -r '."x-application".images.u24.precommands[]? // empty' "$APP_DIR/compose.yaml") )
 #	echo "Picked up pre-commands:" "${PRECOMMANDS[@]}"
 #	COMMANDS=( $(yq -r '."x-application".images.u24.commands[]? // empty' "$APP_DIR/compose.yaml") )
@@ -102,7 +102,7 @@ PRECOMMANDS=()
 
 IFS=$'\n'
 PKGS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*/*-pkgs* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
-PKGS_NODEPS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*/*-pkgs-nodeps* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
+PKGS_NORECS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*/*-pkgs-norecs* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
 COMMANDS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*/*-commands* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
 PRECOMMANDS+=( $(ls "$CDC_CONFIG_DIR"/image-u24/requested/*/*-precommands* 2>/dev/null | grep -v "~" | sort -s -t- -k1,1n -k2 | xargs cat) )
 IFS=' '
@@ -110,8 +110,8 @@ IFS=' '
 if [ -n "${PKGS}" ]; then
     PKGS_LINES="RUN apt-get -y install $(printf "%s\n" "${PKGS[@]}" | sort -u | tr '\n' ' ')"
 fi
-if [ -n "${PKGS_NODEPS}" ]; then
-    PKGS_NODEPS_LINES="RUN apt-get --no-install-recommends -y install $(printf "%s\n" "${PKGS_NODEPS[@]}" | sort -u | tr '\n' ' ')"
+if [ -n "${PKGS_NORECS}" ]; then
+    PKGS_NORECS_LINES="RUN apt-get --no-install-recommends -y install $(printf "%s\n" "${PKGS_NORECS[@]}" | sort -u | tr '\n' ' ')"
 fi
 if [ -n "${COMMANDS}" ]; then
     COMMANDS_LINES="$(printf "%s\n" "${COMMANDS[@]}")"
@@ -128,7 +128,7 @@ cp -rp "${IMAGE_DIR}/image-${IMAGE}/tools"/* "${CDC_CONFIG_DIR}/image-u24/build/
 ## Create containerfile
 cat > "$CDC_CONFIG_DIR/image-u24/build/Containerfile" <<EOF
 $PRECOMMANDS_LINES
-$PKGS_NODEPS_LINES
+$PKGS_NOREC_LINES
 $PKGS_LINES
 $COMMANDS_LINES
 EOF

@@ -199,7 +199,7 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 	fi
 
 	if [ "$FEATURE" = "video" ]; then
-	    if [ -e /dev/video0 -a ! -e /dev/container-hotplug ]; then
+	    if [ ! -e /dev/container-hotplug ]; then
 		echo "WARNING: system appear to be missing the udev setup to support hotplugging of video devices."
 		echo "Only video devices available at startup will be supported."
 		for DEV in /dev/video*; do
@@ -209,6 +209,8 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 		done
 	    else
 		ADJUSTMENT_VOLS+=( "/dev/container-hotplug/video:/dev/container-hotplug/video" )
+		#VIDEO_GID="$(getent group video | awk -F: '{print $3}')"
+		#PODMAN_UP_ARGS+=( "--gidmap=$VIDEO_GID:$VIDEO_GID:1" )
 	    fi
 	    INIT_COMMANDS+=( "echo -n {0..9} | xargs -d ' '  -i ln -s /dev/video/video{} /dev/video{}" )
             ADJUSTMENT_CAPS+=( "CAP_SETUID" "CAP_SETGID" )
@@ -416,7 +418,6 @@ if [ -n "$CONTAINER_ID" ]; then
 fi
 
 if [ -z "$CONTAINER_ID" -a -n "$SERVICE" ]; then
-
     if [ -n "$DBUS_PROXY" ]; then
 	echo "Launching:" "$DBUS_SESSION_BUS_ADDRESS" "$XDG_RUNTIME_DIR/bus-proxy-$APP-$LAUNCHER" "${DBUS_PROXY_ARGS[@]}"
 	# Workaround: sometimes xdb-dbus-proxy fails and leaves an empty directory behind, which stops further attmepts with "address in use"
@@ -438,7 +439,6 @@ if [ -z "$CONTAINER_ID" -a -n "$SERVICE" ]; then
 	DBUS_SYSTEM_PROXY_PID=$?
 	trap "kill $DBUS_SYSTEM_PROXY_PID" EXIT
     fi
-
     trap 'podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" down "${SERVICE}" > /dev/null; rm -f "$ADJUSTMENT_FILE"' exit
     if [ "$CDC_DEBUG" -ge "1" ]; then
 	echo podman-compose -p "${APP}" --env-file "${CDC_APP_PATH}/.env" -f compose.yaml -f "${ADJUSTMENT_FILE}" "${CONFIG_FILE[@]}" "${PODMAN_COMPOSE_UP_ARGS[@]}" up -d "${SERVICE}"

@@ -164,10 +164,14 @@ def wait_forever():
     def handler(signum, frame):
         nonlocal should_exit
         if signum in TERMINATE_SIGNALS:
-            print(f"[INFO] cdc-entrypoint: received {signal.Signals(signum).name} (exiting).", file=sys.stderr)
+            msg = f"[DEBUG] [INFO] cdc-entrypoint: received {signal.Signals(signum).name}\n".encode()
             should_exit = True
         else:
-            print(f"[DEBUG] cdc-entrypoint: ignoring signal {signal.Signals(signum).name}", file=sys.stderr)
+            try:
+                msg = f"[DEBUG] cdc-entrypoint: ignoring signal {signal.Signals(signum).name}\n".encode()
+            except Exception:
+                msg = b"[DEBUG] cdc-entrypoint: ignoring unknown signal\n"
+        os.write(2, msg)
 
     for sig in set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}:
         try:

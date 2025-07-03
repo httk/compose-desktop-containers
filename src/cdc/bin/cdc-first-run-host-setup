@@ -64,7 +64,8 @@ cat <<EEOOFF
 ## OPTIONAL: if you want support for hot-plugging devices into your containers, you need this type of config for udev:
 
 sudo tee /etc/udev/rules.d/99-cdc.rules <<EOF
-KERNEL=="video*", SUBSYSTEM=="video4linux", ACTION=="add", RUN+="/bin/bash -c '/bin/mkdir -p -m 0755 /dev/container-hotplug/video; MAJOR=\$\$(stat -c %%t /dev/%k | xargs printf \"%%d\"); MINOR=\$\$(stat -c %%T /dev/%k | xargs printf \"%%d\"); mknod /dev/container-hotplug/video/%k c \$\$MAJOR \$\$MINOR; chown root:video /dev/container-hotplug/video/%k; chmod 0660 /dev/container-hotplug/video/%k'"
+SUBSYSTEM=="cpu", KERNEL=="cpu0", ACTION=="add|change", RUN+="/bin/mkdir -p -m 0755 /dev/container-hotplug/video"
+KERNEL=="video*", SUBSYSTEM=="video4linux", ACTION=="add", RUN+="/bin/bash -c '/bin/mkdir -p -m 0755 /dev/container-hotplug/video; MAJOR=\\\$\\\$(stat -c %%t /dev/%k | xargs printf \"%%d\"); MINOR=\\\$\\\$(stat -c %%T /dev/%k | xargs printf \"%%d\"); mknod /dev/container-hotplug/video/%k c \\\$\\\$MAJOR \\\$\\\$MINOR; chown root:video /dev/container-hotplug/video/%k; chmod 0660 /dev/container-hotplug/video/%k'"
 KERNEL=="video*", SUBSYSTEM=="video4linux", ACTION=="remove", RUN+="/bin/rm -f /dev/container-hotplug/video/%k"
 EOF
 sudo udevadm control --reload-rules && sudo udevadm trigger

@@ -75,8 +75,8 @@ if [ -n "$LABEL" -a "$(echo "$PODMAN_CONFIG" | yq -r '."x-application".images')"
         for ENTRY in $(echo "$PODMAN_CONFIG" | yq -r ".\"x-application\".images.\"${image}\".pkgs // [] | . []"); do
             echo "$ENTRY" >> "${CDC_CONFIG_DIR}/image-${image}/requested/${LABEL}"/100-pkgs
         done
-        for ENTRY in $(echo "$PODMAN_CONFIG" | yq -r ".\"x-application\".images.\"${image}\".\"pkgs-nodeps\" // [] | . []"); do
-            echo "$ENTRY" >> "${CDC_CONFIG_DIR}/image-${image}/requested/${LABEL}"/100-pkgs-nodeps
+        for ENTRY in $(echo "$PODMAN_CONFIG" | yq -r ".\"x-application\".images.\"${image}\".\"pkgs-norecs\" // [] | . []"); do
+            echo "$ENTRY" >> "${CDC_CONFIG_DIR}/image-${image}/requested/${LABEL}"/100-pkgs-norecs
         done
 	# Lets not support image-specific commands for now; it is way more tricky to handle, since
 	# the image probably need to be rebuilt from scratch.
