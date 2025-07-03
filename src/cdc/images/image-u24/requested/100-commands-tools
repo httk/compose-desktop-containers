@@ -1,6 +1,0 @@
-# These tools allow execution of X11 software under wayland in a more secure way
-COPY ./tools/xwayland-exec /usr/local/bin/xwayland-exec
-COPY ./tools/xwayland-wm-exec /usr/local/bin/xwayland-wm-exec
-COPY ./tools/gamescope-exec /usr/local/bin/gamescope-exec
-COPY ./tools/gamescope-on-vc /usr/local/bin/gamescope-on-vc
-RUN chmod +x /usr/local/bin/xwayland-exec /usr/local/bin/xwayland-wm-exec /usr/local/bin/gamescope-exec /usr/local/bin/gamescope-on-vc

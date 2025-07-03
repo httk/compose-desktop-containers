@@ -59,7 +59,7 @@ else
        "cdc-$IMAGE" /bin/bash
 fi
 
-podman commit wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=$USER" "cdc-${IMAGE}"
+podman commit --squash wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=$USER" "cdc-${IMAGE}"
 podman rm -fi wrap-upgrade-tmp
 podman image prune -f
 

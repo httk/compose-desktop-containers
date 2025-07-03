@@ -77,12 +77,22 @@ if grep -q 'direct rendering: Yes' <<< "$GLXINFO" && grep -q 'OpenGL vendor stri
     if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
         echo "## WARNING: xwayland on NVIDIA driver accelerated desktops currently do not work well: you will get flicker from applications that are routed to wayland via xwayland (not just containerized applications...)."
         echo "## There are workarounds (xorg-xwayland-explicit-sync), but the only simple full fix seems to be to switch your desktop to x11, or to change to run desktop graphics on your iGPU."
+        echo
     fi
 fi
 
-if command -v nvidia-smi 2>/dev/null; then
-    echo "## For GPU feature support, you need to install the NVIDIA Container Toolkit:"
+if command -v nvidia-smi 2>/dev/null >/dev/null; then
+    echo "## You appear to have an NVIDA GPU with compute features installed."
+    echo "## To support GPU compute in containers, you need to install the NVIDIA Container Toolkit:"
     echo
     echo 'curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg   && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list |     sed "s#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g" | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list'
     echo 'sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml'
+    echo
 fi
+
+    cat <<EEOOFF
+## Finally, build the standard CDC image:
+
+cdc image-create
+
+EEOOFF

@@ -1,2 +1,0 @@
-RUN mkdir -p /tmp/.X11-unix && chmod a+rwxt /tmp/.X11-unix
-RUN ln -s /opt/.X11-unix/X42 /tmp/.X11-unix/X42

@@ -1,5 +1,5 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 COPY files/timezone /etc/timezone
-COPY tools/cdc-entrypoint /usr/bin/cdc-entrypoint
-RUN dpkg --add-architecture i386 && apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates locales
+COPY tools/cdc-entrypoint /bin/cdc-entrypoint
+RUN apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates locales

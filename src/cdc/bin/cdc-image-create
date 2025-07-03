@@ -134,7 +134,7 @@ $COMMANDS_LINES
 EOF
 
 cd "$CDC_CONFIG_DIR/image-u24/build/"
-podman build -t cdc-u24 --label=wrap .
+podman build --squash -t cdc-u24 --label=wrap .
 podman image prune -f --filter label=wrap
 
 rm -rf "$CDC_CONFIG_DIR/image-u24/installed"

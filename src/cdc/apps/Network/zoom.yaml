@@ -210,9 +210,6 @@ services:
   run:
     <<: *common
 
-    # Needed for hotplugging of video devices to work
-    user: root
-
     network_mode: bridge
 
     volumes:
@@ -226,9 +223,6 @@ services:
 
   run-wayland:
     <<: *common
-
-    # Needed for hotplugging of video devices to work
-    user: root
 
     network_mode: bridge
 

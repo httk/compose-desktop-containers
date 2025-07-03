@@ -1,0 +1,28 @@
+#!/bin/bash
+
+echo "## Removing any residual containers"
+
+CDC_RUNNING_CONTAINERS="$(podman ps --filter label=wrap -q)"
+
+if [ -n "$CDC_RUNNING_CONTAINERS" ]; then
+    podman kill "$CDC_RUNNING_CONTAINERS"
+fi
+
+CDC_STOPPED_CONTAINERS="$(podman ps --all --filter label=wrap -q)"
+if [ -n "$CDC_STOPPED_CONTAINERS" ]; then
+    podman rm "$CDC_STOPPED_CONTAINERS"
+fi
+buildah rm --all
+
+echo
+echo "## Should you really want to completely delete your CDC standard image, you can manually run this command:"
+echo
+echo "  podman rmi $(podman images --filter label=wrap -q)"
+echo
+
+echo "## If you wish to clean you and restart your podman config from a clean slate, this is the command to do it:"
+echo
+echo "  podman system reset"
+echo
+echo "## However, this will delete *all* your podman images and containers, not just the ones associated with CDC!"
+echo
