@@ -140,6 +140,5 @@ podman image prune -f --filter label=wrap
 rm -rf "$CDC_CONFIG_DIR/image-u24/installed"
 cp -rp "$CDC_CONFIG_DIR/image-u24/requested" "$CDC_CONFIG_DIR/image-u24/installed"
 
-# After a container has been created, it may take a significant time to instansitate it the first time
-echo "Testing container"
+echo "First run of new container (this may take a long time as podman may need to remap uid/gid manually)"
 podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."

@@ -63,5 +63,5 @@ podman commit --squash wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=
 podman rm -fi wrap-upgrade-tmp
 podman image prune -f
 
-echo "Testing modified container"
+echo "First run of new container (this may take a long time as podman may need to remap uid/gid manually)"
 podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
