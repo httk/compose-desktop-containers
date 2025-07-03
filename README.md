@@ -12,9 +12,15 @@ allowing a complete containerized build recepie to distributed as a single compo
 
 ## Quickstart for users
 
-1. The absolutely easiest way to install this app is via `pipx`:
+(If you want to work with the CDC source code, see )
+
+1. The absolutely easiest way to install this app is via `pipx`. On Ubuntu if you do not already have `pipx` you install it by:
    ```
-   pipx install https://github.com/httk/compose-desktop-containers
+   sudo apt install pipx
+   ```
+   Then install CDC by:
+   ```
+   pipx install 'git+https://github.com/httk/compose-desktop-containers.git'
    ```
    (In contrast to `pip`, `pipx` installs pypi-packaged software into your home directory in a way where it does not get tied to a specific venv.
    This is the right choice for "tools" that you want to have access to across your interactions with different venvs.)

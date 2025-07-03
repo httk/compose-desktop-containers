@@ -22,7 +22,7 @@ if [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "plucky" ]; then
 sudo apt-get install -y crun podman podman-compose curl wmctrl xdotool python3-pip python3-venv python3-setuptools python3-tk python3-gi python3-gst-1.0 gstreamer1.0-pipewire gir1.2-appindicator3-0.1 yq mesa-utils
 
 EEOOFF
-elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "oracular" ]; then    
+elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "oracular" ]; then
     cat <<EEOOFF
 #####################################################
 ## You need to install a number of system packages ##
@@ -33,7 +33,7 @@ elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "oracular" ]; then
 sudo apt-get install -y crun podman podman-compose curl wmctrl xdotool python3-pip python3-venv python3-setuptools python3-tk python3-gi python3-gst-1.0 gstreamer1.0-pipewire gir1.2-appindicator3-0.1 yq mesa-utils
 
 EEOOFF
-elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "nobel" ]; then
+elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "noble" ]; then
     cat <<EEOOFF
 #####################################################
 ## You need to install a number of system packages ##
@@ -51,7 +51,7 @@ else
 ## Your OS type and version is not recognized, hence only general advice can be given. ##
 #########################################################################################
 
-## You need system packages for: 
+## You need system packages for:
 
 - podman podman-compose yq mesa-utils crun curl wmctrl xdotool python3 (with pip, venv, tk, gi, and gst), gstreamer with pipewire support, appindicator3
 
