@@ -23,6 +23,14 @@ x-application:
            - "${HOME}/Documents/containers/meetings:/home/${USER}/Documents/containers/meetings"
          working_dir: "/home/${USER}/Documents/containers/meetings"
 
+  images:
+    u24:
+      pkgs: ["libglib2.0-0", "libxcb-keysyms1", "libdbus-1-3", "libxcb-shape0", "libpulse0", "libxcb-xinerama0",
+             "libxcb-shm0", "libxcb-xfixes0", "libxcb-randr0", "libxcb-image0", "libfontconfig1", "libxi6",
+             "libsm6", "libxrender1", "libxcomposite1", "libxslt1.1", "libsqlite3-0", "libxcb-xtest0",
+             "libxtst6", "ibus", "libxkbcommon-x11-0", "desktop-file-utils", "libgbm1", "libdrm2",
+             "libxcb-cursor0", "libxcb-icccm4", "libatomic1", "libfreetype6", "libgbm1"]
+
   env-default: |
     # No configurable options
 
@@ -156,7 +164,7 @@ services:
 
     image: "cdc-u24"
 
-    entrypoint: ["/usr/bin/cdc-entrypoint"]
+    entrypoint: ["/bin/cdc-entrypoint"]
     network_mode: none
 
     working_dir: /home/$USER

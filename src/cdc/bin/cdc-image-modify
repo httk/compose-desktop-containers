@@ -16,8 +16,7 @@ echo
 
 podman rm -fi wrap-upgrade-tmp
 
-if [ -n "$1" ]; then
-  podman run \
+CONTAINER_ID=$(podman run \
        -w "/" \
        --hostname="cdc-$IMAGE" \
        --user=root \
@@ -35,31 +34,36 @@ if [ -n "$1" ]; then
        --security-opt=no-new-privileges \
        --userns=keep-id \
        -e LANG \
-       "cdc-$IMAGE" bash -c 'eval $@' bash "$@"
+       -d \
+       "cdc-$IMAGE" /bin/cdc-entrypoint)
+
+trap "podman stop \"${CONTAINER_ID}\"" exit
+
+if [ -n "$1" ]; then
+  podman exec \
+       -w "/" \
+       --user=root \
+       "$CONTAINER_ID" bash -c 'eval $@' bash "$@"
 else
-  podman run \
+  podman exec \
        -it \
        -w "/" \
-       --hostname="cdc-$IMAGE" \
        --user=root \
-       --name=wrap-upgrade-tmp \
-       --cap-drop=ALL \
-       --cap-add=CAP_FOWNER \
-       --cap-add=CAP_CHOWN \
-       --cap-add=CAP_DAC_OVERRIDE \
-       --cap-add=CAP_DAC_READ_SEARCH \
-       --cap-add=CAP_SETUID \
-       --cap-add=CAP_SETGID \
-       --read-only=false \
-       --read-only-tmpfs \
-       --systemd=false \
-       --security-opt=no-new-privileges \
-       --userns=keep-id \
        -e LANG \
-       "cdc-$IMAGE" /bin/bash
+       "$CONTAINER_ID" /bin/bash
 fi
 
-podman commit --squash wrap-upgrade-tmp --change "CMD=/bin/bash" --change "USER=$USER" "cdc-${IMAGE}"
+echo "Adding tmp fs config"
+podman exec \
+       -w "/" \
+       --user=root \
+       "$CONTAINER_ID" bash -c "mkdir -p /tmp/$USER && chown \"$USER:$USER\" \"/tmp/$USER\" && chmod 0700 \"/tmp/$USER\" && mkdir -p \"/tmp/$USER/run\" && chown \"$USER:$USER\" \"/tmp/$USER/run\" && chmod 0700 \"/tmp/$USER/run\""
+       
+podman stop "$CONTAINER_ID"
+trap - exit
+
+echo "Commiting changes"
+podman commit --squash "$CONTAINER_ID" --change "USER=$USER" "cdc-${IMAGE}"
 podman rm -fi wrap-upgrade-tmp
 podman image prune -f
 

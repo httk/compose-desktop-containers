@@ -66,18 +66,18 @@ if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/default/52-commands-user.disable
   if [ "$UID" == "1000" ]; then
 
     cat > "$CDC_CONFIG_DIR/image-u24/requested/default/52-commands-user" <<EOF
-RUN usermod -l "$USER" ubuntu && groupmod -n "$USER" ubuntu && usermod -d "/home/$USER" -m "$USER" && usermod -c "$FULLNAME" "$USER" && mkdir /tmp/$USER && chown "$USER:$USER" "/tmp/$USER" && chmod 0700 "/tmp/$USER" && mkdir "/tmp/$USER/run" && chown "$USER:$USER" "/tmp/$USER/run" && chmod 0700 "/tmp/$USER/run"
+RUN usermod -l "$USER" ubuntu && groupmod -n "$USER" ubuntu && usermod -d "/home/$USER" -m "$USER" && usermod -c "$FULLNAME" "$USER"
 EOF
 
   else
 
     cat > "$CDC_CONFIG_DIR/image-u24/requested/default/52-commands-user" <<EOF
-RUN groupadd -r -g "$UID" "$USER" && useradd -m -u "$UID" -g "$UID" -c "$FULLNAME" "$USER" && mkdir /tmp/$USER && chown "$USER:$USER" "/tmp/$USER" && chmod 0700 "/tmp/$USER" && mkdir "/tmp/$USER/run" && chown "$USER:$USER" "/tmp/$USER/run" && chmod 0700 "/tmp/$USER/run"
+RUN groupadd -r -g "$UID" "$USER" && useradd -m -u "$UID" -g "$UID" -c "$FULLNAME" "$USER"
 EOF
 
   fi
   cat >> "$CDC_CONFIG_DIR/image-u24/requested/default/52-commands-user" <<EOF
-RUN mkdir -p /run/user && ln -s "/tmp/$USER/run" "/run/user/${UID}"
+RUN mkdir -p /tmp/$USER && chown "$USER:$USER" "/tmp/$USER" && chmod 0700 "/tmp/$USER" && mkdir -p "/tmp/$USER/run" && chown "$USER:$USER" "/tmp/$USER/run" && chmod 0700 "/tmp/$USER/run" && mkdir -p /run/user && ln -nsf "/tmp/$USER/run" "/run/user/${UID}"
 EOF
 fi
 
@@ -127,6 +127,8 @@ cp -rp "${IMAGE_DIR}/image-${IMAGE}/tools"/* "${CDC_CONFIG_DIR}/image-u24/build/
 
 ## Create containerfile
 cat > "$CDC_CONFIG_DIR/image-u24/build/Containerfile" <<EOF
+ENTRYPOINT=/bin/cdc-entrypoint
+CMD=/bin/bash
 $PRECOMMANDS_LINES
 $PKGS_NOREC_LINES
 $PKGS_LINES
