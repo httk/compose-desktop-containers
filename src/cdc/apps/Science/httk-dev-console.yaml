@@ -54,19 +54,9 @@ x-launchers:
       - rm -rf ~/.local/share/uv
       - ln -s "$$(pwd -P)/uv/home" ~/.local/share/uv
       - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
-      - python3 -m venv httk.venvs/bootstrap
       - source httk.venvs/bootstrap/bin/activate
-      - python -m pip install uv
-      - uv tool install --force uv
-      - deactivate
-      - rm -rf httk.venvs/bootstrap
-      - uv tool install --force tox --with tox-uv
-      - uv python install 3.10
-      - mkdir -p "httk.venvs/uv"
+      - pipx install --force uv
       - ln -nsf ../httk.venvs httk.venvs
-      - uv venv --python 3.10 httk.venvs/uv/default
-      - uv pip install --python "httk.venvs/uv/default/bin/python" -r httk/requirements.txt -r httk/requirements-dev.txt pyside6
-      - ln -nsf .venvs/uv/default httk/.venv
       - mkdir -p ~/Downloads
       - cd ~/Downloads
       - echo "Download jmol"
@@ -107,7 +97,6 @@ x-launchers:
       - conda config --set auto_activate false
       - |
         conda config --set env_prompt '(conda: {name}) '
-      - conda install -y tox
 
   redownload:
     service: setup
@@ -200,13 +189,27 @@ x-launchers:
       - export CONDA_PKGS_DIRS="$$(pwd -P)/conda/pkgs"
       - export CONDA_ENVS_PATH="$$(pwd -P)/httk/.venvs/conda"
       - cd httk
+      - mkdir -p .venvs/
+      - |
+        if [ ! -e .venvs/system ]; then
+          python3 -m venv .venvs/system
+          source .venvs/system/bin/activate
+          python3 -m pip install -r requirements.txt -r requirements-dev.txt
+          python3 -m pip install -e .
+        fi
+      - if [ ! -e .venv ]; then ln -s .venvs/system .venv; fi
+      - if [ ! -e .venvs/system/bin/activate ]; then echo "Your venv in venvs/system seems broken? Remove and run 'make venv' to recreate it."; fi
       - echo "===================================================================================================="
       - echo ""
-      - echo "The project default venv in .venv is now active (.venv is a symlink you can change)"
-      - echo "Initialize other venvs by, e.g., 'make init_uv_venv venv=py312' or 'make init_conda_venv venv=py312'"
-      - echo "And activate them by '.venvs/uv/py312/bin/activate' and 'conda activate py312' respectively."
+      - echo "You should now be in a configured, working venv"
       - echo ""
-      - echo "If the dependencies may have changed, run `make init_default_venv` to update."
+      - echo "  httk-dev-console sets up a venv for the system python in .venvs/system, and symlinks .venv -> .venvs/system"
+      - echo "  Then the venv pointed to by .venv is activated"
+      - echo "  To create other venvs, use, e.g., 'make init_uv_venv venv=py312' or 'make init_conda_venv venv=py312'"
+      - echo "  Activate them by, e.g., '.venvs/uv/py312/bin/activate' or 'conda activate py312'."
+      - echo ""
+      - echo "If the dependencies change, use:"
+      - echo "   python -m pip install -r requirements.txt -r requirements-dev.tex."
       - echo ""
       - echo "===================================================================================================="
       - bash --init-file <(echo "source ~/.local/share/miniforge/etc/profile.d/conda.sh; source .venv/bin/activate; source init.shell")
