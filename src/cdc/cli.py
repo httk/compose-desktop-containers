@@ -21,13 +21,12 @@ def list_available_commands(script_dir):
                 description = "(error reading description)"
             commands.append((order, command, description))
 
-    # Sort by order number, then name
     return sorted(commands, key=lambda x: (x[0], x[1]))
 
 def main():
 
     try:
-        ver = version("cdc")  # Replace with your package name
+        ver = version("cdc")
     except PackageNotFoundError:
         ver = "(unknown)"
 
@@ -45,16 +44,8 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "__complete":
-        for _, cmd, _ in list_available_commands(script_dir):
-            print(cmd)
-        sys.exit(0)
+    handle_autocomplete(args.command, script_dir)
 
-    if args.command == "bash_completion":
-        print("""_cdc_completions() {{ local cur="${{COMP_WORDS[COMP_CWORD]}}"; if [[ $COMP_CWORD -eq 1 ]]; then COMPREPLY=( $(compgen -W "$({} __complete)" -- "$cur") ); fi }}; complete -F _cdc_completions cdc; export CDC_BASH_COMPLETION=1""".strip().format(sys.argv[0]))
-        sys.exit(0)
-
-    # Attempt to dispatch to the matching script
     if args.command and args.command != "help":
         script_path = os.path.join(script_dir, f"cdc-{args.command}")
         if not os.path.isfile(script_path):
@@ -75,13 +66,16 @@ def main():
         print(f"Start the app by executing one of the launchers.\n")
         print(f"Depending on the compose yaml file, XDG desktop launchers may also have been created (which you then can launch from your desktop menus).\n")
 
-        shell = os.environ.get("SHELL", "")
-        if "bash" in os.environ.get("SHELL", "") and not "CDC_BASH_COMPLETION" in os.environ:
-            print("Hint: You can enable cdc tab completion by running (or put in your .bashrc):\n    eval \"$(cdc bash_completion)\"\n")
+        if "CDC_AUTOCOMPLETE" not in os.environ:
+            shell = os.environ.get("SHELL","")
+            if "bash" in shell:
+                print("Hint: You can enable cdc tab completion in bash by running (or put in your .bashrc):\n    eval \"$(cdc bash_completion)\"\n")
+            elif "fish" in shell:
+                print("Hint: You can enable cdc tab completion in fish by running (or put in your ~/.config/fish/config.fish):\n    cdc fish_completion | source\n")
+            elif "zsh" in shell:
+                print("Hint: You can enable cdc tab completion by zsh running (or put in your ~/.zshrc):\n    eval \"$(cdc zsh_completion)\"\n")
+            sys.exit(exit_code)
 
-        sys.exit(exit_code)
-
-    # Determine script path
     script_name = f"cdc-{args.command}"
     script_path = os.path.join(script_dir, script_name)
 
@@ -92,10 +86,44 @@ def main():
             print(f"  {cmd}")
         sys.exit(1)
 
-    # Run the command, forwarding args
     try:
         os.environ["CDC_CLI_NAME"] = "cdc "+str(args.command)
         subprocess.run(["bash", script_path] + args.args, check=True)
     except subprocess.CalledProcessError as e:
         sys.exit(e.returncode)
 
+def handle_autocomplete(command, script_dir):
+
+    if command == "__complete":
+        for _, cmd, desc in list_available_commands(script_dir):
+            print(f"{cmd}\t{desc}")
+        sys.exit(0)
+
+    if command == "bash_completion":
+        print("""_cdc_completions() {{ local cur="${{COMP_WORDS[COMP_CWORD]}}"; if [[ $COMP_CWORD -eq 1 ]]; then COMPREPLY=( $(compgen -W "$({} __complete)" -- "$cur") ); fi }}; complete -F _cdc_completions cdc; export CDC_AUTOCOMPLETE=1""".strip().format(sys.argv[0]))
+        sys.exit(0)
+
+    if command == "fish_completion":
+        print(r'''
+        function __fish_cdc_complete
+            set -l tokens (commandline -opc)
+            set -l last_token (commandline -ct)
+            set -l args $tokens
+            for line in (cdc __complete $args)
+                echo $line
+            end
+        end
+        complete -c cdc -f -a '(__fish_cdc_complete)'
+        export CDC_AUTOCOMPLETE=1'''.strip())
+        sys.exit(0)
+
+    if command == "zsh_completion":
+        print(f'''
+        _cdc_completions() {{
+          local -a completions
+          completions=("${{(@f)$( {sys.argv[0]} __complete | sed 's/\\t/:/')}}")
+          _describe 'cdc command' completions
+        }}
+        compdef _cdc_completions cdc
+        export CDC_AUTOCOMPLETE=1'''.strip())
+        sys.exit(0)

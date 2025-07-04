@@ -224,5 +224,4 @@ services:
       - video
       - sound
       - wayland
-      - wayland-host-tmp-mount
       - dbus-proxy: --filter --call="org.freedesktop.portal.*=*" --talk=org.kde.StatusNotifierWatcher
