@@ -127,8 +127,6 @@ cp -rp "${IMAGE_DIR}/image-${IMAGE}/tools"/* "${CDC_CONFIG_DIR}/image-u24/build/
 
 ## Create containerfile
 cat > "$CDC_CONFIG_DIR/image-u24/build/Containerfile" <<EOF
-ENTRYPOINT=/bin/cdc-entrypoint
-CMD=/bin/bash
 $PRECOMMANDS_LINES
 $PKGS_NOREC_LINES
 $PKGS_LINES
