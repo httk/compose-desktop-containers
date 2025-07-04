@@ -128,7 +128,7 @@ services:
 
     image: "cdc-u24"
 
-    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    entrypoint: ["/bin/cdc-entrypoint"]
     network_mode: none
 
     working_dir: /home/$USER
@@ -187,5 +187,4 @@ services:
       - "${CDC_APP_PATH}/home/.local/share/zoom/zoom:/opt/zoom:ro"
 
     x-features:
-      - dri
       - wayland-fallback-x11

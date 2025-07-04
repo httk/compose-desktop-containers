@@ -20,6 +20,10 @@ x-application:
   env-default: |
     # This container has no configurable options
 
+  images:
+    u24:
+      pkgs: ["libudev-dev", "libqt5gui5", "libqt5core5a", "libqt5opengl5", "libqt5network5", "libqt5xml5", "libftdi-dev", "libftdi1-dev", "libhidapi-dev", "libelf1", "libusb-0.1-4"]
+
 x-launchers:
   download:
     service: setup
@@ -142,7 +146,7 @@ services:
 
     image: "cdc-u24"
 
-    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    entrypoint: ["/bin/cdc-entrypoint"]
 
     network: none
 
