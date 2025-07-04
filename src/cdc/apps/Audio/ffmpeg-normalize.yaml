@@ -121,7 +121,7 @@ services:
 
     image: "cdc-u24"
 
-    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    entrypoint: ["/bin/cdc-entrypoint"]
     network_mode: none
 
     working_dir: /home/$USER

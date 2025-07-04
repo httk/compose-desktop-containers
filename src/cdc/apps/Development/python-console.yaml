@@ -30,6 +30,9 @@ services:
     working_dir: /home/$USER
     user: "${USER}"
 
+    entrypoint: ["/bin/cdc-entrypoint"]
+    network_mode: none
+    
     environment: &common-env
       LANG: "${LANG}"
       XDG_RUNTIME_DIR: "/tmp/${USER}/run"

@@ -113,7 +113,7 @@ services:
 
     image: "cdc-u24"
 
-    entrypoint: ["/usr/bin/cdc-entrypoint"]
+    entrypoint: ["/bin/cdc-entrypoint"]
 
     network: none
 

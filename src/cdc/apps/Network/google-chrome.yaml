@@ -122,7 +122,7 @@ services:
   common: &common
 
     image: "cdc-u24"
-    entrypoint: ["/bin/tini", "/bin/bash", "--", "-c", "$$(printf \"%s\\n\" \"$@\"); sleep infinity"]
+    entrypoint: ["/bin/cdc-entrypoint"]
 
     working_dir: /home/$USER
     user: "${USER}"

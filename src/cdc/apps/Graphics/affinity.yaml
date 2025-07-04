@@ -4,6 +4,7 @@ x-application:
 
   readme: |
     Affinity: 3D computer graphics software tool.
+    This container definition does not work yet [WIP]
 
   override-default: |
     version: "3.8"
