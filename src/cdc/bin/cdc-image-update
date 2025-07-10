@@ -8,19 +8,18 @@ SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 IMAGE_DIR="$(realpath -- "$SCRIPTPATH/../images")"
 CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
 
-CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
-mkdir -p "$CDC_CONFIG_DIR/image-u24/build/files" "$CDC_CONFIG_DIR/image-u24/build/tools"
 mkdir -p "$CDC_CONFIG_DIR/image-u24/installed"
-mkdir -p "$CDC_CONFIG_DIR/image-u24/requested/default"
 
-(
-    cd "$IMAGE_DIR"/image-"$IMAGE"/requested
-    for FILE in *; do
-        if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/default/${FILE}.disabled" -a "${FILE%\~}" = "${FILE}" ]; then
-            cp "$FILE" "$CDC_CONFIG_DIR/image-u24/requested/default/."
-        fi
-    done
-)
+#mkdir -p "$CDC_CONFIG_DIR/image-u24/build/files" "$CDC_CONFIG_DIR/image-u24/build/tools"
+#mkdir -p "$CDC_CONFIG_DIR/image-u24/requested/default"
+#(
+#    cd "$IMAGE_DIR"/image-"$IMAGE"/requested
+#    for FILE in *; do
+#        if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/default/${FILE}.disabled" -a "${FILE%\~}" = "${FILE}" ]; then
+#            cp "$FILE" "$CDC_CONFIG_DIR/image-u24/requested/default/."
+#        fi
+#    done
+#)
 
 INSTALLED_PKGS=()
 INSTALLED_PKGS_NORECS=()

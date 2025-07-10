@@ -30,7 +30,7 @@ services:
     working_dir: /home/$USER
     user: "${USER}"
 
-    entrypoint: ["/bin/cdc-entrypoint"]
+    entrypoint: ["/cdc/entrypoint"]
     network_mode: none
     
     environment: &common-env

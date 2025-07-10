@@ -1,0 +1,136 @@
+comment_char %
+escape_char /
+
+% This file contains locale data. The author of this file does not claim any copyright interest in the
+% locale data contained in this file. This declaration may be interpreted at the recipients choice as
+% the file being "placed in the public domain" or licensed under CC0 (https://creativecommons.org/public-domain/cc0/).
+% Furthermore, explicit permission (and encouragement) is given to the GNU C Library to adopt this file
+% alongside other locales and distribute it with a modified header under the same license as other locales.
+
+% English language locale for Sweden.
+%
+% Source: Rickard Armiento
+% Address: Rickard Armiento, Linköping University, 581 83 Linköping, Sweden
+% Contact: Rickard Armiento
+% Email: locale@armiento.net
+% Language: en
+% Territory: SE
+% Revision: 1.0
+% Date: 2024-08-20
+% Application: general
+% Users: general
+
+% Notes:
+%
+% English is not an official language of Sweden. Nevertheless, an en_SE locale can be motivated by the following quote
+% from Wikipedia:
+%
+%   There is currently an ongoing debate among linguists whether English should be considered a foreign language,
+%   second language or transcultural language in Sweden (and other Scandinavian countries) due to its widespread
+%   use in education and society in general.
+%
+% This locale definition aims to describe the typical conventions for the use of English by native Swedes.
+%
+% It retains the LC_CTYPE and LC_COLLATE definitions of sv_SE to allow for Swedish-native classification
+% of the three Swedish-specific umlaut characters at the end of the alphabet, and to retain the Swedish-native
+% sort order of V, W and these umlaut characters. This is relevant, for example, when sorting names.
+%
+% It uses the region-appropriate sv_SE declarations of LC_MONETARY, LC_PAPER, LC_TELEPHONE, LC_MEASUREMENT, and LC_NAME.
+%
+% It copies the declaration of LC_TIME from en_DK: the use of English names of the days of the week and the months,
+% but using the region-appropriate date format derived from ISO 8601-1988 (e.g., 2024-08-22), and definition
+% of week number (first_weekday 2).
+%
+% LC_NUMERIC is custom for the locale: the most common representation of numbers alongside English text in Sweden
+% adopts the English decimal point (.) rather than the Swedish decimal comma (,), but retains the Swedish
+% practice for the thousands separator of a narrow space rather than a comma, since the latter could cause confusion
+% with the Swedish decimal notation.
+%
+% LC_ADDRESS uses the same data as sv_SE, except setting the lang_* settings to English.
+%
+%%
+
+LC_IDENTIFICATION
+title      "English locale for Sweden"
+source     "Rickard Armiento"
+address    "Rickard Armiento, Linköping University, 581 83 Linköping, Sweden"
+contact    "Rickard Armiento"
+email      "contact-locale@armiento.net"
+tel        ""
+fax        ""
+language   "English"
+territory  "Sweden"
+revision   "1.0"
+date       "2024-08-20"
+
+category "i18n:2012";LC_IDENTIFICATION
+category "i18n:2012";LC_CTYPE
+category "i18n:2012";LC_COLLATE
+category "i18n:2012";LC_TIME
+category "i18n:2012";LC_NUMERIC
+category "i18n:2012";LC_MONETARY
+category "i18n:2012";LC_MESSAGES
+category "i18n:2012";LC_PAPER
+category "i18n:2012";LC_NAME
+category "i18n:2012";LC_ADDRESS
+category "i18n:2012";LC_TELEPHONE
+category "i18n:2012";LC_MEASUREMENT
+END LC_IDENTIFICATION
+
+LC_COLLATE
+copy "sv_SE"
+END LC_COLLATE
+
+LC_CTYPE
+copy "sv_SE"
+END LC_CTYPE
+
+LC_MONETARY
+copy "sv_SE"
+END LC_MONETARY
+
+LC_NUMERIC
+decimal_point   "."
+thousands_sep   "<U202F>"
+grouping        3;3
+END LC_NUMERIC
+
+LC_TIME
+copy "en_DK"
+END LC_TIME
+
+LC_MESSAGES
+yesexpr "^[+1yYjJ]"
+noexpr  "^[-0nN]"
+yesstr  "yes"
+nostr   "no"
+END LC_MESSAGES
+
+LC_PAPER
+copy "sv_SE"
+END LC_PAPER
+
+LC_TELEPHONE
+copy "sv_SE"
+END LC_TELEPHONE
+
+LC_MEASUREMENT
+copy "sv_SE"
+END LC_MEASUREMENT
+
+LC_NAME
+copy "sv_SE"
+END LC_NAME
+
+LC_ADDRESS
+postal_fmt    "%f%N%a%N%d%N%b%N%s %h %e %r%N%z %T%N%c%N"
+country_name "Sweden"
+country_ab2 "SE"
+country_ab3 "SWE"
+country_num 752
+country_car "S"
+lang_name    "English"
+lang_ab      "en"
+lang_term    "eng"
+lang_lib     "eng"
+END LC_ADDRESS

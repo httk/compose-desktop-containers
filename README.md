@@ -11,12 +11,13 @@ Furthermore, the launchers can include maintenance tasks such as `download`, `bu
 
 (If you want to install CDC in a way where you can edit its source code, see [Installation for developers](#installation-for-developers))
 
-1. The absolutely easiest way to install CDC is via `pipx`. 
-   On Ubuntu if you do not already have `pipx`, first install this tool by:
+1. On Ubuntu if you do not already have `pipx`, first install it:
    ```
    sudo apt install pipx
    ```
-   Then install CDC by:
+   (Or, if you have `uv`, you can replace `pipx` by `uv tool` below, but `uv` cannot currently be installed via `apt`.)
+
+   Install CDC by:
    ```
    pipx install 'git+https://github.com/httk/compose-desktop-containers.git'
    ```
@@ -48,6 +49,10 @@ Furthermore, the launchers can include maintenance tasks such as `download`, `bu
 5. Install one of the apps
    ```
    cdc setup Networking/discord
+   ```
+   Note how it asks you to update the container image, hence also do:
+   ```
+   cdc image-update
    ```
 
 6. You should now be able to find `Discord` in your desktop system launcher menu. Or, to run it in the terminal:
@@ -165,26 +170,34 @@ To purge these, check, and possibly remove, the directories:
 ## Installation for developers
 
 Users who want to be able to work with the CDC source code are recommend to install it as follows.
-First clone the source code repository somewhere in your home directory:
+
+Make sure you have `pipx` or `uv` available.
+On Ubuntu you can install `pipx` by:
+```
+sudo apt install pipx
+```
+(If you prefer `uv` you can just replace `pipx` -> `uv` in the instructions below).
+
+Clone the source code repository somewhere in your home directory:
 ```
 cd ~/Containers
 git clone https://github.com/httk/compose-desktop-containers cdc --recurse-submodules
 cd cdc
 ```
 
-Create a virtualenv in which `cdc` and then pip-install CDC into this venv as "editable":
+Install CDC using the editable (`-e`) flag:
 ```
-make venv
-source .venv/bin/activate
-pip install -e .
+pipx install -e .
 ```
-Now, anytime you activate this venv, you will have access to the version of CDC represented by the source code in the repo.
 
-If you at some point are sufficiently happy with a development version that you want to install it outside the venv, just do:
+If you change the dependencies, you may need to force-reinstall it using pipx:
 ```
-pipx install --force .
+pipx install --force -e .
 ```
-(The `--force` directs `pipx` to replace any existing copy). Note that this command installs CDC as *a copy of the current development version in the repo*. Changes you make from this point will thus not be reflected in your version outside the venc *until* you re-run this `pipx` command.
+(The `--force` directs `pipx` to replace any existing copy).
+
+Note: if you prefer to work in a normal virtualenv and skip `pipx`, you can do
+
 
 ## Design decisions and details
 
