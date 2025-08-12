@@ -6,6 +6,7 @@ IMAGE="u24"
 
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
+TOOLPATH="$(dirname -- "${SCRIPTPATH}")/tools"
 
 echo "==========================================="
 echo "Opening a root shell to modify cdc-${IMAGE}"
@@ -21,6 +22,7 @@ CONTAINER_ID=$(podman run \
        --hostname="cdc-$IMAGE" \
        --user=root \
        --name=wrap-upgrade-tmp \
+       --volume="${TOOLPATH}/container:/cdc:ro" \
        --cap-drop=ALL \
        --cap-add=CAP_FOWNER \
        --cap-add=CAP_CHOWN \
@@ -35,7 +37,7 @@ CONTAINER_ID=$(podman run \
        --userns=keep-id \
        -e LANG \
        -d \
-       "cdc-$IMAGE" /bin/cdc-entrypoint)
+       "cdc-$IMAGE" /cdc/entrypoint)
 
 trap "podman stop \"${CONTAINER_ID}\"" exit
 

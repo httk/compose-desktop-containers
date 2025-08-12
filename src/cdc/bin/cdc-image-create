@@ -7,6 +7,7 @@ IMAGE="u24"
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 IMAGE_DIR="$(realpath -- "$SCRIPTPATH/../images")"
 CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
+CDC_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cdc"
 TOOLPATH="$(dirname -- "${SCRIPTPATH}")/tools"
 
 if [ -z "$USER" -o -z "$UID" -o -z "$LANG" ]; then
@@ -25,6 +26,7 @@ PRECOMMANDS_FILES=""
 CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
 rm -rf "$CDC_CONFIG_DIR/image-u24/build"
 mkdir -p "$CDC_CONFIG_DIR/image-u24"/{build/files,requested,installed}
+mkdir -p "$CDC_DATA_DIR/image-u24/rootfs"
 
 # Collect necessary files to build the image in files/
 cp "$TOOLPATH/image/en_SE.locale" "$CDC_CONFIG_DIR/image-u24/build/files/."
@@ -64,9 +66,8 @@ EOF
 
 FULLNAME="$(getent passwd rar | awk -F':' '{print $5}')"
 
-if [ ! -e  "$CDC_CONFIG_DIR/image-u24/requested/default/52-commands-user.disabled" ]; then
-  # We need to handle the user part differently depending on if it overlaps the default 1000 user or not.
-  if [ "$UID" == "1000" ]; then
+# We need to handle the user part differently depending on if it overlaps the default 1000 user or not.
+if [ "$UID" == "1000" ]; then
 
     cat >> Containerfile <<EOF
 RUN usermod -l "$USER" ubuntu && groupmod -n "$USER" ubuntu && usermod -d "/home/$USER" -m "$USER" && usermod -c "$FULLNAME" "$USER"
@@ -79,10 +80,9 @@ RUN groupadd -r -g "$UID" "$USER" && useradd -m -u "$UID" -g "$UID" -c "$FULLNAM
 EOF
 
   fi
-  cat >> "$CDC_CONFIG_DIR/image-u24/requested/default/52-commands-user" <<EOF
+  cat >> Containerfile <<EOF
 RUN mkdir -p /tmp/$USER && chown "$USER:$USER" "/tmp/$USER" && chmod 0700 "/tmp/$USER" && mkdir -p "/tmp/$USER/run" && chown "$USER:$USER" "/tmp/$USER/run" && chmod 0700 "/tmp/$USER/run" && mkdir -p /run/user && ln -nsf "/tmp/$USER/run" "/run/user/${UID}"
 EOF
-fi
 
 podman build --squash-all -t cdc-u24 --label=wrap .
 podman image prune -f --filter label=wrap
@@ -90,6 +90,6 @@ podman image prune -f --filter label=wrap
 rm -rf "$CDC_CONFIG_DIR/image-u24/installed"
 cp -rp "$CDC_CONFIG_DIR/image-u24/requested" "$CDC_CONFIG_DIR/image-u24/installed"
 
-echo "First run of new container (this may take a long time as podman may need to remap uid/gid manually)"
-podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
+#echo "First run of new container (this may take a long time as podman may need to remap uid/gid manually)"
+#podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
 
