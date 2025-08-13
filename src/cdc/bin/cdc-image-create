@@ -21,7 +21,7 @@ IMGDIR="$CDC_DATA_DIR/image-u24"
 mkdir -p "${IMGDIR}/rootfs"
 
 podman pull "$BASEIMAGE"
-podman unshare -- sh -c "cid=$(podman create --userns keep-id ubuntu:24.04) && podman export \"\$cid\" | tar -C \"${IMGDIR}/rootfs\" -xpf - --numeric-owner --xattrs --acls && podman rm \"\$cid\""
+podman unshare -- sh -c "cid=$(podman create ubuntu:24.04) && podman export \"\$cid\" | tar -C \"${IMGDIR}/rootfs\" -xpf - --numeric-owner --xattrs --acls && podman rm \"\$cid\""
 
 # The sed 's/.utf8/.UTF-8/' fixes incorrectly specified locales from pre-GNOME 3.18 I think.
 LOCALES="$(locale -a | grep -v "POSIX" | sed 's/.utf8/.UTF-8/' | tr '\n' ' ')"
@@ -64,14 +64,14 @@ fi
 SETUP_SCRIPT="${SETUP_SCRIPT}mkdir -p \"/tmp/$USER\" && chown \"$USER:$USER\" \"/tmp/$USER\" && chmod 0700 \"/tmp/$USER\" && mkdir -p \"/tmp/$USER/run\" && chown \"$USER:$USER\" \"/tmp/$USER/run\" && chmod 0700 \"/tmp/$USER/run\" && mkdir -p /run/user && ln -nsf \"/tmp/$USER/run\" \"/run/user/${UID}\";"
 
 # Google Chrome is necessary to support installation of progressive-web-apps (PWA)
-SETUP_SCRIPT="${SETUP_SCRIPT}wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt -y install ./google-chrome-stable_current_amd64.deb && rm -f google-chrome-stable_current_amd64.deb;"
+#SETUP_SCRIPT="${SETUP_SCRIPT}wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt -y install ./google-chrome-stable_current_amd64.deb && rm -f google-chrome-stable_current_amd64.deb;"
 
 SETUP_SCRIPT="${SETUP_SCRIPT}apt-get clean autoclean -y && apt-get autoremove -y;"
 
 echo "Setup script"
 echo "$SETUP_SCRIPT"
 
-podman run -u root --rm --userns keep-id --rootfs "${IMGDIR}/rootfs" bash -c "${SETUP_SCRIPT}"
+podman run -u root --rm --uidmap 1000:0:1  --uidmap 0:1:1000 --uidmap 1001:1001:10000 --rootfs "${IMGDIR}/rootfs" bash -c "${SETUP_SCRIPT}"
 
 mkdir -p "$CDC_CONFIG_DIR"/image-u24/requested/default
 
@@ -205,4 +205,4 @@ EOF
 )
 
 echo "Checking that container runs."
-podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
+podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --uidmap 1000:0:1  --uidmap 0:1:1000 --uidmap 1001:1001:10000 --name "cdc_test_u24" cdc-u24 echo "Container finished."
