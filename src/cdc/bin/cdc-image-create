@@ -11,6 +11,8 @@ CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
 CDC_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cdc"
 TOOLPATH="$(dirname -- "${SCRIPTPATH}")/tools"
 
+export PODMAN_USERNS="keep-id"
+
 if [ -z "$USER" -o -z "$UID" -o -z "$LANG" ]; then
     echo "The following env variables must be set: USER, UID, LANG"
     exit 1
@@ -71,7 +73,7 @@ SETUP_SCRIPT="${SETUP_SCRIPT}apt-get clean autoclean -y && apt-get autoremove -y
 echo "Setup script"
 echo "$SETUP_SCRIPT"
 
-podman run -u root --rm --uidmap 1000:0:1  --uidmap 0:1:1000 --uidmap 1001:1001:10000 --rootfs "${IMGDIR}/rootfs" bash -c "${SETUP_SCRIPT}"
+podman run -u root --userns=keep-id --rm --rootfs "${IMGDIR}/rootfs" bash -c "${SETUP_SCRIPT}"
 
 mkdir -p "$CDC_CONFIG_DIR"/image-u24/requested/default
 
@@ -201,8 +203,21 @@ EOF
 
 (
     cd "${IMGDIR}/rootfs"
-    podman unshare -- tar -cpf - . --numeric-owner | podman import - cdc-u24
+    podman unshare -- tar -cpf - . --numeric-owner | podman import -- - cdc-u24
 )
 
+echo "Inspect"
+#podman inspect cdc-u24
+IMGDIR=$(find ~/.local/share/containers/storage/overlay -name "rar" 2>/dev/null | sed -n 's%\(.*\)/diff/tmp/rar%\1%p')
+ls -la "${IMGDIR}"
+
 echo "Checking that container runs."
-podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --uidmap 1000:0:1  --uidmap 0:1:1000 --uidmap 1001:1001:10000 --name "cdc_test_u24" cdc-u24 echo "Container finished."
+#time podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns="" --name "cdc_test_u24" cdc-u24 echo "Container finished."
+time podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
+
+echo "Inspect"
+ls -la "${IMGDIR}"
+
+#podman inspect cdc-u24
+#find ~/.local/share/containers/storage/overlay -name "rar" 2>/dev/null | xargs ls -la
+
