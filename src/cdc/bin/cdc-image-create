@@ -2,6 +2,7 @@
 
 set -e
 
+BASEIMAGE="ubuntu:24.04"
 IMAGE="u24"
 
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
@@ -15,30 +16,17 @@ if [ -z "$USER" -o -z "$UID" -o -z "$LANG" ]; then
     exit 1
 fi
 
+podman unshare -- rm -rf "$CDC_DATA_DIR/image-u24/rootfs"
+IMGDIR="$CDC_DATA_DIR/image-u24"
+mkdir -p "${IMGDIR}/rootfs"
+
+podman pull "$BASEIMAGE"
+podman unshare -- sh -c "cid=$(podman create --userns keep-id ubuntu:24.04) && podman export \"\$cid\" | tar -C \"${IMGDIR}/rootfs\" -xpf - --numeric-owner --xattrs --acls && podman rm \"\$cid\""
+
 # The sed 's/.utf8/.UTF-8/' fixes incorrectly specified locales from pre-GNOME 3.18 I think.
 LOCALES="$(locale -a | grep -v "POSIX" | sed 's/.utf8/.UTF-8/' | tr '\n' ' ')"
 
-PKGS_FILES=""
-PKGS_NORECS_FILES=""
-COMMANDS_FILES=""
-PRECOMMANDS_FILES=""
-
-CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
-rm -rf "$CDC_CONFIG_DIR/image-u24/build"
-mkdir -p "$CDC_CONFIG_DIR/image-u24"/{build/files,requested,installed}
-mkdir -p "$CDC_DATA_DIR/image-u24/rootfs"
-
-# Collect necessary files to build the image in files/
-cp "$TOOLPATH/image/en_SE.locale" "$CDC_CONFIG_DIR/image-u24/build/files/."
-cp /etc/timezone "$CDC_CONFIG_DIR/image-u24/build/files/."
-
-cd "$CDC_CONFIG_DIR/image-u24/build"
-
-cat > Containerfile <<EOF
-FROM ubuntu:24.04
-ENV DEBIAN_FRONTEND=noninteractive
-COPY files/timezone /etc/timezone
-EOF
+podman unshare -- cp /etc/timezone "${IMGDIR}/rootfs/etc/."
 
 # Handle that /etc/localtime both can be a symlink or a file, and re-do the symlink in the container
 LOCALTIME=$(readlink /etc/localtime)
@@ -46,50 +34,175 @@ if [ -n "$LOCALTIME" ]; then
     TZ_LOCATION="${LOCALTIME##*/}"
     TZ_AREA="${LOCALTIME%/*}"
     TZ_AREA="${TZ_AREA##*/}"
-    echo "RUN ln -sf \"/usr/share/zoneinfo/${TZ_AREA}/${TZ_LOCATION}\" /etc/localtime" >> Containerfile
+    podman unshare -- ln -sf "/usr/share/zoneinfo/${TZ_AREA}/${TZ_LOCATION}" "${IMGDIR}/rootfs/etc/localtime"
 else
-    cp /etc/localtime files/localtime
-    echo "RUN rm -f /etc/localtime" >> Containerfile
-    echo "COPY files/localtime /etc/localtime" >> Containerfile
+    podman unshare -- rm -f "${IMGDIR}/rootfs/etc/localtime"
+    podman unshare -- cp /etc/localtime "${IMGDIR}/rootfs/etc/."
 fi
 
-# Google Chrome is necessary to support installation of progressive-web-apps (PWA)
-cat >> Containerfile <<EOF
-RUN apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates locales wget
-COPY ./files/en_SE.locale /tmp/en_SE.locale
-RUN test ! -e /usr/share/i18n/locales/en_SE && cp /tmp/en_SE.locale /usr/share/i18n/locales/en_SE && localedef -i en_SE -f UTF-8 en_SE.UTF-8 && echo "# en_SE.UTF-8 UTF-8" >> "/etc/locale.gen" && echo "en_SE.UTF-8 UTF-8" >> "/usr/share/i18n/SUPPORTED"
-RUN locale-gen ${LOCALES} && update-locale "LANG=$LANG" && rm -f /tmp/en_SE.locale
-ENV LANG $LANG
-RUN groupadd -r -g 5000 build && useradd -m -u 5000 -g 5000 -c "Build user" "build"
-RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt -y install ./google-chrome-stable_current_amd64.deb && rm -f google-chrome-stable_current_amd64.deb
-EOF
+if [ ! -e "${IMGDIR}/rootfs/usr/share/i18n/locales/en_SE" ]; then
+    podman unshare -- mkdir -p "${IMGDIR}/rootfs/usr/share/i18n/locales"
+    podman unshare -- cp "${TOOLPATH}/container/en_SE.locale" "${IMGDIR}/rootfs/usr/share/i18n/locales/en_SE"
+fi
+    
+SETUP_SCRIPT="
+export DEBIAN_FRONTEND=noninteractive;
+apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates locales wget tzdata;
+test ! -e /usr/share/i18n/locales/en_SE && localedef -i en_SE -f UTF-8 en_SE.UTF-8 && echo \"# en_SE.UTF-8 UTF-8\" >> \"/etc/locale.gen\" && echo \"en_SE.UTF-8 UTF-8\" >> \"/usr/share/i18n/SUPPORTED\";
+locale-gen ${LOCALES} && update-locale \"LANG=$LANG\";
+groupadd -r -g 5000 build && useradd -m -u 5000 -g 5000 -c \"Build user\" \"build\";
+"
 
 FULLNAME="$(getent passwd rar | awk -F':' '{print $5}')"
 
 # We need to handle the user part differently depending on if it overlaps the default 1000 user or not.
 if [ "$UID" == "1000" ]; then
+    SETUP_SCRIPT="${SETUP_SCRIPT}usermod -l \"$USER\" ubuntu && groupmod -n \"$USER\" ubuntu && usermod -d \"/home/$USER\" -m \"$USER\" && usermod -c \"$FULLNAME\" \"$USER\";"
+else
+    SETUP_SCRIPT="${SETUP_SCRIPT}groupadd -r -g \"$UID\" \"$USER\" && useradd -m -u \"$UID\" -g \"$UID\" -c \"$FULLNAME\" \"$USER\";"
+fi
+SETUP_SCRIPT="${SETUP_SCRIPT}mkdir -p \"/tmp/$USER\" && chown \"$USER:$USER\" \"/tmp/$USER\" && chmod 0700 \"/tmp/$USER\" && mkdir -p \"/tmp/$USER/run\" && chown \"$USER:$USER\" \"/tmp/$USER/run\" && chmod 0700 \"/tmp/$USER/run\" && mkdir -p /run/user && ln -nsf \"/tmp/$USER/run\" \"/run/user/${UID}\";"
 
-    cat >> Containerfile <<EOF
-RUN usermod -l "$USER" ubuntu && groupmod -n "$USER" ubuntu && usermod -d "/home/$USER" -m "$USER" && usermod -c "$FULLNAME" "$USER"
+# Google Chrome is necessary to support installation of progressive-web-apps (PWA)
+SETUP_SCRIPT="${SETUP_SCRIPT}wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt -y install ./google-chrome-stable_current_amd64.deb && rm -f google-chrome-stable_current_amd64.deb;"
+
+SETUP_SCRIPT="${SETUP_SCRIPT}apt-get clean autoclean -y && apt-get autoremove -y;"
+
+echo "Setup script"
+echo "$SETUP_SCRIPT"
+
+podman run -u root --rm --userns keep-id --rootfs "${IMGDIR}/rootfs" bash -c "${SETUP_SCRIPT}"
+
+mkdir -p "$CDC_CONFIG_DIR"/image-u24/requested/default
+
+cat > "$CDC_CONFIG_DIR"/image-u24/requested/default/10-pkgs-default <<EOF
+coreutils
+nano
+curl
+wget
+rsync
+bash
+findutils
+util-linux
+git
+git-extras
+gawk
+grep
+jq
+yq
+bc
+dc
+bsdutils
+inotify-tools
+diffutils
+fontconfig
+fonts-liberation
+fonts-liberation-sans-narrow
+fonts-dejavu-core
+fonts-dejavu-extra
+fonts-dejavu-mono
+fonts-mathjax
+fonts-ubuntu
+ghostscript
+bzip2
+gzip
+zip
+zstd
+cpio
+xz-utils
+cabextract
+less
+hostname
+net-tools
+netcat-openbsd
+socat
+ethtool
+p7zip-full
+patch
+pkg-config
+screen
+tmux
+unzip
+xmlstarlet
+xz-utils
+python3
+ipython3
+python3-pip
+python3-setuptools
+python3-venv
+python3-tk
+python3-gi
+python3-gst-1.0
+python3-xlib
+python3-watchdog
+pipx
+libx11-data
+x11-utils
+gpg
+gpg-agent
+xdg-utils
+pipewire
+pipewire-alsa
+pipewire-pulse
+alsa-utils
+pulseaudio-utils
+libasound2-plugins
+xdg-desktop-portal
+xdg-desktop-portal-gnome
+xdg-desktop-portal-gtk
+wmctrl
+xdotool
+gstreamer1.0-pipewire
+gir1.2-appindicator3-0.1
+wine64
+wine64-tools
+winetricks
+proton-caller
+protontricks
+yad
+zenity
+pre-commit
+icoutils
+imagemagick
+pngtools
+build-essential
+ant
+ant-optional
+aspell
+ispell
+autoconf
+automake
+autopoint
+autotools-dev
+binutils
+checkinstall
+debconf
+debconf-i18n
+debconf-utils
+debhelper
+debianutils
+dpkg
+make
+cmake
+extra-cmake-modules
+ffmpeg
+ftp
+pandoc
+patch
+patchutils
+perl
+rake
+readline-common
+ruby
+sed
+sqlite3
+time
 EOF
 
-  else
+(
+    cd "${IMGDIR}/rootfs"
+    podman unshare -- tar -cpf - . --numeric-owner | podman import - cdc-u24
+)
 
-    cat >> Containerfile <<EOF
-RUN groupadd -r -g "$UID" "$USER" && useradd -m -u "$UID" -g "$UID" -c "$FULLNAME" "$USER"
-EOF
-
-  fi
-  cat >> Containerfile <<EOF
-RUN mkdir -p /tmp/$USER && chown "$USER:$USER" "/tmp/$USER" && chmod 0700 "/tmp/$USER" && mkdir -p "/tmp/$USER/run" && chown "$USER:$USER" "/tmp/$USER/run" && chmod 0700 "/tmp/$USER/run" && mkdir -p /run/user && ln -nsf "/tmp/$USER/run" "/run/user/${UID}"
-EOF
-
-podman build --squash-all -t cdc-u24 --label=wrap .
-podman image prune -f --filter label=wrap
-
-rm -rf "$CDC_CONFIG_DIR/image-u24/installed"
-cp -rp "$CDC_CONFIG_DIR/image-u24/requested" "$CDC_CONFIG_DIR/image-u24/installed"
-
-#echo "First run of new container (this may take a long time as podman may need to remap uid/gid manually)"
-#podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
-
+echo "Checking that container runs."
+podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."

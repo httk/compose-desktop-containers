@@ -6,7 +6,9 @@ IMAGE="u24"
 
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
+CDC_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cdc"
 TOOLPATH="$(dirname -- "${SCRIPTPATH}")/tools"
+IMGDIR="$CDC_DATA_DIR/image-u24"
 
 echo "==========================================="
 echo "Opening a root shell to modify cdc-${IMAGE}"
@@ -37,7 +39,7 @@ CONTAINER_ID=$(podman run \
        --userns=keep-id \
        -e LANG \
        -d \
-       "cdc-$IMAGE" /cdc/entrypoint)
+       --rootfs "${IMGDIR}/rootfs" /cdc/entrypoint)
 
 trap "podman stop \"${CONTAINER_ID}\"" exit
 
@@ -65,9 +67,15 @@ podman stop "$CONTAINER_ID"
 trap - exit
 
 echo "Commiting changes"
-podman commit --squash "$CONTAINER_ID" --change "USER=$USER" "cdc-${IMAGE}"
-podman rm -fi wrap-upgrade-tmp
-podman image prune -f
+
+#podman commit --squash "$CONTAINER_ID" --change "USER=$USER" "cdc-${IMAGE}"
+#podman rm -fi wrap-upgrade-tmp
+#podman image prune -f
+
+(
+    cd "${IMGDIR}/rootfs"
+    podman unshare -- tar -cpf - . --numeric-owner | podman import - cdc-u24
+)
 
 echo "First run of new container (this may take a long time as podman may need to remap uid/gid manually)"
 podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
