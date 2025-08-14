@@ -20,7 +20,7 @@ fi
 export CDC_PWD="$(pwd -P)"
 SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
 LAUNCHPATH="$(cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)"
-TOOLPATH="$(dirname -- "$(realpath -- "$0")")"
+TOOLPATH="$(dirname -- "${SCRIPTPATH}")/tools"
 
 PODMAN_COMPOSE_UP_ARGS=()
 PODMAN_COMPOSE_EXEC_ARGS=()
@@ -137,6 +137,9 @@ ADJUSTMENT_DEVS=()
 ADJUSTMENT_VOLS=()
 ADJUSTMENT_CAPS=()
 OVERRIDE_ALLOW_READ="no"
+
+# Always mount the cdc tools at /cdc
+ADJUSTMENT_VOLS+=( "${TOOLPATH}/container:/cdc:ro" "/etc/timezone:/etc/timezone" )
 
 if [ "$(yq -r ".\"x-launchers\".\"$LAUNCHER\".script" <<< "$PODMAN_CONFIG")" != "null" ]; then
     LAUNCH_SCRIPT="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".script | recurse(.[]? // empty) | select(type != \"array\")" <<< "$PODMAN_CONFIG")"
