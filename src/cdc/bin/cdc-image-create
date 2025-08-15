@@ -11,6 +11,7 @@ CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
 CDC_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cdc"
 TOOLPATH="$(dirname -- "${SCRIPTPATH}")/tools"
 
+# Not entirely clear which podman invokatins are affected by this, but it seems to be needed to end up with the right owner of users files in the expanded roofs/
 export PODMAN_USERNS="keep-id"
 
 if [ -z "$USER" -o -z "$UID" -o -z "$LANG" ]; then
@@ -23,7 +24,8 @@ IMGDIR="$CDC_DATA_DIR/image-u24"
 mkdir -p "${IMGDIR}/rootfs"
 
 podman pull "$BASEIMAGE"
-podman unshare -- sh -c "cid=$(podman create ubuntu:24.04) && podman export \"\$cid\" | tar -C \"${IMGDIR}/rootfs\" -xpf - --numeric-owner --xattrs --acls && podman rm \"\$cid\""
+podman tag "$BASEIMAGE" "cdc-$IMAGE"
+podman unshare -- sh -c "cid=$(podman create "cdc-$IMAGE") && podman export \"\$cid\" | tar -C \"${IMGDIR}/rootfs\" -xpf - --numeric-owner --xattrs --acls && podman rm \"\$cid\""
 
 # The sed 's/.utf8/.UTF-8/' fixes incorrectly specified locales from pre-GNOME 3.18 I think.
 LOCALES="$(locale -a | grep -v "POSIX" | sed 's/.utf8/.UTF-8/' | tr '\n' ' ')"
@@ -46,11 +48,11 @@ if [ ! -e "${IMGDIR}/rootfs/usr/share/i18n/locales/en_SE" ]; then
     podman unshare -- mkdir -p "${IMGDIR}/rootfs/usr/share/i18n/locales"
     podman unshare -- cp "${TOOLPATH}/container/en_SE.locale" "${IMGDIR}/rootfs/usr/share/i18n/locales/en_SE"
 fi
-    
+
 SETUP_SCRIPT="
 export DEBIAN_FRONTEND=noninteractive;
-apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates locales wget tzdata;
-test ! -e /usr/share/i18n/locales/en_SE && localedef -i en_SE -f UTF-8 en_SE.UTF-8 && echo \"# en_SE.UTF-8 UTF-8\" >> \"/etc/locale.gen\" && echo \"en_SE.UTF-8 UTF-8\" >> \"/usr/share/i18n/SUPPORTED\";
+apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates locales wget tzdata python3 python3-pip python3-venv;
+localedef -i en_SE -f UTF-8 en_SE.UTF-8 && echo \"# en_SE.UTF-8 UTF-8\" >> \"/etc/locale.gen\" && echo \"en_SE.UTF-8 UTF-8\" >> \"/usr/share/i18n/SUPPORTED\";
 locale-gen ${LOCALES} && update-locale \"LANG=$LANG\";
 groupadd -r -g 5000 build && useradd -m -u 5000 -g 5000 -c \"Build user\" \"build\";
 "
@@ -66,14 +68,14 @@ fi
 SETUP_SCRIPT="${SETUP_SCRIPT}mkdir -p \"/tmp/$USER\" && chown \"$USER:$USER\" \"/tmp/$USER\" && chmod 0700 \"/tmp/$USER\" && mkdir -p \"/tmp/$USER/run\" && chown \"$USER:$USER\" \"/tmp/$USER/run\" && chmod 0700 \"/tmp/$USER/run\" && mkdir -p /run/user && ln -nsf \"/tmp/$USER/run\" \"/run/user/${UID}\";"
 
 # Google Chrome is necessary to support installation of progressive-web-apps (PWA)
-#SETUP_SCRIPT="${SETUP_SCRIPT}wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt -y install ./google-chrome-stable_current_amd64.deb && rm -f google-chrome-stable_current_amd64.deb;"
+SETUP_SCRIPT="${SETUP_SCRIPT}wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt -y install ./google-chrome-stable_current_amd64.deb && rm -f google-chrome-stable_current_amd64.deb;"
 
 SETUP_SCRIPT="${SETUP_SCRIPT}apt-get clean autoclean -y && apt-get autoremove -y;"
 
 echo "Setup script"
 echo "$SETUP_SCRIPT"
 
-podman run -u root --userns=keep-id --rm --rootfs "${IMGDIR}/rootfs" bash -c "${SETUP_SCRIPT}"
+podman run -u root --userns="keep-id" --rm --rootfs "${IMGDIR}/rootfs" bash -c "${SETUP_SCRIPT}"
 
 mkdir -p "$CDC_CONFIG_DIR"/image-u24/requested/default
 
@@ -201,22 +203,23 @@ sqlite3
 time
 EOF
 
-(
-    cd "${IMGDIR}/rootfs"
-    podman unshare -- tar -cpf - . --numeric-owner | podman import -- - cdc-u24
-)
+#(
+#    cd "${IMGDIR}/rootfs"
+#    podman unshare -- tar -cpf - . --numeric-owner | podman import -- - cdc-u24
+#)
 
-echo "Inspect"
-#podman inspect cdc-u24
-IMGDIR=$(find ~/.local/share/containers/storage/overlay -name "rar" 2>/dev/null | sed -n 's%\(.*\)/diff/tmp/rar%\1%p')
-ls -la "${IMGDIR}"
-
-echo "Checking that container runs."
+echo "Test run of new container."
 #time podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns="" --name "cdc_test_u24" cdc-u24 echo "Container finished."
-time podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
+#time podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns="keep-id" --name "cdc_test_u24" cdc-u24 echo "Container finished."
 
-echo "Inspect"
-ls -la "${IMGDIR}"
+ROOTMOUNTS=""
+for ROOTMOUNT in bin boot etc home opt sbin srv usr var; do
+    ROOTMOUNTS="$ROOTMOUNTS --volume=$IMGDIR/rootfs/$ROOTMOUNT:/$ROOTMOUNT:ro"
+done
+time podman run --rm $ROOTMOUNTS -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns="keep-id" --name "cdc_test_u24" cdc-u24 echo "Container finished."
+
+echo "Running update on newly created image"
+"${SCRIPTPATH}/cdc-image-update"
 
 #podman inspect cdc-u24
 #find ~/.local/share/containers/storage/overlay -name "rar" 2>/dev/null | xargs ls -la

@@ -10,6 +10,11 @@ CDC_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cdc"
 TOOLPATH="$(dirname -- "${SCRIPTPATH}")/tools"
 IMGDIR="$CDC_DATA_DIR/image-u24"
 
+ROOTMOUNTS=""
+for ROOTMOUNT in bin boot etc home opt sbin srv usr var; do
+    ROOTMOUNTS="$ROOTMOUNTS --volume=$IMGDIR/rootfs/$ROOTMOUNT:/$ROOTMOUNT:rw"
+done
+
 echo "==========================================="
 echo "Opening a root shell to modify cdc-${IMAGE}"
 echo "To commit the result, end the session with CTRL+d"
@@ -20,6 +25,7 @@ echo
 podman rm -fi wrap-upgrade-tmp
 
 CONTAINER_ID=$(podman run \
+       $ROOTMOUNTS \
        -w "/" \
        --hostname="cdc-$IMAGE" \
        --user=root \
@@ -62,20 +68,21 @@ podman exec \
        -w "/" \
        --user=root \
        "$CONTAINER_ID" bash -c "mkdir -p /tmp/$USER && chown \"$USER:$USER\" \"/tmp/$USER\" && chmod 0700 \"/tmp/$USER\" && mkdir -p \"/tmp/$USER/run\" && chown \"$USER:$USER\" \"/tmp/$USER/run\" && chmod 0700 \"/tmp/$USER/run\""
-       
+
 podman stop "$CONTAINER_ID"
 trap - exit
 
-echo "Commiting changes"
-
+# Latest version uses read-write mounts from .local/share/cdc/image-u25/rootfs to preserve changes, no longer any need to update the underlying image
+#
+#echo "Commiting changes"
 #podman commit --squash "$CONTAINER_ID" --change "USER=$USER" "cdc-${IMAGE}"
 #podman rm -fi wrap-upgrade-tmp
 #podman image prune -f
+#(
+#    cd "${IMGDIR}/rootfs"
+#    podman unshare -- tar -cpf - . --numeric-owner | podman import - cdc-u24
+#)
+#echo "First run of new container (this may take a long time as podman may need to remap uid/gid manually)"
 
-(
-    cd "${IMGDIR}/rootfs"
-    podman unshare -- tar -cpf - . --numeric-owner | podman import - cdc-u24
-)
-
-echo "First run of new container (this may take a long time as podman may need to remap uid/gid manually)"
+echo "Test new container"
 podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
