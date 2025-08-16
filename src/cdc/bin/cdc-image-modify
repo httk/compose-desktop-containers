@@ -26,6 +26,7 @@ podman rm -fi wrap-upgrade-tmp
 
 CONTAINER_ID=$(podman run \
        $ROOTMOUNTS \
+       --rm \
        -w "/" \
        --hostname="cdc-$IMAGE" \
        --user=root \
@@ -54,6 +55,7 @@ if [ -n "$1" ]; then
        -w "/" \
        --user=root \
        "$CONTAINER_ID" bash -c 'eval $@' bash "$@"
+      echo "HERE2"
 else
   podman exec \
        -it \
@@ -63,12 +65,12 @@ else
        "$CONTAINER_ID" /bin/bash
 fi
 
-echo "Adding tmp fs config"
 podman exec \
        -w "/" \
        --user=root \
        "$CONTAINER_ID" bash -c "mkdir -p /tmp/$USER && chown \"$USER:$USER\" \"/tmp/$USER\" && chmod 0700 \"/tmp/$USER\" && mkdir -p \"/tmp/$USER/run\" && chown \"$USER:$USER\" \"/tmp/$USER/run\" && chmod 0700 \"/tmp/$USER/run\""
 
+echo "Stopping container"
 podman stop "$CONTAINER_ID"
 trap - exit
 
@@ -84,5 +86,10 @@ trap - exit
 #)
 #echo "First run of new container (this may take a long time as podman may need to remap uid/gid manually)"
 
+ROOTMOUNTS=""
+for ROOTMOUNT in bin boot etc home opt sbin srv usr var; do
+    ROOTMOUNTS="$ROOTMOUNTS --volume=$IMGDIR/rootfs/$ROOTMOUNT:/$ROOTMOUNT:ro"
+done
+
 echo "Test new container"
-podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
+podman run --rm $ROOTMOUNTS -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns=keep-id --name "cdc_test_u24" cdc-u24 echo "Container finished."
