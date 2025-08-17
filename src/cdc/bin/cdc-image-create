@@ -19,6 +19,7 @@ if [ -z "$USER" -o -z "$UID" -o -z "$LANG" ]; then
     exit 1
 fi
 
+rm -rf "$CDC_CONFIG_DIR/image-$IMAGE/installed"
 podman unshare -- rm -rf "$CDC_DATA_DIR/image-u24/rootfs"
 IMGDIR="$CDC_DATA_DIR/image-u24"
 mkdir -p "${IMGDIR}/rootfs"
@@ -217,6 +218,9 @@ for ROOTMOUNT in bin boot etc home opt sbin srv usr var; do
     ROOTMOUNTS="$ROOTMOUNTS --volume=$IMGDIR/rootfs/$ROOTMOUNT:/$ROOTMOUNT:ro"
 done
 time podman run --rm $ROOTMOUNTS -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns="keep-id" --name "cdc_test_u24" cdc-u24 echo "Container finished."
+
+echo "Building tools"
+"${SCRIPTPATH}/cdc-build" gamescope
 
 echo "Running update on newly created image"
 "${SCRIPTPATH}/cdc-image-update"

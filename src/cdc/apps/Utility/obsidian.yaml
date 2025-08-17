@@ -122,6 +122,13 @@ x-launchers:
         - source: obsidian.png
           dest: obsidian.png
 
+  interactive:
+    service: run
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash
+
 services:
 
   common: &common

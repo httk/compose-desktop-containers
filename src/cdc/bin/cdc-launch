@@ -144,12 +144,13 @@ OVERRIDE_ALLOW_READ="no"
 IMAGE="$(yq -r ".services.\"$SERVICE\".\"image\"" <<< "$PODMAN_CONFIG")"
 if [ "${IMAGE#cdc-}" != "${IMAGE}" ]; then
     IMGDIR="$CDC_DATA_DIR/image-${IMAGE#cdc-}"
-    for ROOTMOUNT in bin boot etc home opt sbin srv usr var; do
+    for ROOTMOUNT in bin boot etc home sbin srv usr var; do
 	ADJUSTMENT_VOLS+=( "$IMGDIR/rootfs/$ROOTMOUNT:/$ROOTMOUNT:ro" )
     done
+    ADJUSTMENT_VOLS+=( "${IMGDIR}/opt:/opt:ro" )
 fi
 
-# Always mount the cdc tools at /cdc
+# Always mount the cdc tools at /cdc, and /opt
 ADJUSTMENT_VOLS+=( "${TOOLPATH}/container:/cdc:ro" "/etc/timezone:/etc/timezone:ro" )
 
 if [ "$(yq -r ".\"x-launchers\".\"$LAUNCHER\".script" <<< "$PODMAN_CONFIG")" != "null" ]; then

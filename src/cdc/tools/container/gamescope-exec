@@ -13,4 +13,4 @@ for sig in INT QUIT HUP TERM; do
 done
 trap cleanup EXIT
 
-gamescope "$@"
+/opt/gamescope/bin/gamescope "$@"

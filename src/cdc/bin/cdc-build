@@ -1,0 +1,66 @@
+#!/bin/bash
+
+set -e
+
+IMG="u24"
+
+SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
+CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
+CDC_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cdc"
+TOOLPATH="$(dirname -- "${SCRIPTPATH}")/tools"
+
+export PODMAN_USERNS="keep-id"
+
+if [ -z "$1" ]; then
+    echo "Usage: cdc build <buildname>"
+    echo
+    echo "Available builds:"
+    ls "${TOOLPATH}/build"
+    exit 1
+fi
+
+BUILDNAME="$1"
+shift 1
+
+if [ ! -e "${TOOLPATH}/build/${BUILDNAME}/Containerfile" ]; then
+    echo "Do not know how to build ${BUILDNAME}"
+    echo
+    echo "Available builds:"
+    ls "${TOOLPATH}/build"
+    exit 1
+fi
+
+cd "${TOOLPATH}/build/${BUILDNAME}/"
+
+podman build --label=cdc-build --build-arg UID="$(id -u)" --build-arg GID="$(id -g)" -t "cdc-build-${BUILDNAME}" .
+
+FIXES=""
+
+CRUNVER="$(crun --version | awk '/crun version /{print $3}')"
+if ! sort -C -V <<< $'1.9.1\n'"$CRUNVER"; then
+    FIXES="$FIXES --read-only=false"
+    echo "Warning: read-only turned off due to old version of crun."
+fi
+
+podman unshare -- rm -rf "${CDC_DATA_DIR}/image-${IMG}/opt/${BUILDNAME}"
+mkdir -p "${CDC_DATA_DIR}/image-${IMG}/opt/${BUILDNAME}"
+
+podman run --rm \
+       --user=build \
+       --hostname=cdc-build \
+       --cap-drop=ALL \
+       --read-only \
+       --read-only-tmpfs \
+       --systemd=false \
+       --security-opt=no-new-privileges \
+       -e LANG \
+       --userns="keep-id" \
+       -v "${CDC_DATA_DIR}/image-${IMG}/opt/${BUILDNAME}:/opt/${BUILDNAME}:rw" \
+       $FIXES \
+       "cdc-build-${BUILDNAME}"
+
+podman rmi "cdc-build-${BUILDNAME}"
+podman image prune -a -f --filter label=cdc-build
+#(cd outputs/install/gamescope; tar -zcvf ../../../files/gamescope.tgz .)
+
+echo "$BUILDNAME built; result available in: ${CDC_DATA_DIR}/image-${IMG}/opt/${BUILDNAME}"
