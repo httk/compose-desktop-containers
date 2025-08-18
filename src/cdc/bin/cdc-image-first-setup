@@ -1,0 +1,151 @@
+#!/bin/bash
+
+set -e
+
+BASEIMAGE="ubuntu:24.04"
+IMAGE="u24"
+
+SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
+IMAGE_DIR="$(realpath -- "$SCRIPTPATH/../images")"
+CDC_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cdc"
+CDC_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cdc"
+TOOLPATH="$(dirname -- "${SCRIPTPATH}")/tools"
+
+# Not entirely clear which podman invocations are affected by this, but it seems to be needed to end up with the right owner of users files in the expanded roofs/
+export PODMAN_USERNS="keep-id"
+
+if [ -z "$USER" -o -z "$UID" -o -z "$LANG" ]; then
+    echo "The following env variables must be set: USER, UID, LANG"
+    exit 1
+fi
+
+mkdir -p "$CDC_CONFIG_DIR"/image-u24/requested/default
+cat > "$CDC_CONFIG_DIR"/image-u24/requested/default/10-pkgs-default <<EOF
+coreutils
+nano
+curl
+wget
+rsync
+bash
+findutils
+util-linux
+git
+git-extras
+gawk
+grep
+jq
+yq
+bc
+dc
+bsdutils
+inotify-tools
+diffutils
+fontconfig
+fonts-liberation
+fonts-liberation-sans-narrow
+fonts-dejavu-core
+fonts-dejavu-extra
+fonts-dejavu-mono
+fonts-mathjax
+fonts-ubuntu
+ghostscript
+bzip2
+gzip
+zip
+zstd
+cpio
+xz-utils
+cabextract
+less
+hostname
+net-tools
+netcat-openbsd
+socat
+ethtool
+p7zip-full
+patch
+pkg-config
+screen
+tmux
+unzip
+xmlstarlet
+xz-utils
+python3
+ipython3
+python3-pip
+python3-setuptools
+python3-venv
+python3-tk
+python3-gi
+python3-gst-1.0
+python3-xlib
+python3-watchdog
+pipx
+libx11-data
+x11-utils
+gpg
+gpg-agent
+xdg-utils
+pipewire
+pipewire-alsa
+pipewire-pulse
+alsa-utils
+pulseaudio-utils
+libasound2-plugins
+xdg-desktop-portal
+xdg-desktop-portal-gnome
+xdg-desktop-portal-gtk
+wmctrl
+xdotool
+gstreamer1.0-pipewire
+gir1.2-appindicator3-0.1
+wine64
+wine64-tools
+winetricks
+proton-caller
+protontricks
+yad
+zenity
+pre-commit
+icoutils
+imagemagick
+pngtools
+build-essential
+ant
+ant-optional
+aspell
+ispell
+autoconf
+automake
+autopoint
+autotools-dev
+binutils
+checkinstall
+debconf
+debconf-i18n
+debconf-utils
+debhelper
+debianutils
+dpkg
+make
+cmake
+extra-cmake-modules
+ffmpeg
+ftp
+pandoc
+patch
+patchutils
+perl
+rake
+readline-common
+ruby
+sed
+sqlite3
+time
+EOF
+
+#echo "Building /opt tools"
+#"${SCRIPTPATH}/cdc-build" gamescope
+
+echo "Running update on newly created image"
+"${SCRIPTPATH}/cdc-image-update"
