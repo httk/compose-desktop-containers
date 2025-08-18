@@ -159,7 +159,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-      - /run
+      - /run:tmpcopyup
 
     shm_size: "1G"
 
