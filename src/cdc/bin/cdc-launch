@@ -140,6 +140,8 @@ ADJUSTMENT_VOLS=()
 ADJUSTMENT_CAPS=()
 OVERRIDE_ALLOW_READ="no"
 
+ADJUSTMENT_ENVS+=( "XDG_RUNTIME_DIR: /run/user/${UID}" )
+
 # If the image starts with "cdc-" we auto-mount a number of path components from the expanded filesystem instead
 IMAGE="$(yq -r ".services.\"$SERVICE\".\"image\"" <<< "$PODMAN_CONFIG")"
 if [ "${IMAGE#cdc-}" != "${IMAGE}" ]; then
@@ -235,7 +237,7 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 
 	elif [ "$FEATURE" = "wayland" ]; then
 	    ADJUSTMENT_ENVS+=( "WAYLAND_DISPLAY: ${WAYLAND_DISPLAY}" )
-	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/tmp/${USER}/run/${WAYLAND_DISPLAY}:ro" )
+	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}:/run/user/${UID}/${WAYLAND_DISPLAY}:ro" )
 	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAGS: --ozone-platform=wayland --enable-features=WaylandWindowDecorations,UseOzonePlatform")
             ADJUSTMENT_ENVS+=( "QT_QPA_PLATFORM: wayland")
             ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: wayland")
@@ -282,7 +284,7 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
                 echo "Warning: gpu_compute feature specified, but no installed gpu accelerator recognized."
 	    fi
 	elif [ "$FEATURE" = "sound" ]; then
-	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/pipewire-0:/tmp/${USER}/run/pipewire-0:rw" )
+	    ADJUSTMENT_VOLS+=( "${XDG_RUNTIME_DIR}/pipewire-0:/run/user/${UID}/pipewire-0:rw" )
 	    ADJUSTMENT_DEVS+=( "/dev/snd:/dev/snd" )
 
 	elif [ "$FEATURE" == "dbus-proxy" ]; then
@@ -308,7 +310,9 @@ fi
 cat <<EOF >> "$ADJUSTMENT_FILE"
 services:
   $SERVICE:
-    x-dummy: none
+    tmpfs:
+      - /run:tmpcopyup
+    mount:
 EOF
 if [ -n "$ADJUSTMENT_DEVS" ]; then
   cat <<EOF >> "$ADJUSTMENT_FILE"

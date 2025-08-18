@@ -220,51 +220,56 @@ def start_filesystem_monitor():
     return monitor_hotplug_dir(observer, handler)
 
 def main():
-    global child_pid, exit_status
+    global child_pid, exit_status, IDLE_AFTER_EXIT
 
-    args = sys.argv[1:]
+    all_args = sys.argv[1:]
 
     # Separate tinit options and child args
-    if "--" in args:
-        sep_index = args.index("--")
-        args = args[:sep_index]
-        child_args = args[sep_index + 1:]
+    if "--" in all_args:
+        sep_index = all_args.index("--")
+        args = all_args[:sep_index]
+        child_args = all_args[sep_index + 1:]
     else:
         args = []
-        child_args = args
+        child_args = all_args
+
+    if "--no-idle" in args:
+        IDLE_AFTER_EXIT = 0
 
     # Start filesystem monitoring thread
     fs_observer = start_filesystem_monitor()
 
     try:
         if child_args:
-            child_pid = os.fork()
-            if child_pid == 0:
-                # In child
-                os.setsid()
-                try:
-                    os.tcsetpgrp(0, os.getpgrp())
-                except OSError:
-                    pass
-                os.execvp(child_args[0], child_args)
-            else:
-                # In parent
-                for sig in signal_set:
-                    try:
-                        signal.signal(sig, forward_signal)
-                    except (OSError, RuntimeError, ValueError):
-                        continue
+            # Start child safely using subprocess (no fork() warning)
+            proc = subprocess.Popen(
+                child_args,
+                preexec_fn=os.setsid,  # start in its own process group
+            )
+            child_pid = proc.pid
 
-                wait_for_child()
-                print(f"[INFO] cdc-entrypoint: child exited with code {exit_status}.", file=sys.stderr)
+            # Forward signals to child
+            for sig in signal_set:
+                try:
+                    signal.signal(sig, forward_signal)
+                except (OSError, RuntimeError, ValueError):
+                    continue
+
+            # Wait for child
+            exit_status = proc.wait()
+            print(f"[INFO] cdc-entrypoint: child exited with code {exit_status}.", file=sys.stderr)
 
         if IDLE_AFTER_EXIT:
             wait_forever()
             sys.exit(0)
 
     finally:
-        fs_observer.stop()
-        fs_observer.join()
+        try:
+            fs_observer.stop()
+            fs_observer.join()
+        except RuntimeError:
+            # Observer may never have been started
+            pass
 
     sys.exit(exit_status if exit_status is not None else 1)
 

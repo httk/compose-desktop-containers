@@ -1,0 +1,217 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    Steam: the games store and platform
+
+    It is strongly recommended that you configure your desktop with a hotkey for toggling applications in fullscreen.
+
+  override-default: |
+    version: "3.8"
+
+    services:
+      run:
+        volumes:
+          - "${HOME}/Documents/containers/games:/home/${USER}/Documents/containers/games"
+        working_dir: "/home/${USER}/Documents/containers/games"
+
+  env-default: |
+    # This container has no configurable options
+
+  images:
+    u24:
+      pkgs: ["steam-libs", "steam-libs-amd64"]
+
+x-launchers:
+  download:
+    service: setup
+    type: setup
+    script: &download_script
+      - echo "DOWNLOAD"
+      - mkdir -p Downloads
+      - |
+        if [ -n "Downloads/steam.deb" ]; then
+          curl -L -o Downloads/steam.deb "https://cdn.fastly.steamstatic.com/client/installer/steam.deb"
+        fi
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
+      - rm -f Downloads/steam.db
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - VERSION="$${1:-steam.deb}";
+      - echo "INSTALL $$VERSION";
+      - rm -rf ~/.local/share/steam-installer
+      - mkdir -p ~/.local/share/steam-installer
+      - cd ~/.local/share/steam-installer
+      - dpkg-deb -x ~/Downloads/"$$VERSION" steam
+#      - mkdir -p ~/.local/share/applications 
+#      - cp flashprint/usr/share/applications/FlashPrint5.desktop ~/.local/share/applications/FlashPrint5.desktop &&
+#      - sed -i 's%^Exec=/usr/share/FlashPrint5$$%Exec=/home/$${USER}/install/flashprint/usr/share/FlashPrint5/%' ~/.local/share/applications/FlashPrint5.desktop
+
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - VERSION="$${1:-steam.deb}";
+      - echo "INSTALL $$VERSION";
+      - rm -rf ~/.steam ~/.local/share/steam ~/.local/share/steam-installer
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE CHECK"
+      - echo "Steam autoupdates, no need for updates."
+      - exit 0;
+
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - *redownload_script
+      - *reinstall_script
+
+  steam:
+    service: run
+    type: background
+    script:
+      - echo "STEAM"
+      - pipewire-pulse &
+      - setpriv --ambient-caps '-all' ~/.local/share/steam-installer/steam/usr/bin/steam "$$@"
+
+    desktop:
+      file: |
+        [Desktop Entry]
+        GenericName=Steam
+        Name=Steam
+        StartupWMClass=Steam
+        MimeType=text/plain;
+        Exec=steam
+        Icon=steam
+        Type=Application
+        Terminal=false
+        Categories=Utility;
+
+      icons:
+        - source: steam.png
+          dest: steam.png
+
+
+  steam-wayland:
+    service: run-wayland
+    type: background
+    script:
+      - echo "FLASHPRINT"
+      - setpriv --ambient-caps '-all' ~/.local/share/steam-installer/steam/usr/bin/steam "$$@"
+
+  interactive:
+    service: run
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    entrypoint: ["/cdc/entrypoint"]
+
+    network: none
+
+    working_dir: /home/${USER}
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
+
+# possible options:
+#      STEAM_USE_MANGOAPP: 1
+#      SRT_URLOPEN_PREFER_STEAM: 1
+#      STEAM_ENABLE_VOLUME_HANDLER: 1
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+    network_node: none
+
+
+  setup:
+    <<: *common
+
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
+    network_mode: none
+
+  run:
+    <<: *common
+
+    cap_add:
+    - CAP_SYS_NICE
+    - CAP_SETGID 
+    - CAP_SETUID
+    - CAP_SYS_CHROOT
+    - CAP_SYS_PTRACE
+    - CAP_NET_ADMIN 
+    - CAP_SYS_ADMIN
+
+    network_node: bridge
+    
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    x-features:
+      - x11
+      - sound
+      - dbus-proxy: --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher      
+
+  run-wayland:
+    <<: *common
+
+    network_node: bridge
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    x-features:
+      - wayland
+      - sound
+      - dbus-proxy: --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher
+      

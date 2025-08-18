@@ -18,36 +18,7 @@ fi
 
 PODMAN_CONFIG=$(podman-compose -f compose.yaml config 2>/dev/null || true)
 
-if [ ! -e override.yaml ]; then
-    if [ "$(yq -r '."x-application"."override-default"' compose.yaml)" != "null" ]; then
-	yq -r '."x-application"."override-default"' compose.yaml > override.yaml
-    else
-	cat <<EOF > override.yaml
-version: "3.8"
-EOF
-    fi
-fi
-
-if [ ! -e .env ]; then
-    if [ "$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."env-default"')" != "null" ]; then
-	yq -r '."x-application"."env-default"' compose.yaml > .env
-    else
-	cat <<EOF > .env
-# No configurable options
-EOF
-    fi
-    if [ ! -e env ]; then
-	ln -s .env env
-    fi
-fi
-
-if [ "$(echo "$PODMAN_CONFIG" | yq -r '."x-application"."readme"')" != "null" ]; then
-    yq -r '."x-application"."readme"' compose.yaml > README.md
-else
-    cat <<EOF > README.md
-This app is missing a README.
-EOF
-fi
+"$SCRIPTPATH/cdc-reinit"
 
 if [ -z "$1" ]; then
     (
@@ -65,31 +36,3 @@ else
     )
 fi
 
-"$SCRIPTPATH/cdc-host-integration"
-
-LABEL="$(echo "$PODMAN_CONFIG" | yq -r '."x-application".label')"
-if [ -n "$LABEL" -a "$(echo "$PODMAN_CONFIG" | yq -r '."x-application".images')" != "null" ]; then
-    for image in $(echo "$PODMAN_CONFIG" | yq -r '.["x-application"].images | keys[]'); do
-        rm -rf "${CDC_CONFIG_DIR}/image-${image}/requested/${LABEL}"
-	mkdir -p "${CDC_CONFIG_DIR}/image-${image}/requested/${LABEL}"
-        for ENTRY in $(echo "$PODMAN_CONFIG" | yq -r ".\"x-application\".images.\"${image}\".pkgs // [] | . []"); do
-            echo "$ENTRY" >> "${CDC_CONFIG_DIR}/image-${image}/requested/${LABEL}"/100-pkgs
-        done
-        for ENTRY in $(echo "$PODMAN_CONFIG" | yq -r ".\"x-application\".images.\"${image}\".\"pkgs-norecs\" // [] | . []"); do
-            echo "$ENTRY" >> "${CDC_CONFIG_DIR}/image-${image}/requested/${LABEL}"/100-pkgs-norecs
-        done
-	# Lets not support image-specific commands for now; it is way more tricky to handle, since
-	# the image probably need to be rebuilt from scratch.
-        #for ENTRY in $(echo "$PODMAN_CONFIG" | yq -r ".\"x-application\".images.${image}.\"commands\"[]"); do
-        #    echo "$ENTRY" >> "${CDC_CONFIG_DIR}/image-${image}/requested/${LABEL}"/100-commands
-        #done
-        #for ENTRY in $(echo "$PODMAN_CONFIG" | yq -r ".\"x-application\".images.${image}.\"precommands\"[]"); do
-        #    echo "$ENTRY" >> "${CDC_CONFIG_DIR}/image-${image}/requested/${LABEL}"/100-precommands
-        #done
-    done
-    echo "Note: this image contains dependency system packages. You should run:"
-    echo
-    echo "  cdc image-update"
-    echo
-    echo "to make sure those are installed into the image."
-fi

@@ -20,18 +20,16 @@ if [ -z "$USER" -o -z "$UID" -o -z "$LANG" ]; then
 fi
 
 rm -rf "$CDC_CONFIG_DIR/image-$IMAGE/installed"
+rm -rf "$CDC_CONFIG_DIR/image-$IMAGE/build"
 podman unshare -- rm -rf "$CDC_DATA_DIR/image-u24/rootfs"
-IMGDIR="$CDC_DATA_DIR/image-u24"
-mkdir -p "${IMGDIR}/rootfs"
 
-podman pull "$BASEIMAGE"
-podman tag "$BASEIMAGE" "cdc-$IMAGE"
-podman unshare -- sh -c "cid=$(podman create "cdc-$IMAGE") && podman export \"\$cid\" | tar -C \"${IMGDIR}/rootfs\" -xpf - --numeric-owner --xattrs --acls && podman rm \"\$cid\""
+mkdir -p "$CDC_CONFIG_DIR/image-$IMAGE/build/files"
+cp -p /etc/timezone "$TOOLPATH/container/entrypoint" "$TOOLPATH/container/en_SE.locale" "$CDC_CONFIG_DIR/image-$IMAGE/build/files/."
+
+FULLNAME="$(getent passwd rar | awk -F':' '{print $5}')"
 
 # The sed 's/.utf8/.UTF-8/' fixes incorrectly specified locales from pre-GNOME 3.18 I think.
 LOCALES="$(locale -a | grep -v "POSIX" | sed 's/.utf8/.UTF-8/' | tr '\n' ' ')"
-
-podman unshare -- cp /etc/timezone "${IMGDIR}/rootfs/etc/."
 
 # Handle that /etc/localtime both can be a symlink or a file, and re-do the symlink in the container
 LOCALTIME=$(readlink /etc/localtime)
@@ -39,37 +37,70 @@ if [ -n "$LOCALTIME" ]; then
     TZ_LOCATION="${LOCALTIME##*/}"
     TZ_AREA="${LOCALTIME%/*}"
     TZ_AREA="${TZ_AREA##*/}"
-    podman unshare -- ln -sf "/usr/share/zoneinfo/${TZ_AREA}/${TZ_LOCATION}" "${IMGDIR}/rootfs/etc/localtime"
+    LOCALTIME_CMD="RUN ln -sf \"/usr/share/zoneinfo/${TZ_AREA}/${TZ_LOCATION}\" /etc/localtime"
 else
-    podman unshare -- rm -f "${IMGDIR}/rootfs/etc/localtime"
-    podman unshare -- cp /etc/localtime "${IMGDIR}/rootfs/etc/."
+    LOCALTIME_CMD="COPY files/localtime /etc/localtime"
+    cp /etc/localtime "$CDC_CONFIG_DIR/image-$IMAGE/build/files/."
 fi
 
-if [ ! -e "${IMGDIR}/rootfs/usr/share/i18n/locales/en_SE" ]; then
-    podman unshare -- mkdir -p "${IMGDIR}/rootfs/usr/share/i18n/locales"
-    podman unshare -- cp "${TOOLPATH}/container/en_SE.locale" "${IMGDIR}/rootfs/usr/share/i18n/locales/en_SE"
-fi
+podman pull "$BASEIMAGE"
+
+# Base container image personalized for the specific user
+cat > "$CDC_CONFIG_DIR/image-$IMAGE/build/Containerfile" <<EOF
+FROM ubuntu:24.04
+ARG USER_NAME \
+USER_UID \
+USER_GID \
+USER_FULLNAME \
+BUILD_UID \
+BUILD_GID
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -y && apt-get -y install --reinstall ca-certificates locales tzdata python3-minimal python3-watchdog curl && apt-get clean autoclean -y && rm -rf /var/tmp/* /var/lib/apt/lists/* /tmp/*
+RUN set -eux; \
+    if getent passwd "\${USER_UID}" >/dev/null; then \
+      olduser="\$(getent passwd "\${USER_UID}" | cut -d: -f1)"; \
+      userdel -r "\${olduser}"; \
+    fi; \
+    if getent group "\${USER_GID}" >/dev/null; then \
+      oldgroup="\$(getent group "\${USER_GID}" | cut -d: -f1)"; \
+      groupdel "\${oldgroup}"; \
+    fi; \
+    groupadd -g "\${USER_GID}" \${USER_NAME}; \
+    useradd -M -u "\${USER_UID}" -g "\${USER_GID}" -c "\${USER_FULLNAME}" -s /bin/bash \${USER_NAME}; \
+    groupadd -g "\${BUILD_GID}" build && useradd -m -u "\${BUILD_UID}" -g "\${BUILD_GID}" -c "Build user" build;
+COPY files/entrypoint /cdc/entrypoint
+COPY files/en_SE.locale "/usr/share/i18n/locales/en_SE"
+RUN localedef -i en_SE -f UTF-8 en_SE.UTF-8 && echo "# en_SE.UTF-8 UTF-8" >> "/etc/locale.gen" && echo "en_SE.UTF-8 UTF-8" >> "/usr/share/i18n/SUPPORTED" && locale-gen ${LOCALES} && update-locale "LANG=$LANG";
+RUN mkdir -p /run/user/\${USER_UID} && chown "\${USER_NAME}:\${USER_NAME}" "/run/user/\${USER_UID}" && chmod 700 "/run/user/\${USER_UID}"
+USER \${USER_NAME}
+CMD ["bash"]
+EOF
+
+(
+  cd "$CDC_CONFIG_DIR/image-$IMAGE/build"
+  podman build --squash --label="cdc-build-image-${IMAGE}" --build-arg USER_NAME="${USER}" --build-arg USER_FULLNAME="${FULLNAME}" --build-arg USER_UID="$(id -u)" --build-arg USER_GID="$(id -g)" --build-arg BUILD_UID="$(( $(id -u) + 1000 ))" --build-arg BUILD_GID="$(( $(id -g) + 1000 ))" -t "cdc-${IMAGE}" .
+  podman image prune -f --filter "label=cdc-build-image-${IMAGE}"
+)
+
+# We expand the rootfs into a directory instead, to avoid costly operations on full image files (userns=keep-id needs chown of every file...)
+IMGDIR="$CDC_DATA_DIR/image-u24"
+mkdir -p "${IMGDIR}/rootfs"
+podman unshare -- sh -c "cid=$(podman create "cdc-$IMAGE") && podman export \"\$cid\" | tar -C \"${IMGDIR}/rootfs\" -xpf - --numeric-owner --xattrs --acls && podman rm \"\$cid\""
+
+# Continued customization in the roofs on top of base image
+
+# This used to be necessary for e.g., steam to use bwrap, but maybe
+#   chmod +s /usr/bin/bwrap;
+# but maybe this workaround for other issues fixed it?
+#   setpriv --ambient-caps '-all' <steam command>
 
 SETUP_SCRIPT="
 export DEBIAN_FRONTEND=noninteractive;
-apt-get update && apt-get -y dist-upgrade && apt-get install -y --reinstall ca-certificates locales wget tzdata python3 python3-pip python3-venv;
-localedef -i en_SE -f UTF-8 en_SE.UTF-8 && echo \"# en_SE.UTF-8 UTF-8\" >> \"/etc/locale.gen\" && echo \"en_SE.UTF-8 UTF-8\" >> \"/usr/share/i18n/SUPPORTED\";
-locale-gen ${LOCALES} && update-locale \"LANG=$LANG\";
-groupadd -r -g 5000 build && useradd -m -u 5000 -g 5000 -c \"Build user\" \"build\";
+dpkg --add-architecture i386 && apt-get update && apt-get -y dist-upgrade && apt-get -y clean;
 "
 
-FULLNAME="$(getent passwd rar | awk -F':' '{print $5}')"
-
-# We need to handle the user part differently depending on if it overlaps the default 1000 user or not.
-if [ "$UID" == "1000" ]; then
-    SETUP_SCRIPT="${SETUP_SCRIPT}usermod -l \"$USER\" ubuntu && groupmod -n \"$USER\" ubuntu && usermod -d \"/home/$USER\" -m \"$USER\" && usermod -c \"$FULLNAME\" \"$USER\";"
-else
-    SETUP_SCRIPT="${SETUP_SCRIPT}groupadd -r -g \"$UID\" \"$USER\" && useradd -m -u \"$UID\" -g \"$UID\" -c \"$FULLNAME\" \"$USER\";"
-fi
-SETUP_SCRIPT="${SETUP_SCRIPT}mkdir -p \"/tmp/$USER\" && chown \"$USER:$USER\" \"/tmp/$USER\" && chmod 0700 \"/tmp/$USER\" && mkdir -p \"/tmp/$USER/run\" && chown \"$USER:$USER\" \"/tmp/$USER/run\" && chmod 0700 \"/tmp/$USER/run\" && mkdir -p /run/user && ln -nsf \"/tmp/$USER/run\" \"/run/user/${UID}\";"
-
 # Google Chrome is necessary to support installation of progressive-web-apps (PWA)
-SETUP_SCRIPT="${SETUP_SCRIPT}wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt -y install ./google-chrome-stable_current_amd64.deb && rm -f google-chrome-stable_current_amd64.deb;"
+SETUP_SCRIPT="${SETUP_SCRIPT}curl -LO https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && apt -y install ./google-chrome-stable_current_amd64.deb && rm -f google-chrome-stable_current_amd64.deb;"
 
 SETUP_SCRIPT="${SETUP_SCRIPT}apt-get clean autoclean -y && apt-get autoremove -y;"
 
@@ -217,9 +248,9 @@ ROOTMOUNTS=""
 for ROOTMOUNT in bin boot etc home opt sbin srv usr var; do
     ROOTMOUNTS="$ROOTMOUNTS --volume=$IMGDIR/rootfs/$ROOTMOUNT:/$ROOTMOUNT:ro"
 done
-time podman run --rm $ROOTMOUNTS -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns="keep-id" --name "cdc_test_u24" cdc-u24 echo "Container finished."
+time podman run --rm $ROOTMOUNTS -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --tmpfs="/run" --userns="keep-id" --name "cdc_test_u24" cdc-u24 echo "Container finished."
 
-echo "Building tools"
+echo "Building /opt tools"
 "${SCRIPTPATH}/cdc-build" gamescope
 
 echo "Running update on newly created image"
