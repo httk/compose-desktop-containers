@@ -22,6 +22,7 @@ import sys
 import time
 import threading
 import signal
+import subprocess
 
 HOTPLUG_DIR = '/dev/container-hotplug'
 LINK_DIR = '/dev'
@@ -242,6 +243,7 @@ def main():
     try:
         if child_args:
             # Start child safely using subprocess (no fork() warning)
+            print("WHAT IS GOING ON?",child_args)
             proc = subprocess.Popen(
                 child_args,
                 preexec_fn=os.setsid,  # start in its own process group

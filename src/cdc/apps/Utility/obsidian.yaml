@@ -189,9 +189,5 @@ services:
 
     network_mode: bridge
 
-    volumes:
-      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
-      - "${CDC_APP_PATH}/home/.local/share/zoom/zoom:/opt/zoom:ro"
-
     x-features:
       - wayland-fallback-x11

@@ -2,6 +2,10 @@ version: "3.8"
 
 x-application:
 
+  name: Orcaslicer
+
+  label: orcaslicer
+
   readme: |
     Orcaslicer: An open source slicer for FDM printers.
 
@@ -192,9 +196,8 @@ services:
     user:
       root
 
-    command:
-      - ln -sf /usr/lib/x86_64-linux-gnu/libjavascriptcoregtk-4.1.so.0 /usr/lib/x86_64-linux-gnu/libjavascriptcoregtk-4.0.so.18
-      - ln -sf /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0 /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.0.so.37
-
     x-features:
       - x11
+
+# command: bash -c "ln -sf /usr/lib/x86_64-linux-gnu/libjavascriptcoregtk-4.1.so.0 /usr/lib/x86_64-linux-gnu/libjavascriptcoregtk-4.0.so.18 && ln -sf /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0 /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.0.so.37"
+
