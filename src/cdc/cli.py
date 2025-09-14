@@ -74,17 +74,11 @@ def main():
                 print("Hint: You can enable cdc tab completion in fish by running (or put in your ~/.config/fish/config.fish):\n    cdc fish_completion | source\n")
             elif "zsh" in shell:
                 print("Hint: You can enable cdc tab completion by zsh running (or put in your ~/.zshrc):\n    eval \"$(cdc zsh_completion)\"\n")
-            sys.exit(exit_code)
+
+        sys.exit(exit_code)
 
     script_name = f"cdc-{args.command}"
     script_path = os.path.join(script_dir, script_name)
-
-    if not os.path.isfile(script_path):
-        print(f"Unknown command: {args.command}\n")
-        print("Available commands:")
-        for cmd in list_available_commands(script_dir):
-            print(f"  {cmd}")
-        sys.exit(1)
 
     try:
         os.environ["CDC_CLI_NAME"] = "cdc "+str(args.command)

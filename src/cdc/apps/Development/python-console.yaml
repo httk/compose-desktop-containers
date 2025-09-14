@@ -3,21 +3,169 @@ version: "3.8"
 x-application:
 
   readme: |
-    python-develop: bare-bones console with access to host network
-    for Python development.
+    httk development environment
 
   override-default: |
     version: "3.8"
 
     services:
-      python-develop:
+      run:
          volumes:
-           - "${HOME}/Documents/containers/develop:/home/${USER}/Documents/containers/develop"
-         working_dir: "/home/${USER}/Documents/containers/develop"
+           - "${HOME}/Documents/containers/devel:/home/${USER}/Documents/containers/devel"
+         working_dir: "/home/${USER}/Documents/containers/devel"
+
+      setup:
+         volumes:
+           - "${HOME}/Documents/containers/devel:/home/${USER}/Documents/containers/devel"
+         working_dir: "/home/${USER}/Documents/containers/devel"
+
+      setup-nonet:
+         volumes:
+           - "${HOME}/Documents/containers/devel:/home/${USER}/Documents/containers/devel"
+         working_dir: "/home/${USER}/Documents/containers/devel"
+
 
   env-default: |
-    # No configurable options
+    # This container has no configurable options
 
+  images:
+    u24:
+      pkgs:
+        - python3
+        - python3-venv
+        - python3-pip
+        - pipx
+
+
+x-launchers:
+  download:
+    service: setup
+    type: setup
+
+    script: &download_script
+      - echo "DOWNLOAD"
+      - export PATH="/home/${USER}/.local/bin:$${PATH}"
+      - export DEV_DIR="$$(pwd -P)"
+      - mkdir -p ~/.local/share/icons/hicolor/scalable
+      - curl -L -o ~/.local/share/icons/hicolor/scalable/python-console.svg https://s3.dualstack.us-east-2.amazonaws.com/pythondotorg-assets/media/files/python-logo-only.svg
+      - mkdir -p "uv/cache" "uv/home"
+      - rm -rf ~/.local/share/uv
+      - ln -s "$$(pwd -P)/uv/home" ~/.local/share/uv
+      - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
+      - pipx install --force uv
+      - mkdir -p ~/Downloads
+      - cd ~/Downloads
+      - echo "Download Miniforge"
+      - LATESTURL="$$(curl -s https://api.github.com/repos/conda-forge/miniforge/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep 'Miniforge3-.*-Linux-x86_64.sh$$')"
+      - |
+        if [ ! -e ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -o ! -e ~/Downloads/"${LATESTURL##*/}" ]; then
+          curl -L -O "$$LATESTURL"
+          LATEST=$$(ls -t Miniforge3-*-Linux-x86_64.sh | head -1)
+          ln -sf "$$LATEST" ~/Downloads/Miniforge3-latest-Linux-x86_64.sh
+        fi
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
+      - rm -f "$$(readlink -f Downloads/Miniforge3-latest-Linux-x86_64.sh)"
+      - rm -f ~/Downloads/Miniforge3-latest-Linux-x86_64.sh
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - echo "INSTALL";
+      - export DEV_DIR="$$(pwd -P)"
+      - export PATH="/home/${USER}/.local/bin:$${PATH}"
+      - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
+      - mkdir -p ~/.local/share
+      - |
+        if [ ! -e ~/.local/share/miniforge ]; then
+          echo "Install miniforge"
+          bash ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -b -s -p ~/.local/share/miniforge
+        fi
+      - source ~/.local/share/miniforge/etc/profile.d/conda.sh
+      - conda config --add envs_dirs "$$DEV_DIR/conda/venvs"
+      - conda config --add pkgs_dirs "$$DEV_DIR/conda/pkgs"
+      - conda update -n base -c conda-forge conda -y
+      - conda config --remove-key auto_activate_base 2>/dev/null || true
+      - conda config --set auto_activate false
+      - |
+        conda config --set env_prompt '(conda: {name}) '
+
+  reinstall:
+    #service: setup-nonet
+    service: setup
+    type: setup
+    script: &reinstall_script
+      - echo "REINSTALL"
+      - rm -rf ~/.local/share/miniforge
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
+      - echo "UPDATE CHECK"
+      - echo "Development environment, nothing to auto-update"
+      - exit 0
+
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - echo "Development environment, nothing to auto-update"
+
+  python-console:
+    service: run
+    type: console
+    script:
+      - echo "python-console"
+      - export DEV_DIR="$$(pwd -P)"
+      - export PATH=~/.local/bin:"$$PATH"
+      - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
+      - export CONDA_PKGS_DIRS="$$(pwd -P)/conda/pkgs"
+      - export CONDA_ENVS_PATH="$$(pwd -P)/httk/.venvs/conda"
+      - echo "===================================================================================================="
+      - echo ""
+      - echo "You have started the cdc python-console"
+      - echo ""
+      - echo "  You have access to python3 with venv and pip, conda, and uv to set up venvs"
+      - echo "  Recommended workflow:"
+      - echo "  "
+      - echo "  - Clone a repo to work on with, e.g., git clone git@github.com/myuser/myrepo"
+      - echo "  - Create a corresponding <myrepo>.venvs directory outside that directory"
+      - echo "  - Initialize (using venv+pip, conda, uv) any relevant venvs as subdirectories of .venvs"
+      - echo "  - Symlink these from your repo:\ ln -s ../<myrepo>.venvs <myrepo>/.venvs"
+      - echo "  - Symlink your main venv into that directory:\ ln -s .venvs/<default> .venv"
+      - echo "  "
+      - echo "  When you pick up development, just do:"
+      - echo "  - cd <myrepo>"
+      - echo "  - source .venv/bin/activate  (or, for conda:\ conda activate ./.venv)"
+      - echo ""
+      - echo "===================================================================================================="
+      - bash --init-file <(echo "source ~/.local/share/miniforge/etc/profile.d/conda.sh;")
+
+    desktop:
+
+      file: |
+        [Desktop Entry]
+        Name=Python console (container)
+        Comment=Python console
+        Exec=python-console %U
+        Terminal=true
+        Type=Application
+        Icon=python-console
+        Categories=Development;
+
+      icons:
+        - source: .local/share/icons/hicolor/scalable/python-console.svg
+          size: scalable
+          dest: python-console.svg
 
 services:
 
@@ -27,20 +175,21 @@ services:
 
     image: "cdc-u24"
 
+    entrypoint: ["/cdc/entrypoint"]
+    network_mode: none
+
     working_dir: /home/$USER
     user: "${USER}"
 
-    entrypoint: ["/cdc/entrypoint"]
-    network_mode: none
-    
     environment: &common-env
       LANG: "${LANG}"
-      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
       XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      NO_AT_BRIDGE: 1
 
     cap_drop:
       - ALL
-      
+
     security_opt:
       - no-new-privileges
 
@@ -52,57 +201,34 @@ services:
     shm_size: "1G"
 
     volumes: &common-volumes
-      - "${CDC_APP_DIR}/home:/home/${USER}:rw"
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
 
-    devices: &common-devices
-      - /dev/dri:/dev/dri
+    devices:
+      - "/dev/dri:/dev/dri"
 
     security_opt:
       - no-new-privileges
 
     userns_mode: "keep-id"
 
+
+  setup:
+    <<: *common
+
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
     network_mode: none
 
-  ## INSTALL ##
-
-  ## UPDATE ##
-
-  update-check: &update-check
+  run:
     <<: *common
 
-    command:
-      - echo "UPDATE CHECK"
-      - echo "Nothing to do"
-      
-  update: &update
-    <<: *common
+    network_mode: bridge
 
-    command:
-      - echo "UPDATE"
-      - echo "Nothing to do"
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
 
-  ## EXECUTE ###
-
-  python-develop:
-    <<: *common
-
-    network_mode: host
-
-    command:
-      - echo "python-develop"
-      - bash
-
-    x-launcher:
-      command_line: true
-
-  ## INTERACTIVE ##
-
-  interactive:
-    <<: *common
-
-    network_mode: host
-
-    command:
-      - echo "INTERACTIVE"
-      - bash
+    x-features:
+      - x11

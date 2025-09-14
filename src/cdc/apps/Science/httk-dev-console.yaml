@@ -54,7 +54,6 @@ x-launchers:
       - rm -rf ~/.local/share/uv
       - ln -s "$$(pwd -P)/uv/home" ~/.local/share/uv
       - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
-      - source httk.venvs/bootstrap/bin/activate
       - pipx install --force uv
       - ln -nsf ../httk.venvs httk.venvs
       - mkdir -p ~/Downloads
@@ -159,6 +158,7 @@ x-launchers:
       - echo "REINSTALL"
       - rm -rf ~/.local/share/jmol
       - rm -rf ~/.local/share/isotropy
+      - rm -rf ~/.local/share/miniforge
       - *install_script
 
   update-check:
@@ -248,8 +248,7 @@ services:
     environment: &common-env
       LANG: "${LANG}"
       XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
-      XDG_CURRENT_DESKTOP: "GNOME"
-      BROWSER: "falkon"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
       NO_AT_BRIDGE: 1
 
     cap_drop:
