@@ -1,0 +1,235 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    httk development environment
+
+  override-default: |
+    version: "3.8"
+
+    services:
+      run:
+         volumes:
+           - "${HOME}/Documents/containers/devel:/home/${USER}/Documents/containers/devel"
+         working_dir: "/home/${USER}/Documents/containers/devel"
+
+      setup:
+         volumes:
+           - "${HOME}/Documents/containers/devel:/home/${USER}/Documents/containers/devel"
+         working_dir: "/home/${USER}/Documents/containers/devel"
+
+      setup-nonet:
+         volumes:
+           - "${HOME}/Documents/containers/devel:/home/${USER}/Documents/containers/devel"
+         working_dir: "/home/${USER}/Documents/containers/devel"
+
+
+  env-default: |
+    # This container has no configurable options
+
+  images:
+    u24:
+      pkgs:
+        - python3
+        - python3-venv
+        - python3-pip
+        - pipx
+
+
+x-launchers:
+  download:
+    service: setup
+    type: setup
+
+    script: &download_script
+      - echo "DOWNLOAD"
+      - export PATH="/home/${USER}/.local/bin:$${PATH}"
+      - export DEV_DIR="$$(pwd -P)"
+      - mkdir -p ~/.local/share/icons/hicolor/scalable
+      - curl -L -o ~/.local/share/icons/hicolor/scalable/python-console.svg https://s3.dualstack.us-east-2.amazonaws.com/pythondotorg-assets/media/files/python-logo-only.svg
+      - mkdir -p "uv/cache" "uv/home"
+      - rm -rf ~/.local/share/uv
+      - ln -s "$$(pwd -P)/uv/home" ~/.local/share/uv
+      - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
+      - pipx install --force uv
+      - mkdir -p ~/Downloads
+      - cd ~/Downloads
+      - echo "Download Miniforge"
+      - LATESTURL="$$(curl -s https://api.github.com/repos/conda-forge/miniforge/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep 'Miniforge3-.*-Linux-x86_64.sh$$')"
+      - |
+        if [ ! -e ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -o ! -e ~/Downloads/"${LATESTURL##*/}" ]; then
+          curl -L -O "$$LATESTURL"
+          LATEST=$$(ls -t Miniforge3-*-Linux-x86_64.sh | head -1)
+          ln -sf "$$LATEST" ~/Downloads/Miniforge3-latest-Linux-x86_64.sh
+        fi
+      - LATESTFILENAME="$$(curl -ILs -o /dev/null -w %{url_effective} 'https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64' | sed 's%https://.*/\(code_.*\_amd64\.deb\)%\1%')"
+      - curl -L -o ~/Downloads/$$LATESTFILENAME 'https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64' && ln -sf $$LATESTFILENAME ~/Downloads/code-latest_amd64.deb
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
+      - rm -f "$$(readlink -f Downloads/Miniforge3-latest-Linux-x86_64.sh)"
+      - rm -f ~/Downloads/Miniforge3-latest-Linux-x86_64.sh
+      - rm -f "$$(readlink -f Downloads/code-latest_amd64.deb)"
+      - rm -f ~/Downloads/code-latest_amd64.deb
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - VERSION="$${1:-code-latest_amd64.deb}";
+      - echo "INSTALL $$VERSION";
+      - export DEV_DIR="$$(pwd -P)"
+      - export PATH="/home/${USER}/.local/bin:$${PATH}"
+      - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
+      - mkdir -p ~/.local/share
+      - |
+        if [ ! -e ~/.local/share/miniforge ]; then
+          echo "Install miniforge"
+          bash ~/Downloads/Miniforge3-latest-Linux-x86_64.sh -b -s -p ~/.local/share/miniforge
+        fi
+      - source ~/.local/share/miniforge/etc/profile.d/conda.sh
+      - conda config --add envs_dirs "$$DEV_DIR/conda/venvs"
+      - conda config --add pkgs_dirs "$$DEV_DIR/conda/pkgs"
+      - conda update -n base -c conda-forge conda -y
+      - conda config --remove-key auto_activate_base 2>/dev/null || true
+      - conda config --set auto_activate false
+      - |
+        conda config --set env_prompt '(conda: {name}) '
+      - rm -rf ~/.local/share/vscode
+      - mkdir ~/.local/share/vscode
+      - cd ~/.local/share/vscode
+      - dpkg-deb -x ~/Downloads/"$$VERSION" vscode
+      - mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/1024x1024/apps
+      - cp vscode/usr/share/applications/code.desktop ~/.local/share/applications/code.desktop
+      - sed -i 's%/usr/bin/code%/home/$USER/.local/share/vscode/vscode/usr/share/code/bin/code%' ~/.local/share/applications/code.desktop
+      - cp "vscode/usr/share/pixmaps/vscode.png" ~/.local/share/icons/hicolor/1024x1024/apps/vscode.png
+      - gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
+      - update-desktop-database ~/.local/share/applications/
+
+  reinstall:
+    #service: setup-nonet
+    service: setup
+    type: setup
+    script: &reinstall_script
+      - echo "REINSTALL"
+      - rm -rf ~/.local/share/miniforge
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
+      - echo "UPDATE CHECK"
+      - echo "Development environment, nothing to auto-update"
+      - exit 0
+
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - echo "Development environment, nothing to auto-update"
+
+  vscode:
+    service: run
+    type: console
+    script:
+      - echo "vscode"
+      - export DEV_DIR="$$(pwd -P)"
+      - export PATH=~/.local/bin:"$$PATH"
+      - export UV_CACHE_DIR="$$(pwd -P)/uv/cache"
+      - export CONDA_PKGS_DIRS="$$(pwd -P)/conda/pkgs"
+      - export CONDA_ENVS_PATH="$$(pwd -P)/httk/.venvs/conda"
+      - source ~/.local/share/miniforge/etc/profile.d/conda.sh;
+      - ~/.local/share/vscode/vscode/usr/share/code/code
+
+    desktop:
+
+      file: |
+        [Desktop Entry]
+        Name=Python console (container)
+        Comment=Python console
+        Exec=python-console %U
+        Terminal=false
+        Type=Application
+        Icon=vscode
+        Categories=Development;
+
+      icons:
+        - source: .local/share/icons/hicolor/1024x1024/cscode.png
+          size: 1024
+          dest: vscode.png
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    entrypoint: ["/cdc/entrypoint"]
+    network_mode: none
+
+    working_dir: /home/$USER
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      NO_AT_BRIDGE: 1
+
+    cap_drop:
+      - ALL
+
+    cap_add:
+      - SYS_CHROOT
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+
+  setup:
+    <<: *common
+
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
+    network_mode: none
+
+  run:
+    <<: *common
+
+    network_mode: bridge
+
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    x-features:
+      - x11

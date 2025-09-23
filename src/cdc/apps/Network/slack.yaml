@@ -58,7 +58,7 @@ x-launchers:
         dpkg-deb -x ~/Downloads/"$$VERSION" slack &&
         mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/256x256/apps &&
         cp slack/usr/share/applications/slack.desktop ~/.local/share/applications/slack.desktop &&
-        sed -i 's%/usr/bin/slack%/home/$USER/Installation/slack/usr/bin/slack%' ~/.local/share/applications/slack.desktop &&
+        sed -i 's%/usr/bin/slack%/home/$USER/.local/share/slack/slack/usr/bin/slack%' ~/.local/share/applications/slack.desktop &&
         cp "slack/usr/share/pixmaps/slack.png" ~/.local/share/icons/hicolor/256x256/apps/slack.png &&
         gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor &&
         update-desktop-database ~/.local/share/applications/
