@@ -85,6 +85,7 @@ EOF
 # We expand the rootfs into a directory instead, to avoid costly operations on full image files (userns=keep-id needs chown of every file...)
 IMGDIR="$CDC_DATA_DIR/image-u24"
 mkdir -p "${IMGDIR}/rootfs"
+mkdir -p "${IMGDIR}/opt"
 podman unshare -- sh -c "cid=$(podman create "cdc-$IMAGE") && podman export \"\$cid\" | tar -C \"${IMGDIR}/rootfs\" -xpf - --numeric-owner --xattrs --acls && podman rm \"\$cid\""
 
 # Continued customization in the roofs on top of base image
@@ -107,14 +108,14 @@ SETUP_SCRIPT="${SETUP_SCRIPT}apt-get clean autoclean -y && apt-get autoremove -y
 echo "Setup script"
 echo "$SETUP_SCRIPT"
 
-podman run -u root --userns="keep-id" --rm --rootfs "${IMGDIR}/rootfs" bash -c "${SETUP_SCRIPT}"
+podman run -u root --userns="keep-id" --rm --rootfs "${IMGDIR}/rootfs" --volume "${IMGDIR}/opt:/opt:rw" bash -c "${SETUP_SCRIPT}"
 
 echo "Test run of new container."
 #time podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns="" --name "cdc_test_u24" cdc-u24 echo "Container finished."
 #time podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns="keep-id" --name "cdc_test_u24" cdc-u24 echo "Container finished."
 
-ROOTMOUNTS=""
-for ROOTMOUNT in bin boot etc home opt sbin srv usr var; do
+ROOTMOUNTS="--volume=${IMGDIR}/opt:/opt:ro"
+for ROOTMOUNT in bin boot etc home sbin srv usr var; do
     ROOTMOUNTS="$ROOTMOUNTS --volume=$IMGDIR/rootfs/$ROOTMOUNT:/$ROOTMOUNT:ro"
 done
 time podman run --rm $ROOTMOUNTS -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --tmpfs="/run" --userns="keep-id" --name "cdc_test_u24" cdc-u24 echo "Container finished."

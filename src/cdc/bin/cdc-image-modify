@@ -10,9 +10,9 @@ CDC_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cdc"
 TOOLPATH="$(dirname -- "${SCRIPTPATH}")/tools"
 IMGDIR="$CDC_DATA_DIR/image-u24"
 
-ROOTMOUNTS=""
-for ROOTMOUNT in bin boot etc home opt sbin srv usr var; do
-    ROOTMOUNTS="$ROOTMOUNTS --volume=$IMGDIR/rootfs/$ROOTMOUNT:/$ROOTMOUNT:rw"
+ROOTMOUNTS="--volume=${IMGDIR}/opt:/opt:rw"
+for ROOTMOUNT in bin boot etc home sbin srv usr var; do
+    ROOTMOUNTS="$ROOTMOUNTS --volume=${IMGDIR}/rootfs/$ROOTMOUNT:/$ROOTMOUNT:rw"
 done
 
 echo "========================================================================="
@@ -83,8 +83,8 @@ trap - exit
 #)
 #echo "First run of new container (this may take a long time as podman may need to remap uid/gid manually)"
 
-ROOTMOUNTS=""
-for ROOTMOUNT in bin boot etc home opt sbin srv usr var; do
+ROOTMOUNTS="--volume=${IMGDIR}/opt:/opt:ro"
+for ROOTMOUNT in bin boot etc home sbin srv usr var; do
     ROOTMOUNTS="$ROOTMOUNTS --volume=$IMGDIR/rootfs/$ROOTMOUNT:/$ROOTMOUNT:ro"
 done
 

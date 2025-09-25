@@ -1,0 +1,184 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    zotero
+
+  override-default: |
+    version: "3.8"
+
+    services:
+      run:
+         volumes:
+           - "${HOME}/Documents/containers/papers:/home/${USER}/Documents/containers/papers"
+         working_dir: "/home/${USER}/Documents/containers/papers"
+
+  env-default: |
+    # This container has no configurable options
+
+  images:
+    u24:
+      pkgs:
+        - libdbus-glib-1-2
+
+x-launchers:
+  download:
+    service: setup
+    type: setup
+
+    script: &download_script
+      - echo "DOWNLOAD"
+      - mkdir -p ~/Downloads
+      - LATESTURL="$$(curl -ILs -o /dev/null -w %{url_effective} 'https://www.zotero.org/download/client/dl?channel=release&platform=linux-x86_64')"
+      - LATESTFILENAME="$$(sed 's%https://.*/\(Zotero-.*\_linux-x86_64\.tar.bz2\)%\1%' <<< "$$LATESTURL")"
+      - curl -L -o ~/Downloads/"$$LATESTFILENAME" "$$LATESTURL" && ln -sf "$$LATESTFILENAME" ~/Downloads/Zotero-latest_linux-x86_64.tar.bz2
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
+      - rm -f "$$(readlink -f Downloads/Zotero-latest_linux-x86_64.tar.bz2)"
+      - rm -f ~/Downloads/Zotero-latest.tar.bz2
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - VERSION="$${1:-Zotero-latest_linux-x86_64.tar.bz2}";
+      - echo "INSTALL $$VERSION";
+      - mkdir -p ~/.local/share
+      - rm -rf ~/.local/share/zotero
+      - mkdir ~/.local/share/zotero
+      - cd ~/.local/share/zotero
+      - tar -jxvf ~/Downloads/"$$VERSION"
+      - cd Zotero_linux-x86_64
+      - mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/128x128/apps
+      - cp zotero.desktop ~/.local/share/applications/zotero.desktop
+      - sed -i 's%^Exec=.*$$%Exec=/home/$USER/.local/share/zotero/Zotero_linux-x86_64/zotero%' ~/.local/share/applications/zotero.desktop
+      - cp icons/icon128.png ~/.local/share/icons/hicolor/128x128/apps/zotero.png
+      - gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
+      - update-desktop-database ~/.local/share/applications/
+
+  reinstall:
+    #service: setup-nonet
+    service: setup
+    type: setup
+    script: &reinstall_script
+      - echo "REINSTALL"
+      - rm -rf ~/.local/share/zotero
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
+      - echo "UPDATE CHECK"
+      - LATESTURL="$$(curl -ILs -o /dev/null -w %{url_effective} 'https://www.zotero.org/download/client/dl?channel=release&platform=linux-x86_64')"
+      - LATESTFILENAME="$$(sed 's%https://.*/\(Zotero-.*\_linux-x86_64\.tar.bz2\)%\1%' <<< "$LATESTURL")"
+      - |
+        if [ -e ~/Downloads/"$$LATESTFILENAME" ]; then
+          exit 0
+        else
+          exit 1
+
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - *reinstall_script
+
+  zotero:
+    service: run
+    type: console
+    script:
+      - echo "zotero"
+      - LD_LIBRARY_PATH=~/.local/share/zotero/Zotero_linux-x86_64 ~/.local/share/zotero/Zotero_linux-x86_64/zotero
+
+    desktop:
+
+      file: |
+        [Desktop Entry]
+        Name=Zotero (container)
+        Comment=Zotero
+        Exec=zotero %U
+        Terminal=false
+        Type=Application
+        Icon=zotero
+        Categories=Science;
+
+      icons:
+        - source: .local/share/icons/hicolor/1024x1024/zotero.png
+          size: 1024
+          dest: zotero.png
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    entrypoint: ["/cdc/entrypoint"]
+    network_mode: none
+
+    working_dir: /home/$USER
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "${XDG_RUNTIME_DIR}"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+
+    cap_drop:
+      - ALL
+
+    cap_add:
+      - SYS_CHROOT
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+
+  setup:
+    <<: *common
+
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
+    network_mode: none
+
+  run:
+    <<: *common
+
+    network_mode: bridge
+
+    volumes:
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    x-features:
+      - wayland-fallback-x11
