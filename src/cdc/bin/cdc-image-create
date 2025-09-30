@@ -108,7 +108,7 @@ SETUP_SCRIPT="${SETUP_SCRIPT}apt-get clean autoclean -y && apt-get autoremove -y
 echo "Setup script"
 echo "$SETUP_SCRIPT"
 
-podman run -u root --userns="keep-id" --rm --rootfs "${IMGDIR}/rootfs" --volume "${IMGDIR}/opt:/opt:rw" bash -c "${SETUP_SCRIPT}"
+podman run --volume "${IMGDIR}/opt:/opt:rw" -u root --userns="keep-id" --rm --rootfs "${IMGDIR}/rootfs" bash -c "${SETUP_SCRIPT}"
 
 echo "Test run of new container."
 #time podman run --rm -w "/home/$USER" --user="$USER" --shm-size=1G --cap-drop=ALL --read-only --read-only-tmpfs --userns="" --name "cdc_test_u24" cdc-u24 echo "Container finished."

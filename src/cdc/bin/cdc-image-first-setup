@@ -142,6 +142,7 @@ ruby
 sed
 sqlite3
 time
+pciutils
 EOF
 
 #echo "Building /opt tools"

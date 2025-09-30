@@ -53,7 +53,7 @@ x-launchers:
       - mkdir -p ~/.local/share/steam-installer
       - cd ~/.local/share/steam-installer
       - dpkg-deb -x ~/Downloads/"$$VERSION" steam
-#      - mkdir -p ~/.local/share/applications 
+#      - mkdir -p ~/.local/share/applications
 #      - cp flashprint/usr/share/applications/FlashPrint5.desktop ~/.local/share/applications/FlashPrint5.desktop &&
 #      - sed -i 's%^Exec=/usr/share/FlashPrint5$$%Exec=/home/$${USER}/install/flashprint/usr/share/FlashPrint5/%' ~/.local/share/applications/FlashPrint5.desktop
 
@@ -87,6 +87,7 @@ x-launchers:
     type: background
     script:
       - echo "STEAM"
+      - ulimit -n 65536
       - pipewire-pulse &
       - setpriv --ambient-caps '-all' ~/.local/share/steam-installer/steam/usr/bin/steam "$$@"
 
@@ -112,7 +113,9 @@ x-launchers:
     service: run-wayland
     type: background
     script:
-      - echo "FLASHPRINT"
+      - echo "STEAM-WAYLAND"
+      - ulimit -n 65536
+      - pipewire-pulse &
       - setpriv --ambient-caps '-all' ~/.local/share/steam-installer/steam/usr/bin/steam "$$@"
 
   interactive:
@@ -186,22 +189,22 @@ services:
 
     cap_add:
     - CAP_SYS_NICE
-    - CAP_SETGID 
+    - CAP_SETGID
     - CAP_SETUID
     - CAP_SYS_CHROOT
     - CAP_SYS_PTRACE
-    - CAP_NET_ADMIN 
+    - CAP_NET_ADMIN
     - CAP_SYS_ADMIN
 
     network_node: bridge
-    
+
     devices:
       - "/dev/dri:/dev/dri"
 
     x-features:
       - x11
       - sound
-      - dbus-proxy: --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher      
+      - dbus-proxy: --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher
 
   run-wayland:
     <<: *common
@@ -215,4 +218,3 @@ services:
       - wayland
       - sound
       - dbus-proxy: --filter --own=org.mpris.MediaPlayer2.spotify --call="org.freedesktop.portal.*=*" --talk=org.gnome.SettingsDaemon.MediaKeys --talk=org.kde.StatusNotifierWatcher
-      
