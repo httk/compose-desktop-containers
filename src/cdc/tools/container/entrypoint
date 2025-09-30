@@ -23,6 +23,9 @@ import time
 import threading
 import signal
 import subprocess
+import ctypes
+import ctypes.util
+from threading import Event
 
 HOTPLUG_DIR = '/dev/container-hotplug'
 LINK_DIR = '/dev'
@@ -31,10 +34,15 @@ FORWARD_TO_GROUP = True
 IDLE_AFTER_EXIT = os.getenv("CDC_INIT_IDLE_AFTER_EXIT","1") != "0"
 TERMINATE_SIGNALS = {signal.SIGHUP, signal.SIGINT, signal.SIGTERM}
 
-signal_set = set(range(1, signal.NSIG))
-signal_set -= {signal.SIGTTIN, signal.SIGTTOU}
 child_pid = None
 exit_status = None
+child_exited = Event()
+
+# Do not forward SIGCHLD/KILL/STOP to child processes
+signal_set = set(range(1, signal.NSIG))
+for _sig in (signal.SIGKILL, signal.SIGSTOP, signal.SIGCHLD, signal.SIGTTIN, signal.SIGTTOU):
+    if _sig in signal_set:
+        signal_set.remove(_sig)
 
 try:
     from watchdog.observers import Observer
@@ -159,32 +167,41 @@ def wait_for_child():
             continue
 
 def wait_forever():
-
     should_exit = False
 
     def handler(signum, frame):
         nonlocal should_exit
         if signum in TERMINATE_SIGNALS:
-            msg = f"[DEBUG] [INFO] cdc-entrypoint: received {signal.Signals(signum).name}\n".encode()
+            try:
+                name = signal.Signals(signum).name
+            except Exception:
+                name = str(signum)
+            os.write(2, f"[DEBUG] [INFO] cdc-entrypoint: received {name}\n".encode())
             should_exit = True
         else:
             try:
-                msg = f"[DEBUG] cdc-entrypoint: ignoring signal {signal.Signals(signum).name}\n".encode()
+                name = signal.Signals(signum).name
             except Exception:
-                msg = b"[DEBUG] cdc-entrypoint: ignoring unknown signal\n"
-        os.write(2, msg)
+                name = str(signum)
+            os.write(2, f"[DEBUG] cdc-entrypoint: ignoring signal {name}\n".encode())
 
-    for sig in set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}:
+    # Install handler for all but KILL/STOP; SIGCHLD uses reaper
+    for sig in set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP, signal.SIGCHLD}:
         try:
             signal.signal(sig, handler)
         except (OSError, RuntimeError, ValueError):
             continue
 
-    print("[INFO] cdc-entryponint: idling (Ctrl+C or SIGINT/SIGHUP/SIGTERM to exit).", file=sys.stderr)
+    # Keep reaping while idling
+    try:
+        signal.signal(signal.SIGCHLD, reap_children)
+    except (OSError, RuntimeError, ValueError):
+        pass
 
+    print("[INFO] cdc-entryponint: idling (Ctrl+C or SIGINT/SIGHUP/SIGTERM to exit).", file=sys.stderr)
     while not should_exit:
         try:
-            signal.pause()  # blocks until a signal is received
+            signal.pause()
         except InterruptedError:
             continue
 
@@ -220,8 +237,47 @@ def start_filesystem_monitor():
     handler = DevLinkHandler()
     return monitor_hotplug_dir(observer, handler)
 
+def become_subreaper():
+    try:
+        libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+        PR_SET_CHILD_SUBREAPER = 36
+        if libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0) != 0:
+            err = ctypes.get_errno()
+            print(f"[WARN] cdc-entrypoint: prctl(PR_SET_CHILD_SUBREAPER) failed: errno {err}", file=sys.stderr)
+    except Exception as e:
+        print(f"[WARN] cdc-entrypoint: subreaper not enabled: {e}", file=sys.stderr)
+
+def _compute_status(status):
+    if os.WIFEXITED(status):
+        return os.WEXITSTATUS(status)
+    if os.WIFSIGNALED(status):
+        return 128 + os.WTERMSIG(status)
+    return 1
+
+def reap_children(signum=None, frame=None):
+    """Reap any exited children (including adopted grandchildren)."""
+    global exit_status
+    while True:
+        try:
+            pid, status = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            # no (more) children
+            return
+        except InterruptedError:
+            continue
+        if pid == 0:
+            # no zombies right now
+            return
+        # If the child we launched exited, record its status and signal the waiter
+        if pid == child_pid:
+            exit_status = _compute_status(status)
+            child_exited.set()
+        # Swallow all others silently (they were zombies we just reaped)
+
 def main():
     global child_pid, exit_status, IDLE_AFTER_EXIT
+
+    become_subreaper()
 
     all_args = sys.argv[1:]
 
@@ -241,24 +297,34 @@ def main():
     fs_observer = start_filesystem_monitor()
 
     try:
+        # Install SIGCHLD reaper BEFORE starting child
+        try:
+            signal.signal(signal.SIGCHLD, reap_children)
+        except (OSError, RuntimeError, ValueError):
+            pass
+
         if child_args:
             # Start child safely using subprocess (no fork() warning)
-            print("WHAT IS GOING ON?",child_args)
             proc = subprocess.Popen(
                 child_args,
                 preexec_fn=os.setsid,  # start in its own process group
             )
             child_pid = proc.pid
 
-            # Forward signals to child
+            # Forward most signals to child
             for sig in signal_set:
                 try:
                     signal.signal(sig, forward_signal)
                 except (OSError, RuntimeError, ValueError):
                     continue
 
-            # Wait for child
-            exit_status = proc.wait()
+            # Wait until the SIGCHLD handler sets exit_status (no direct wait())
+            while not child_exited.is_set():
+                try:
+                    signal.pause()
+                except InterruptedError:
+                    continue
+
             print(f"[INFO] cdc-entrypoint: child exited with code {exit_status}.", file=sys.stderr)
 
         if IDLE_AFTER_EXIT:
