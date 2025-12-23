@@ -116,7 +116,7 @@ x-launchers:
       - echo "STEAM-WAYLAND"
       - ulimit -n 65536
       - pipewire-pulse &
-      - setpriv --ambient-caps '-all' ~/.local/share/steam-installer/steam/usr/bin/steam "$$@"
+      - SDL_VIDEO_DRIVER=wayland PROTON_ENABLE_WAYLAND=1 setpriv --ambient-caps '-all' ~/.local/share/steam-installer/steam/usr/bin/steam "$$@"
 
   interactive:
     service: run

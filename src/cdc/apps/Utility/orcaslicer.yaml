@@ -28,7 +28,7 @@ x-launchers:
     script: &download_script
       - echo "DOWNLOAD"
       - mkdir -p ~/Downloads
-      - LATESTURL="$$(curl -s https://api.github.com/repos/SoftFever/OrcaSlicer/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep 'OrcaSlicer_.*_Ubuntu2404.*\.AppImage')"
+      - LATESTURL="$$(curl -s -L https://api.github.com/repos/SoftFever/OrcaSlicer/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep 'OrcaSlicer_.*_Ubuntu2404.*\.AppImage')"
       - |
         if [ "$LATESTURL" ]; then
           echo "Could not automatically determine latest version to download."
