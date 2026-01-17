@@ -167,6 +167,89 @@ To purge these, check, and possibly remove, the directories:
 
 * `~/.config/cdc/image-*/requested/<application>`
 
+## Installation on servers for services
+
+1. Setup the podman-compose systemd service:
+   ```
+   sudo podman-compose systemd -a create-unit
+   ```
+
+2. Create an ssh key to be able to ssh into service user accounts:
+   ```
+   ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_services
+   ```
+
+3. Setup a services user accout
+
+   Set up another user account for running containerized services
+   ```
+   sudo useradd -m -s /bin/bash services
+   sudo loginctl enable-linger services
+   sudo install -d -m 700 ~services/.ssh
+   printf 'from=\"127.0.0.1,::1\" %s\n' "$(cat $HOME/.ssh/id_services.pub)" | sudo tee -a ~services/.ssh/authorized_keys
+   sudo chmod 600 ~services/.ssh/authorized_keys
+   sudo chown -R services:services ~services/.ssh
+   # sudo restorecon -R /home/services # <- may be needed on some systems
+   ```
+
+4. Now we can swap over to the service user account with ssh agent-forwarding (important if we want to auth to github):
+   ```
+   ssh -A -i ~/.ssh/id_services service_minecraft@localhost
+   ```
+
+5. Installation as `services` user.
+
+   Followed the installation instructions for users or developers first; it is suggested that you use the subdirectory `Services` in your home directory to hold the containers.
+
+6. Now do:
+   
+   ```
+   cdc services
+   ```
+
+   To list installable servies.
+
+8. Install a service (we will use plex as an example):
+
+   ```
+   cdc install AudioVideo/plex
+   ```
+
+9. Activate it for systemd (technically you don't *have* to do this, if you prefer, you can run a service manually).
+
+   ```
+   podman-compose --project-name plex systemd -a register
+   systemctl --user enable --now podman-compose@plex
+   ```
+
+   Check the status when running as the `services` user:
+   ```
+   systemctl --user status podman-compose@plex
+   ```
+
+   But, now you can also `exit` out of the `services` user and go back to your regular user, where you can check the status as:
+   ```
+   sudo systemctl --user -M services@ status podman-compose@minecraft
+   ```
+   And turn off/on the running service as:
+   ```
+   sudo systemctl --user -M services@ down podman-compose@plex
+   sudo systemctl --user -M services@ up podman-compose@plex
+   ```
+   And disable/re-enable the autostart at boot as:
+   ```
+   systemctl --user disable --now podman-compose@plex
+   systemctl --user enable --now podman-compose@plex
+   ```
+
+## Update
+
+To update system packages and rebuild the latest release:
+```
+podman-compose --podman-args='--target build_stage' build --no-cache
+```
+
+
 ## Installation for developers
 
 Users who want to be able to work with the CDC source code are recommend to install it as follows.
