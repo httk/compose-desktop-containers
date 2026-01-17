@@ -24,7 +24,12 @@ Furthermore, the launchers can include maintenance tasks such as `download`, `bu
    (In contrast to `pip`, `pipx` is meant for application software to be installed in your home directory without getting tied to a specific virtual Python environment.
    This is the right choice for general "tools" that you want to always have access to.)
 
-2. CDC needs some software and configuration of your system. Run the following command:
+   And if pipx warns you about the path, make sure to also enable the local bin path:
+   ```
+   pipx ensurepath
+   ```  
+
+3. CDC needs some software and configuration of your system. Run the following command:
    ```
    cdc first-run-host-setup
    ```
@@ -34,19 +39,19 @@ Furthermore, the launchers can include maintenance tasks such as `download`, `bu
    cdc image-create
    ```
 
-3. Create a directory for holding your installed containerized apps, e.g., `~/Containers`:
+4. Create a directory for holding your installed containerized apps, e.g., `~/Containers`:
    ```
    mkdir ~/Containers
    cd ~/Containers
    ```
 
-4. List the apps provided alongside CDC:
+5. List the apps provided alongside CDC:
    ```
    cdc apps
    ```
    (You can also just obtain a CDC-compatible yaml file from somewhere else)
 
-5. Install one of the apps
+6. Install one of the apps
    ```
    cdc setup Networking/discord
    ```
@@ -55,13 +60,13 @@ Furthermore, the launchers can include maintenance tasks such as `download`, `bu
    cdc image-update
    ```
 
-6. You should now be able to find `Discord` in your desktop system launcher menu. Or, to run it in the terminal:
+7. You should now be able to find `Discord` in your desktop system launcher menu. Or, to run it in the terminal:
    ```
    cd discord
    ./discord
    ```
 
-7. If you for some reason want to force a re-install of discord, you can do so via the maintenance tasks under `setup/`:
+8. If you for some reason want to force a re-install of discord, you can do so via the maintenance tasks under `setup/`:
    ```
    ./setup/reinstall
    ```
@@ -272,6 +277,10 @@ Install CDC using the editable (`-e`) flag:
 ```
 cd cdc
 pipx install -e .
+```
+And if pipx warns you about the path, make sure to also enable the local bin path:
+```
+pipx ensurepath
 ```
 
 If you change the dependencies, you may need to force-reinstall it using pipx:
