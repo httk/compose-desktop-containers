@@ -194,7 +194,7 @@ To purge these, check, and possibly remove, the directories:
 
 4. Now we can swap over to the service user account with ssh agent-forwarding (important if we want to auth to github):
    ```
-   ssh -A -i ~/.ssh/id_services service_minecraft@localhost
+   ssh -A -i ~/.ssh/id_services services@localhost
    ```
 
 5. Installation as `services` user.
@@ -229,7 +229,7 @@ To purge these, check, and possibly remove, the directories:
 
    But, now you can also `exit` out of the `services` user and go back to your regular user, where you can check the status as:
    ```
-   sudo systemctl --user -M services@ status podman-compose@minecraft
+   sudo systemctl --user -M services@ status podman-compose@plex
    ```
    And turn off/on the running service as:
    ```
