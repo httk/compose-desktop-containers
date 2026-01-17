@@ -263,13 +263,13 @@ sudo apt install pipx
 
 Clone the source code repository somewhere in your home directory:
 ```
-cd ~/Containers
+mkdir ~/Tools
 git clone https://github.com/httk/compose-desktop-containers cdc --recurse-submodules
-cd cdc
 ```
 
 Install CDC using the editable (`-e`) flag:
 ```
+cd cdc
 pipx install -e .
 ```
 
