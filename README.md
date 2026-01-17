@@ -264,6 +264,7 @@ sudo apt install pipx
 Clone the source code repository somewhere in your home directory:
 ```
 mkdir ~/Tools
+cd Tools
 git clone https://github.com/httk/compose-desktop-containers cdc --recurse-submodules
 ```
 
