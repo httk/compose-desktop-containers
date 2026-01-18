@@ -24,7 +24,7 @@ rm -rf "$CDC_CONFIG_DIR/image-$IMAGE/build"
 podman unshare -- rm -rf "$CDC_DATA_DIR/image-u24/rootfs"
 
 mkdir -p "$CDC_CONFIG_DIR/image-$IMAGE/build/files"
-cp -p /etc/timezone "$TOOLPATH/container/entrypoint" "$TOOLPATH/container/en_SE.locale" "$CDC_CONFIG_DIR/image-$IMAGE/build/files/."
+cp -p "$TOOLPATH/container/entrypoint" "$TOOLPATH/container/en_SE.locale" "$CDC_CONFIG_DIR/image-$IMAGE/build/files/."
 
 FULLNAME="$(getent passwd rar | awk -F':' '{print $5}')"
 
@@ -53,9 +53,10 @@ USER_UID \
 USER_GID \
 USER_FULLNAME \
 BUILD_UID \
-BUILD_GID
+BUILD_GID \
+APT_PROXY="http://host.containers.internal:3142"
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update -y && apt-get -y install --reinstall ca-certificates locales tzdata python3-minimal python3-watchdog curl && apt-get clean autoclean -y && rm -rf /var/tmp/* /var/lib/apt/lists/* /tmp/*
+RUN echo \${APT_PROXY} && echo "Acquire::http::Proxy \"\${APT_PROXY}\";" > /etc/apt/apt.conf.d/00proxy && echo 'Acquire::HTTPS::Proxy "false";' >> /etc/apt/apt.conf.d/00proxy && apt-get update -y && apt-get -y install --reinstall ca-certificates locales tzdata python3-minimal python3-watchdog curl && apt-get clean autoclean -y && rm -rf /var/tmp/* /var/lib/apt/lists/* /tmp/*
 RUN set -eux; \
     if getent passwd "\${USER_UID}" >/dev/null; then \
       olduser="\$(getent passwd "\${USER_UID}" | cut -d: -f1)"; \

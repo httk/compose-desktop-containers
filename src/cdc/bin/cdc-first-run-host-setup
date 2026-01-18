@@ -11,37 +11,51 @@ VERSION_CODENAME=$(awk -F= '$1=="VERSION_CODENAME" {print $2}' /etc/os-release |
 echo "Detected OS: ${OS_ID} ${VERSION_CODENAME}"
 echo
 
-if [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "plucky" ]; then
+# Note: this was the old set of requiements; some of these may need to move back as we restore some of the old desktop intgration
+# sudo apt-get install -y crun podman podman-compose curl wmctrl xdotool python3-pip python3-venv python3-setuptools python3-tk python3-gi python3-gst-1.0 gstreamer1.0-pipewire gir1.2-appindicator3-0.1 yq mesa-utils
+
+if [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "questing" ]; then
     cat <<EEOOFF
-#####################################################
-## You need to install a number of system packages ##
-#####################################################
+##################################################
+## You may need to install some system packages ##
+##################################################
 
-## Run this command:
+## Make sure you have all prerequistes installed with this command:
 
-sudo apt-get install -y crun podman podman-compose curl wmctrl xdotool python3-pip python3-venv python3-setuptools python3-tk python3-gi python3-gst-1.0 gstreamer1.0-pipewire gir1.2-appindicator3-0.1 yq mesa-utils
+sudo apt-get install -y crun podman podman-compose curl python3-pip python3-venv python3-setuptools yq apt-cacher-ng
+
+EEOOFF
+elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "plucky" ]; then
+    cat <<EEOOFF
+##################################################
+## You may need to install some system packages ##
+##################################################
+
+## Make sure you have all prerequistes installed with this command:
+
+sudo apt-get install -y crun podman podman-compose curl python3-pip python3-venv python3-setuptools yq apt-cacher-ng
 
 EEOOFF
 elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "oracular" ]; then
     cat <<EEOOFF
-#####################################################
-## You need to install a number of system packages ##
-#####################################################
+##################################################
+## You may need to install some system packages ##
+##################################################
 
-## Run this command:
+## Make sure you have all prerequistes installed with this command:
 
-sudo apt-get install -y crun podman podman-compose curl wmctrl xdotool python3-pip python3-venv python3-setuptools python3-tk python3-gi python3-gst-1.0 gstreamer1.0-pipewire gir1.2-appindicator3-0.1 yq mesa-utils
+sudo apt-get install -y crun podman podman-compose curl python3-pip python3-venv python3-setuptools yq apt-cacher-ng
 
 EEOOFF
 elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "noble" ]; then
     cat <<EEOOFF
-#####################################################
-## You need to install a number of system packages ##
-#####################################################
+##################################################
+## You may need to install some system packages ##
+##################################################
 
-## Run this command:
+## Make sure you have all prerequistes installed with this command:
 
-sudo apt-get install -y crun podman podman-compose curl wmctrl xdotool python3-pip python3-venv python3-setuptools python3-tk python3-gi python3-gst-1.0 gstreamer1.0-pipewire gir1.2-appindicator3-0.1 yq mesa-utils
+sudo apt-get install -y crun podman podman-compose curl python3-pip python3-venv python3-setuptools yq apt-cacher-ng
 
 EEOOFF
 else

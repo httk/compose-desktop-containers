@@ -1,0 +1,46 @@
+#!/bin/bash
+
+set -e
+
+SCRIPTPATH="$(dirname -- "$(realpath -- "$0")")"
+SERVICES_DIR="$(realpath -- "$SCRIPTPATH/../services")"
+
+if [ -z "$1" -o "$1" = "-h" -o "$1" = "--help" ]; then
+    echo "Usage: ${CDC_CLI_NAME:-$0} <compose.yaml | service-name> [<install dest>]"
+    exit 0
+fi
+
+INPUT="$1"
+DEST="$2"
+
+if [ "${INPUT%.yaml}" != "${INPUT}" ]; then
+    SOURCE="$INPUT"
+elif [ -f "$SERVICES_DIR/${INPUT}.yaml" ]; then
+    SOURCE="$SERVICES_DIR/${INPUT}.yaml"
+else
+    echo "Error: '$INPUT' is not a YAML file and no matching service found in $SERVICES_DIR"
+    exit 1
+fi
+
+if [ -z "$DEST" ]; then
+    SOURCE_NAME=$(basename -- "$SOURCE")
+    SERVICE="${SOURCE_NAME%.*}"
+    DEST="./$SERVICE"
+else
+    SERVICE=$(basename -- "$DEST")
+fi
+
+if ! yq -r '."x-application"' "$SOURCE" > /dev/null 2>&1 || [ "$(yq -r '."x-application"' "$SOURCE" 2>/dev/null)" == "null" ]; then
+    echo "=== Error dump ==="
+    yq -r '."x-application"' "$SOURCE" && true
+    echo "=================="
+    echo "This does not seem to be a valid desktop-container yaml file."
+    exit 1
+fi
+
+mkdir -p "$DEST"
+DEST_ABSPATH="$(cd -- "$DEST"; pwd -P)"
+ln -sf "$(realpath -- "$SOURCE")" "$DEST_ABSPATH/compose.yaml"
+cd "$DEST_ABSPATH"
+
+"$SCRIPTPATH/cdc-resetup"
