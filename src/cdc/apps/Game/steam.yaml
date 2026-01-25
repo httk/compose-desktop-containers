@@ -21,7 +21,7 @@ x-application:
 
   images:
     u24:
-      pkgs: ["steam-libs", "steam-libs-amd64"]
+      pkgs: ["steam-libs", "steam-libs-amd64", "usbutils", "evtest"]
 
 x-launchers:
   download:
@@ -116,7 +116,7 @@ x-launchers:
       - echo "STEAM-WAYLAND"
       - ulimit -n 65536
       - pipewire-pulse &
-      - SDL_VIDEO_DRIVER=wayland PROTON_ENABLE_WAYLAND=1 setpriv --ambient-caps '-all' ~/.local/share/steam-installer/steam/usr/bin/steam "$$@"
+      - SDL_VIDEO_DRIVER=wayland PROTON_ENABLE_WAYLAND=1 setpriv --ambient-caps '-all' ~/.local/share/steam-installer/steam/usr/bin/steam -pipewire "$$@"
 
   interactive:
     service: run

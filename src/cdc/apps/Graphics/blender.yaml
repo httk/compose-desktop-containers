@@ -9,7 +9,7 @@ x-application:
     version: "3.8"
 
     services:
-      blender:
+      run:
         volumes:
           - "${HOME}/Documents/containers/3d-projects:/home/${USER}/Documents/containers/3d-projects"
         working_dir: "/home/${USER}/Documents/containers/3d-projects"
