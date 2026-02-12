@@ -272,10 +272,12 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
             ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: wayland")
 
 	elif [ "$FEATURE" = "x11" ]; then
-	    ADJUSTMENT_ENVS+=( "DISPLAY: \"${DISPLAY}\"" "XAUTHORITY: \"${XAUTHORITY}\"" )
-	    ADJUSTMENT_VOLS+=( "/tmp/.X11-unix:/tmp/.X11-unix:rw" "${XAUTHORITY}:${XAUTHORITY}:rw" )
-	    ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAGS: --ozone-platform=x11")
-            ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: x11")
+	    if [ -n "${DISPLAY}" ]; then
+		ADJUSTMENT_ENVS+=( "DISPLAY: \"${DISPLAY}\"" "XAUTHORITY: \"${XAUTHORITY}\"" )
+		ADJUSTMENT_VOLS+=( "/tmp/.X11-unix:/tmp/.X11-unix:rw" "${XAUTHORITY}:${XAUTHORITY}:rw" )
+		ADJUSTMENT_ENVS+=( "CDC_OZONE_FLAGS: --ozone-platform=x11")
+		ADJUSTMENT_ENVS+=( "XDG_SESSION_TYPE: x11")
+	    fi
 
         elif [ "$FEATURE" = "gpu_dri" ]; then
             GLXINFO=$(glxinfo || true)
@@ -342,8 +344,10 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 		    done
 		    shopt -u nullglob
 		fi
-		printf '* DEVS %s\n' "${ADJUSTMENT_DEVS[@]}"
-		printf '* VOLS %s\n' "${ADJUSTMENT_VOLS[@]}"
+		if [ "$CDC_DEBUG" -ge "2" ]; then
+		    printf '* DEVS %s\n' "${ADJUSTMENT_DEVS[@]}"
+		    printf '* VOLS %s\n' "${ADJUSTMENT_VOLS[@]}"
+		fi
                 #PODMAN_UP_ARGS+=( "--device nvidia.com/gpu=all" )
                 #OVERRIDE_ALLOW_READ="yes"
 	    elif [ "0" = "1" ]; then
