@@ -24,6 +24,14 @@ CDC_DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cdc"
 LAUNCHPATH="$(cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)"
 TOOLPATH="$(dirname -- "${SCRIPTPATH}")/tools"
 
+LIB_DIRS=(
+  /usr/lib
+  /usr/lib64
+  /usr/lib/x86_64-linux-gnu
+  /usr/lib/aarch64-linux-gnu
+  /usr/lib/wsl/lib
+)
+
 PODMAN_COMPOSE_UP_ARGS=()
 PODMAN_COMPOSE_EXEC_ARGS=()
 PODMAN_COMPOSE_EXEC_POST_ARGS=()
@@ -140,6 +148,24 @@ ADJUSTMENT_VOLS=()
 ADJUSTMENT_CAPS=()
 OVERRIDE_ALLOW_READ="no"
 
+add_unique_dev() {
+    local f="$1"
+  [[ -e "$f" ]] || return 0
+  for existing in "${ADJUSTMENT_DEVS[@]:-}"; do
+    [[ "$existing" == "$f" ]] && return 0
+  done
+  ADJUSTMENT_DEVS+=( "$f:$f" )
+}
+
+add_unique_vol() {
+  local f="$1"
+  [[ -e "$f" ]] || return 0
+  for existing in "${ADJUSTMENT_VOLS[@]:-}"; do
+    [[ "$existing" == "$f" ]] && return 0
+  done
+  ADJUSTMENT_VOLS+=( "$f:$f:ro" )
+}
+
 ADJUSTMENT_ENVS+=( "XDG_RUNTIME_DIR: /run/user/${UID}" )
 
 # If the image starts with "cdc-" we auto-mount a number of path components from the expanded filesystem instead
@@ -153,7 +179,10 @@ if [ "${IMAGE#cdc-}" != "${IMAGE}" ]; then
 fi
 
 # Always mount the cdc tools at /cdc, and /opt
-ADJUSTMENT_VOLS+=( "${TOOLPATH}/container:/cdc:ro" "/etc/timezone:/etc/timezone:ro" )
+ADJUSTMENT_VOLS+=( "${TOOLPATH}/container:/cdc:ro" )
+if [ -e /etc/timezone ]; then
+    ADJUSTMENT_VOLS+=( "/etc/timezone:/etc/timezone:ro" )
+fi
 
 if [ "$(yq -r ".\"x-launchers\".\"$LAUNCHER\".script" <<< "$PODMAN_CONFIG")" != "null" ]; then
     LAUNCH_SCRIPT="$(yq -r ".\"x-launchers\".\"$LAUNCHER\".script | recurse(.[]? // empty) | select(type != \"array\")" <<< "$PODMAN_CONFIG")"
@@ -272,8 +301,51 @@ if [ "$(yq ".services.\"$SERVICE\".\"x-features\"" <<< "$PODMAN_CONFIG")" != "nu
 	elif [ "$FEATURE" = "gpu_compute" ]; then
 	    if command -v nvidia-smi 2>/dev/null; then
 		# NVIDIA
-                PODMAN_UP_ARGS+=( "--device nvidia.com/gpu=all" )
-                OVERRIDE_ALLOW_READ="yes"
+		PATTERNS=("libcuda.so*", "libnvidia-ml.so*", "libnvidia-*.so*")
+		CORE_DEV_GLOBS=(
+		    "/dev/nvidiactl"
+		    "/dev/nvidia-uvm"
+		    "/dev/nvidia-uvm-tools"
+		    "/dev/nvidia-modeset"        # often not needed for pure compute, harmless if present
+		    "/dev/nvidia[0-9]*"          # one per GPU (nvidia0, nvidia1, ...)
+		    "/dev/nvidia-caps/*"         # capability nodes (used by some setups/features)
+		    "/dev/nvidia-fs"             # GPUDirect Storage (only if installed)
+		)
+		for dir in "${LIB_DIRS[@]}"; do
+		    [[ -d "$dir" ]] || continue
+
+		    for pat in "${PATTERNS[@]}"; do
+			while IFS= read -r -d '' f; do
+			    # Resolve symlink chains to the real file (e.g. libcuda.so.1 -> libcuda.so.550.xx)
+			    real="$(readlink -f "$f" 2>/dev/null || true)"
+			    if [[ -n "$real" && -f "$real" ]]; then
+				add_unique_vol "$real"
+			    else
+				add_unique_vol "$f"
+			    fi
+			done < <(find "$dir" -maxdepth 1 -type f -name "$pat" -print0 2>/dev/null)
+		    done
+		done		
+		for g in "${CORE_DEV_GLOBS[@]}"; do
+		    # Expand globs safely (skip if no matches)
+		    shopt -s nullglob
+		    matches=( $g )
+		    shopt -u nullglob
+		    for m in "${matches[@]}"; do
+			add_unique_dev "$m"
+		    done
+		done
+		if [[ -d /dev/dri ]]; then
+		    shopt -s nullglob
+		    for m in /dev/dri/renderD*; do
+			add_unique_dev "$m"
+		    done
+		    shopt -u nullglob
+		fi
+		printf '* DEVS %s\n' "${ADJUSTMENT_DEVS[@]}"
+		printf '* VOLS %s\n' "${ADJUSTMENT_VOLS[@]}"
+                #PODMAN_UP_ARGS+=( "--device nvidia.com/gpu=all" )
+                #OVERRIDE_ALLOW_READ="yes"
 	    elif [ "0" = "1" ]; then
 		# INTEL
 		DUMMY=""

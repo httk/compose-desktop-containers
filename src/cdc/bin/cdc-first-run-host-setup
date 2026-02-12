@@ -22,7 +22,7 @@ if [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "questing" ]; then
 
 ## Make sure you have all prerequistes installed with this command:
 
-sudo apt-get install -y crun podman podman-compose curl python3-pip python3-venv python3-setuptools yq apt-cacher-ng
+sudo apt-get install -y crun podman podman-compose curl python3-pip python3-venv python3-setuptools yq apt-cacher-ng desktop-file-utils
 
 EEOOFF
 elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "plucky" ]; then
@@ -33,7 +33,7 @@ elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "plucky" ]; then
 
 ## Make sure you have all prerequistes installed with this command:
 
-sudo apt-get install -y crun podman podman-compose curl python3-pip python3-venv python3-setuptools yq apt-cacher-ng
+sudo apt-get install -y crun podman podman-compose curl python3-pip python3-venv python3-setuptools yq apt-cacher-ng desktop-file-utils
 
 EEOOFF
 elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "oracular" ]; then
@@ -44,7 +44,7 @@ elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "oracular" ]; then
 
 ## Make sure you have all prerequistes installed with this command:
 
-sudo apt-get install -y crun podman podman-compose curl python3-pip python3-venv python3-setuptools yq apt-cacher-ng
+sudo apt-get install -y crun podman podman-compose curl python3-pip python3-venv python3-setuptools yq apt-cacher-ng desktop-file-utils
 
 EEOOFF
 elif [ "$OS_ID" = "ubuntu" -a "$VERSION_CODENAME" = "noble" ]; then
@@ -67,7 +67,7 @@ else
 
 ## You need system packages for:
 
-- podman podman-compose yq mesa-utils crun curl wmctrl xdotool python3 (with pip, venv, tk, gi, and gst), gstreamer with pipewire support, appindicator3
+- podman podman-compose yq mesa-utils crun curl wmctrl xdotool python3 (with pip, venv, tk, gi, and gst), gstreamer with pipewire support, appindicator3, desktop-file-utils
 
 ===========================
 

@@ -83,5 +83,6 @@ done
 #    POST_PROCESS_LAUNCHER "$SCRIPTPATH/cdc-launch-global" "$LAUNCHER" '."x-application"."global-launcher"'
 #fi
 
+mkdir -p ~/.local/share/icons/hicolor
 update-desktop-database ~/.local/share/applications/
 gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor

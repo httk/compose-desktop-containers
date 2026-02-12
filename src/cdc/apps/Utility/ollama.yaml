@@ -24,41 +24,42 @@ x-launchers:
       - echo "DOWNLOAD"
       - mkdir -p Downloads
       - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.name')"
-      - LATESTURL="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep ollama-linux-amd64.tgz)"
-      - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
+      - LATESTURL="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.assets[] | .browser_download_url' | grep ollama-linux-amd64.tar.zst)"
+      - echo "LATEST URL $$LATESTURL"
+      - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tar.zst"
       - |
         if [ ! -e "Downloads/$$LATESTFILENAME" ]; then
           curl -L -o "Downloads/$$LATESTFILENAME" "$$LATESTURL"
         fi
-      - ln -sf "$$LATESTFILENAME" Downloads/ollama-linux-amd64-latest.tgz
+      - ln -sf "$$LATESTFILENAME" Downloads/ollama-linux-amd64-latest.tar.zst
 
   redownload:
     service: setup
     type: setup
     script: &redownload_script
       - echo "REDOWNLOAD"
-      - rm -f "$$(readlink -f Downloads/ollama-linux-amd64-latest.tgz)"
-      - rm -f Downloads/ollama-linux-amd64-latest.tgz
+      - rm -f "$$(readlink -f Downloads/ollama-linux-amd64-latest.tar.zst)"
+      - rm -f Downloads/ollama-linux-amd64-latest.tar.zst
       - *download_script
 
   install:
     service: setup-nonet
     type: setup
     script: &install_script
-      - VERSION="$${1:-ollama-linux-amd64-latest.tgz}";
+      - VERSION="$${1:-ollama-linux-amd64-latest.tar.zst}";
       - echo "INSTALL $$VERSION";
       - |
         if [ ! -e ~/.local/share/ollama ]; then
           mkdir -p ~/.local/share/ollama
           cd ~/.local/share/ollama
-          tar -zxf ~/Downloads/"$$VERSION"
+          tar --zstd -xf ~/Downloads/"$$VERSION"
         fi
 
   reinstall:
     service: setup-nonet
     type: setup
     script: &reinstall_script
-      - VERSION="$${1:-ollama-linux-amd64-latest.tgz}"
+      - VERSION="$${1:-ollama-linux-amd64-latest.tar.zst}"
       - echo "REINSTALL $$VERSION"
       - rm -rf ~/.local/share/ollama
       - *install_script
@@ -68,7 +69,7 @@ x-launchers:
     type: setup
     script:
       - VERSION="$$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq --raw-output '.name')"
-      - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tgz"
+      - LATESTFILENAME="ollama-linux-amd64-$$VERSION.tar.zst"
       - mkdir -p Downloads
       - if [ -e "Downloads/$$LATESTFILENAME" ]; then
           echo "No new version";
@@ -166,5 +167,5 @@ services:
     ports:
       - "11434:11434"
 
-    features:
-      - gpu
+    x-features:
+      - gpu_compute
