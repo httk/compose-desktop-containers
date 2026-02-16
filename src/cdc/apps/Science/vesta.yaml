@@ -1,0 +1,195 @@
+version: "3.8"
+
+x-application:
+
+  readme: |
+    VESTA: a 3D visualization program for structural models, volumetric data such as electron/nuclear densities, and crystal morphologies.
+
+  override-default: |
+    version: "3.8"
+
+    services:
+      run:
+        volumes:
+          - "${HOME}/Documents/containers/3d-projects:/home/${USER}/Documents/containers/3d-projects"
+        working_dir: "/home/${USER}/Documents/containers/3d-projects"
+
+  env-default: |
+    # This container has no configurable options
+
+  images:
+    u24:
+      pkgs: ["libglu1-mesa", "libwebkit2gtk-4.1-0", "libjavascriptcoregtk-4.1-0"]
+
+x-launchers:
+  download:
+    service: setup
+    type: setup
+    script: &download_script
+      - echo "DOWNLOAD"
+      - mkdir -p Downloads
+      - curl -L -o Downloads/VESTA-gtk3-x86_64.tar.bz "https://jp-minerals.org/vesta/archives/testing/VESTA-gtk3-x86_64.tar.bz2"
+
+  redownload:
+    service: setup
+    type: setup
+    script: &redownload_script
+      - echo "REDOWNLOAD"
+      - rm -rf Downloads/VESTA-gtk3-x86_64.tar.bz
+      - *download_script
+
+  install:
+    service: setup-nonet
+    type: setup
+    script: &install_script
+      - VERSION="$${1:-VESTA-gtk3-x86_64.tar.bz}";
+      - echo "INSTALL $$VERSION";
+      - rm -rf ~/.local/share/VESTA &&
+        mkdir -p ~/.local/share/VESTA &&
+        cd ~/.local/share/VESTA &&
+        tar -jxf ~/Downloads/"$$VERSION" &&
+        mkdir -p ~/.local/share/applications &&
+        echo -n "[Desktop Entry]\nName=VESTA\nExec=/home/$${USER}/.local/share/VESTA/VESTA-gtk3-x86_64/VESTA\nIcon=/home/$${USER}/.local/share/VESTA/VESTA-gtk3-x86_64/vesta.png\nTerminal=false\nType=Application\nCategories=Science;" > ~/.local/share/applications/blender.desktop
+
+  reinstall:
+    service: setup-nonet
+    type: setup
+    script: &reinstall_script
+      - VERSION="$${1:-VESTA-gtk3-x86_64.tar.bz}";
+      - echo "REINSTALL $$VERSION"
+      - rm -rf ~/.local/share/VESTA
+      - *install_script
+
+  update-check:
+    service: setup
+    type: setup
+    script: &update_check_script
+      - echo "UPDATE CHECK"
+      - mkdir -p Downloads
+      - if [ -e Downloads/VESTA-gtk3-x86_64.tar.bz ]; then
+          LASTMOD_LINE="$$(curl -sI -L "https://jp-minerals.org/vesta/archives/testing/VESTA-gtk3-x86_64.tar.bz2" | grep -i '^last-modified:' | cut "-d:" -f2- | sed 's/^\s*\|\s$$//g')";
+          if [ -z "$$LASTMOD_LINE" ]; then
+            echo "Could not get last modified date";
+            exit 0;
+          fi;
+          REMOTE_TS="$$(date -d "${LASTMOD_LINE}" +%s)";
+          LOCAL_TS="$$(date -r "Downloads/VESTA-gtk3-x86_64.tar.bz2" +%s)";
+          if [ "$$REMOTE_TS" -lt "$$LOCAL_TS" ]; then
+            echo "No new version";
+            exit 0;
+          fi;
+        fi;
+      - echo "File missing, or server-side file newer"
+      - exit 1
+
+  update:
+    service: setup
+    type: setup
+    script:
+      - echo "UPDATE"
+      - *redownload_script
+      - *reinstall_script
+
+  VESTA:
+    service: run
+    type: background
+    script:
+      - echo "VESTA"
+      - ln -sf /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0 ~/.local/share/VESTA/VESTA-gtk3-x86_64/libwebkit2gtk-4.0.so.37
+      - ln -sf /usr/lib/x86_64-linux-gnu/libjavascriptcoregtk-4.1.so.0 ~/.local/share/VESTA/VESTA-gtk3-x86_64/libjavascriptcoregtk-4.0.so.18
+      - exec ~/.local/share/VESTA/VESTA-gtk3-x86_64/VESTA "$$@"
+
+    desktop:
+      file: |
+        [Desktop Entry]
+        Name=VESTA (container)
+        StartupWMClass=VESTA
+        PrefersNonDefaultGPU=true
+        GenericName=Crystal structure visualizer
+        Comment=Crystal structure visualization
+        Exec=VESTA %f
+        Terminal=false
+        Type=Application
+        Icon=vesta
+        Categories=Science;
+        MimeType=application/x-vesta;
+        Keywords=crystal structure;
+
+      icons:
+        - source: VESTA-gtk3-x86_64/vesta.png
+          dest: vesta.png
+
+  interactive:
+    service: run
+    console: true
+    script:
+      - echo "INTERACTIVE"
+      - bash
+
+services:
+
+  ## COMMON PART ##
+
+  common: &common
+
+    image: "cdc-u24"
+
+    entrypoint: ["/cdc/entrypoint"]
+
+    network: none
+
+    working_dir: /home/${USER}
+    user: "${USER}"
+
+    environment: &common-env
+      LANG: "${LANG}"
+      XDG_RUNTIME_DIR: "/tmp/${USER}/run"
+      XDG_CURRENT_DESKTOP: "${XDG_CURRENT_DESKTOP}"
+      DESKTOP_SESSION: "${DESKTOP_SESSION}"
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges
+
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+
+    shm_size: "1G"
+
+    volumes: &common-volumes
+      - "${CDC_APP_PATH}/home:/home/${USER}:rw"
+
+    devices:
+      - "/dev/dri:/dev/dri"
+
+    security_opt:
+      - no-new-privileges
+
+    userns_mode: "keep-id"
+
+    network_node: none
+
+
+  setup:
+    <<: *common
+
+    network_mode: bridge
+
+  setup-nonet:
+    <<: *common
+
+  run:
+    <<: *common
+
+    network_node: bridge
+    read_only: false
+
+    user:
+      root
+
+    x-features:
+      - x11
